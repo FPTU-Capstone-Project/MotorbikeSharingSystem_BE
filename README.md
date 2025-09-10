@@ -2,6 +2,35 @@
 
 A Spring Boot backend application for motorbike sharing system with PostgreSQL database. This guide will help you run the project locally for development, regardless of your technical background.
 
+---
+
+## **Choose Your Setup Path**
+
+### **For Non-Technical Users or First-Time Setup**
+👇 **Follow the [Complete Step-by-Step Guide](#complete-setup-guide-step-by-step)** below
+- Detailed instructions from installing software to running the app
+- Works for Mac and Windows
+- No prior knowledge required
+
+### **For Developers (Quick Start)**
+If you already have Docker and know how to use bash/terminal:
+
+```bash
+# Clone/download project and navigate to directory
+cd MotorbikeSharingSystem_BE
+
+# Make script executable and run
+chmod +x dev.sh
+./dev.sh
+
+# Access app at http://localhost:8081
+# Stop with: ./dev.sh stop
+```
+
+**Requirements:** Docker Desktop running, bash terminal (Git Bash on Windows)
+
+---
+
 ## Complete Setup Guide (Step by Step)
 
 Follow these steps exactly - they work for both beginners and experienced developers.
