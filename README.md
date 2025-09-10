@@ -2,22 +2,167 @@
 
 A Spring Boot backend application for motorbike sharing system with PostgreSQL database. This guide will help you run the project locally for development, regardless of your technical background.
 
-## Quick Start
+## Complete Setup Guide (Step by Step)
+
+Follow these steps exactly - they work for both beginners and experienced developers.
+
+### Step 1: Download and Install Required Software
+
+**You need these two things:**
+
+1. **Docker Desktop** - Download from https://www.docker.com/products/docker-desktop
+   - Install Docker Desktop
+   - Start Docker Desktop application
+   - Wait for it to show "Docker Desktop is running" (green icon)
+
+2. **VS Code** - Download from https://code.visualstudio.com/
+   - Install VS Code
+   - This will be where you open the project
+
+### Step 2: Get the Project Code
+
+1. **Download or Clone** this project to your computer
+2. **Remember the location** where you saved it (e.g., Desktop, Documents, etc.)
+
+### Step 3: Open Project in VS Code
+
+1. **Open VS Code**
+2. Click **"File"** → **"Open Folder"** (Mac) or **"Open Folder"** (Windows)
+3. **Navigate to** and **select** the `MotorbikeSharingSystem_BE` folder
+4. Click **"Open"** or **"Select Folder"**
+
+### Step 4: Open the Correct Terminal in VS Code
+
+This is the **most important step** - you need the right type of terminal:
+
+#### For Mac Users:
+1. In VS Code, press **`Ctrl + ` `** (backtick key, usually above Tab key)
+   - Or go to menu: **View → Terminal**
+2. The terminal will open at the bottom of VS Code
+3. Make sure it shows something like:
+   ```
+   username@MacBook-Pro MotorbikeSharingSystem_BE %
+   ```
+4. **This is correct** - Mac uses bash/zsh terminal by default
+
+#### For Windows Users:
+1. In VS Code, press **`Ctrl + ` `** (backtick key, usually above Tab key)
+   - Or go to menu: **View → Terminal**
+2. **Check what terminal type opened** - look at the terminal tab name:
+   
+   **If you see "PowerShell" or "Command Prompt":**
+   - Click the **dropdown arrow** next to the "+" button in terminal
+   - Select **"Git Bash"** (if available) or **"Bash"**
+   - If Git Bash is not available, install **Git for Windows** first from https://git-scm.com/download/win
+   
+   **You want to see "Git Bash" or "Bash"**
+   
+3. The correct terminal should show something like:
+   ```
+   username@DESKTOP-XXX MINGW64 ~/MotorbikeSharingSystem_BE
+   $
+   ```
+
+#### If Git Bash is Not Available (Windows Only):
+1. **Install Git for Windows**:
+   - Go to https://git-scm.com/download/win
+   - Download and install (use default settings)
+   - Restart VS Code
+2. **Try opening terminal again** and select "Git Bash"
+
+### Step 5: Verify You're in the Right Directory
+
+In your terminal (Mac or Windows), type this command and press Enter:
 
 ```bash
-# Navigate to project directory
-cd MotorbikeSharingSystem_BE
+ls
+```
 
-# Start development environment
+**You should see these files:**
+- `dev.sh`
+- `pom.xml`
+- `src/`
+- `README.md`
+- Other project files
+
+**If you don't see these files:**
+- You're in the wrong directory
+- Type: `cd MotorbikeSharingSystem_BE` and press Enter
+- Try `ls` again
+
+### Step 6: Make the Script Executable (Required)
+
+In your terminal, run this command:
+
+```bash
 chmod +x dev.sh
-# Then
-./dev.sh
+```
 
-# Stop when you're done
+This makes the script runnable on your system.
+
+### Step 7: Start the Application
+
+Now run the magic command:
+
+```bash
+./dev.sh
+```
+
+**What you'll see:**
+- Lots of text scrolling (this is normal)
+- Messages about Docker containers starting
+- Eventually: "Application is ready!"
+
+**When it's ready:**
+- Your application will be running at http://localhost:8081
+- Keep the terminal open - don't close it
+
+### Step 8: Test It's Working
+
+1. **Open your web browser**
+2. **Go to:** http://localhost:8081
+3. **You should see** the application running (might be a JSON response or API page)
+4. **Also try:** http://localhost:8081/swagger-ui.html for API documentation
+
+### Step 9: Stop the Application (When Done)
+
+When you're finished working:
+
+```bash
 ./dev.sh stop
 ```
 
-That's it! Your application will be available at http://localhost:8081
+This safely stops everything and cleans up.
+
+## Quick Start (After Initial Setup)
+
+Once you've done the setup above once, daily usage is simple:
+
+```bash
+# Start your development day (in VS Code terminal)
+./dev.sh
+
+# Stop when done
+./dev.sh stop
+```
+
+## Visual Guide Summary
+
+**What success looks like:**
+
+1. **VS Code is open** with your project folder
+2. **Terminal is open** at the bottom (Git Bash on Windows, Terminal on Mac)
+3. **Terminal shows** the project directory: `~/MotorbikeSharingSystem_BE`
+4. **Docker Desktop** shows green "running" status
+5. **After running `./dev.sh`**: Browser shows app at http://localhost:8081
+
+**Signs something is wrong:**
+- Terminal says "PowerShell" (Windows) - switch to Git Bash
+- `ls` command doesn't show `dev.sh` file - wrong directory
+- `./dev.sh` says "permission denied" - run `chmod +x dev.sh` first
+- Docker errors - make sure Docker Desktop is running
+
+---
 
 ## Prerequisites
 
@@ -170,9 +315,106 @@ docker logs motorbike-dev-db -f
 
 </details>
 
-## Troubleshooting
+## Common Issues & Solutions
 
-### Common Issues
+### Terminal Problems (Most Common)
+
+<details>
+<summary>Windows: "bash: command not found" or "./dev.sh: No such file or directory"</summary>
+
+**Problem:** You're using PowerShell or Command Prompt instead of Bash
+
+**Solution:**
+1. **In VS Code terminal**, look at the terminal tab name
+2. If it says "PowerShell" or "cmd":
+   - Click the **dropdown arrow** (⌄) next to the "+" button
+   - Select **"Git Bash"**
+3. **If Git Bash is not in the list:**
+   - Install Git for Windows: https://git-scm.com/download/win
+   - Use default installation settings
+   - Restart VS Code
+   - Try again
+
+**Visual Check - You should see:**
+```bash
+username@DESKTOP-XXX MINGW64 ~/MotorbikeSharingSystem_BE
+$ 
+```
+**Not this (PowerShell):**
+```powershell
+PS C:\Users\username\MotorbikeSharingSystem_BE>
+```
+
+</details>
+
+<details>
+<summary>Windows: "Permission denied" error</summary>
+
+**Problem:** Script doesn't have execute permissions
+
+**Solution:**
+1. **Make sure you're in Git Bash** (not PowerShell)
+2. Run this command first:
+   ```bash
+   chmod +x dev.sh
+   ```
+3. Then try:
+   ```bash
+   ./dev.sh
+   ```
+
+</details>
+
+<details>
+<summary>Mac: "zsh: permission denied: ./dev.sh"</summary>
+
+**Problem:** Script doesn't have execute permissions
+
+**Solution:**
+```bash
+chmod +x dev.sh
+./dev.sh
+```
+
+</details>
+
+<details>
+<summary>Both Platforms: "No such file or directory"</summary>
+
+**Problem:** You're in the wrong folder
+
+**Visual Check - Run this command:**
+```bash
+ls
+```
+
+**You should see:**
+- dev.sh
+- pom.xml
+- src/
+- README.md
+
+**If you don't see these files:**
+```bash
+# Navigate to the correct directory
+cd MotorbikeSharingSystem_BE
+# Check again
+ls
+```
+
+</details>
+
+<details>
+<summary>VS Code Terminal Not Opening</summary>
+
+**Multiple ways to open terminal:**
+1. **Keyboard:** `Ctrl + ` ` (backtick key, above Tab)
+2. **Menu:** View → Terminal  
+3. **Command Palette:** `Ctrl+Shift+P` → type "Terminal: Create New Terminal"
+
+</details>
+
+### Application Issues
 
 <details>
 <summary>Docker is not running</summary>
