@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcloud builds list:*)",
+      "Bash(gcloud run services logs read:*)",
+      "Bash(gcloud builds submit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
