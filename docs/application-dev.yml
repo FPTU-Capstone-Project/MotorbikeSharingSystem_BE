@@ -1,0 +1,48 @@
+spring:
+  profiles:
+    active: dev
+    
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mssus_dev
+    username: postgres
+    password: postgres
+    
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        show_sql: true
+        format_sql: true
+        
+  flyway:
+    enabled: true
+    clean-disabled: false
+
+jwt:
+  secret: dev404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970dev
+  expiration: 3600000 # 1 hour
+  refresh-expiration: 604800000 # 7 days
+
+app:
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:3001,http://localhost:4200
+    
+  features:
+    email-verification: false
+    phone-verification: false
+    
+logging:
+  level:
+    com.mssus.account: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    try-it-out-enabled: true
+
+# Development-specific settings
+debug: false

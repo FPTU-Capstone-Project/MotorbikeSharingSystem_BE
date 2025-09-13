@@ -1,0 +1,47 @@
+spring:
+  profiles:
+    active: test
+    
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        show_sql: false
+        
+  flyway:
+    enabled: false
+    
+  h2:
+    console:
+      enabled: true
+
+jwt:
+  secret: test404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970test
+  expiration: 60000 # 1 minute for testing
+  refresh-expiration: 120000 # 2 minutes for testing
+
+app:
+  features:
+    email-verification: false
+    phone-verification: false
+    
+  security:
+    rate-limit:
+      enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.mssus.account: INFO
+    
+springdoc:
+  swagger-ui:
+    enabled: false

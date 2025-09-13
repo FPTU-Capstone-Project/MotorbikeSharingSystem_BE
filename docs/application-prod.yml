@@ -1,0 +1,52 @@
+spring:
+  profiles:
+    active: prod
+    
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: false
+        
+  flyway:
+    enabled: true
+    clean-disabled: true
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://mssus.com,https://app.mssus.com}
+    
+  features:
+    email-verification: true
+    phone-verification: true
+    student-verification: true
+    driver-verification: true
+    
+  security:
+    rate-limit:
+      enabled: true
+
+logging:
+  level:
+    root: WARN
+    com.mssus.account: INFO
+    org.springframework.security: WARN
+    
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    
+springdoc:
+  swagger-ui:
+    enabled: false
+    
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
