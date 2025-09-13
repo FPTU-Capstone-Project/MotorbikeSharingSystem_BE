@@ -17,7 +17,7 @@ public class SwaggerConfig {
                         .title("Motorbike Sharing System API")
                         .version("1.0")
                         .description("API documentation for Motorbike Sharing System"))
-                .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
+                // Remove global security requirement - let individual endpoints decide
                 .components(new io.swagger.v3.oas.models.Components()
                         .addSecuritySchemes("bearerAuth",
                                 new SecurityScheme()
