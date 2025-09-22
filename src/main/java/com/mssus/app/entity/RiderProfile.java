@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class RiderProfileEntity {
+public class RiderProfile {
 
     @Id
     @Column(name = "rider_id")
@@ -25,7 +25,7 @@ public class RiderProfileEntity {
     @OneToOne
     @MapsId
     @JoinColumn(name = "rider_id", referencedColumnName = "user_id")
-    private UserEntity user;
+    private Users user;
 
     @Column(name = "emergency_contact")
     private String emergencyContact;

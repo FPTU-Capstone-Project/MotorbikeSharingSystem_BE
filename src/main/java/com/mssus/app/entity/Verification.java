@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class VerificationEntity {
+public class Verification {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,7 +27,7 @@ public class VerificationEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    private UserEntity user;
+    private Users user;
 
     @Column(name = "type", nullable = false)
     private String type; // student_id, driver_license, background_check, vehicle_registration
@@ -47,7 +47,7 @@ public class VerificationEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "verified_by")
-    private AdminProfileEntity verifiedBy;
+    private AdminProfile verifiedBy;
 
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;

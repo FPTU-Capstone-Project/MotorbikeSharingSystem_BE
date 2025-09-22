@@ -18,7 +18,8 @@ CREATE TABLE users (
                        email_verified BOOLEAN NOT NULL DEFAULT false,
                        phone_verified BOOLEAN NOT NULL DEFAULT false,
                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                       version BIGINT NOT NULL DEFAULT 0
 );
 
 -- Add unique constraints

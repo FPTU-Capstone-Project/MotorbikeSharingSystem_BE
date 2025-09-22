@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class WalletEntity {
+public class Wallet {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,7 +26,7 @@ public class WalletEntity {
 
     @OneToOne
     @JoinColumn(name = "user_id", referencedColumnName = "user_id", unique = true)
-    private UserEntity user;
+    private Users user;
 
     @Column(name = "psp_account_id")
     private String pspAccountId;

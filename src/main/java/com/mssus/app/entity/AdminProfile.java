@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class AdminProfileEntity {
+public class AdminProfile {
 
     @Id
     @Column(name = "admin_id")
@@ -24,7 +24,7 @@ public class AdminProfileEntity {
     @OneToOne
     @MapsId
     @JoinColumn(name = "admin_id", referencedColumnName = "user_id")
-    private UserEntity user;
+    private Users user;
 
     @Column(name = "department")
     private String department;

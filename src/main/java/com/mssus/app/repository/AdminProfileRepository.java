@@ -1,6 +1,6 @@
 package com.mssus.app.repository;
 
-import com.mssus.app.entity.AdminProfileEntity;
+import com.mssus.app.entity.AdminProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -11,11 +11,11 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
-public interface AdminProfileRepository extends JpaRepository<AdminProfileEntity, Integer> {
+public interface AdminProfileRepository extends JpaRepository<AdminProfile, Integer> {
 
-    Optional<AdminProfileEntity> findByUserUserId(Integer userId);
+    Optional<AdminProfile> findByUserUserId(Integer userId);
 
     @Modifying
-    @Query("UPDATE AdminProfileEntity a SET a.lastLogin = :lastLogin WHERE a.adminId = :adminId")
+    @Query("UPDATE AdminProfile a SET a.lastLogin = :lastLogin WHERE a.adminId = :adminId")
     void updateLastLogin(@Param("adminId") Integer adminId, @Param("lastLogin") LocalDateTime lastLogin);
 }

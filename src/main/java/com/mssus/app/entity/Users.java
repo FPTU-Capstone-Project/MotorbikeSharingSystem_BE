@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class UserEntity {
+public class Users {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -70,16 +70,18 @@ public class UserEntity {
 
     // One-to-One relationships
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private RiderProfileEntity riderProfile;
+    private RiderProfile riderProfile;
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private DriverProfileEntity driverProfile;
+    private DriverProfile driverProfile;
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private AdminProfileEntity adminProfile;
+    private AdminProfile adminProfile;
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private WalletEntity wallet;
+    private Wallet wallet;
+    @Version
+    private Long version;
 
     // Helper method to check if user has a specific role
     public boolean hasRole(String role) {

@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class DriverProfileEntity {
+public class DriverProfile {
 
     @Id
     @Column(name = "driver_id")
@@ -28,7 +28,7 @@ public class DriverProfileEntity {
     @OneToOne
     @MapsId
     @JoinColumn(name = "driver_id", referencedColumnName = "user_id")
-    private UserEntity user;
+    private Users user;
 
     @Column(name = "license_number", unique = true, nullable = false)
     private String licenseNumber;

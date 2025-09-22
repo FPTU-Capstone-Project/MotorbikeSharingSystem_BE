@@ -1,10 +1,10 @@
 package com.mssus.app.mapper;
 
 import com.mssus.app.dto.response.UserProfileResponse;
-import com.mssus.app.entity.AdminProfileEntity;
-import com.mssus.app.entity.DriverProfileEntity;
-import com.mssus.app.entity.RiderProfileEntity;
-import com.mssus.app.entity.WalletEntity;
+import com.mssus.app.entity.AdminProfile;
+import com.mssus.app.entity.DriverProfile;
+import com.mssus.app.entity.RiderProfile;
+import com.mssus.app.entity.Wallet;
 import org.mapstruct.Mapper;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
@@ -14,11 +14,11 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 )
 public interface ProfileMapper {
 
-    UserProfileResponse.RiderProfile toRiderProfileResponse(RiderProfileEntity entity);
+    UserProfileResponse.RiderProfile toRiderProfileResponse(RiderProfile entity);
 
-    UserProfileResponse.DriverProfile toDriverProfileResponse(DriverProfileEntity entity);
+    UserProfileResponse.DriverProfile toDriverProfileResponse(DriverProfile entity);
 
-    UserProfileResponse.AdminProfile toAdminProfileResponse(AdminProfileEntity entity);
+    UserProfileResponse.AdminProfile toAdminProfileResponse(AdminProfile entity);
 
-    UserProfileResponse.WalletInfo toWalletInfoResponse(WalletEntity entity);
+    UserProfileResponse.WalletInfo toWalletInfoResponse(Wallet entity);
 }

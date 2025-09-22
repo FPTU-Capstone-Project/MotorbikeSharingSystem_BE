@@ -1,6 +1,6 @@
 package com.mssus.app.repository;
 
-import com.mssus.app.entity.RiderProfileEntity;
+import com.mssus.app.entity.RiderProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -11,16 +11,16 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 @Repository
-public interface RiderProfileRepository extends JpaRepository<RiderProfileEntity, Integer> {
+public interface RiderProfileRepository extends JpaRepository<RiderProfile, Integer> {
 
-    Optional<RiderProfileEntity> findByUserUserId(Integer userId);
+    Optional<RiderProfile> findByUserUserId(Integer userId);
 
     @Modifying
-    @Query("UPDATE RiderProfileEntity r SET r.totalRides = r.totalRides + 1, " +
+    @Query("UPDATE RiderProfile r SET r.totalRides = r.totalRides + 1, " +
            "r.totalSpent = r.totalSpent + :amount WHERE r.riderId = :riderId")
     void updateRideStats(@Param("riderId") Integer riderId, @Param("amount") BigDecimal amount);
 
     @Modifying
-    @Query("UPDATE RiderProfileEntity r SET r.ratingAvg = :rating WHERE r.riderId = :riderId")
+    @Query("UPDATE RiderProfile r SET r.ratingAvg = :rating WHERE r.riderId = :riderId")
     void updateRating(@Param("riderId") Integer riderId, @Param("rating") Float rating);
 }

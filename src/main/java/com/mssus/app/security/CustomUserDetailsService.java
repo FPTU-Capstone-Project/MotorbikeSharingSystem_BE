@@ -1,6 +1,6 @@
 package com.mssus.app.security;
 
-import com.mssus.app.entity.UserEntity;
+import com.mssus.app.entity.Users;
 import com.mssus.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +27,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         // Username can be either email or phone
-        UserEntity user = userRepository.findByEmailOrPhone(username, username)
+        Users user = userRepository.findByEmailOrPhone(username, username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email or phone: " + username));
 
         if (!user.getIsActive()) {
@@ -39,7 +39,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Transactional(readOnly = true)
     public UserDetails loadUserById(Integer userId) {
-        UserEntity user = userRepository.findByIdWithProfiles(userId)
+        Users user = userRepository.findByIdWithProfiles(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with id: " + userId));
 
         if (!user.getIsActive()) {
@@ -49,7 +49,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         return createUserDetails(user);
     }
 
-    private UserDetails createUserDetails(UserEntity user) {
+    private UserDetails createUserDetails(Users user) {
         List<GrantedAuthority> authorities = getAuthorities(user);
         
         return User.builder()
@@ -63,7 +63,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .build();
     }
 
-    private List<GrantedAuthority> getAuthorities(UserEntity user) {
+    private List<GrantedAuthority> getAuthorities(Users user) {
         List<GrantedAuthority> authorities = new ArrayList<>();
         
         // Base role for all authenticated users
