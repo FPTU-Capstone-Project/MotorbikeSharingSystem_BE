@@ -57,6 +57,9 @@ public class SharedRideRequest {
     @Column(name = "max_wait_time")
     private Integer maxWaitTime;
 
+    @Column(name = "coverage_time_step")
+    private Integer coverageTimeStep;
+
     @Column(name = "special_requests", columnDefinition = "TEXT")
     private String specialRequests;
 
@@ -71,6 +74,9 @@ public class SharedRideRequest {
 
     @Column(name = "actual_dropoff_time")
     private LocalDateTime actualDropoffTime;
+
+    @Column(name = "initiated_by")
+    private String initiatedBy;
 
     @CreatedDate
     @Column(name = "created_at", updatable = false)

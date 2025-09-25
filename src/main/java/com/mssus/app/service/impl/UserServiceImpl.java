@@ -238,7 +238,6 @@ public class UserServiceImpl implements UserService {
             RiderProfile rider = user.getRiderProfile();
             responseBuilder.riderProfile(UserProfileResponse.RiderProfile.builder()
                     .emergencyContact(rider.getEmergencyContact())
-                    .ratingAvg(rider.getRatingAvg())
                     .totalRides(rider.getTotalRides())
                     .totalSpent(rider.getTotalSpent())
                     .preferredPaymentMethod(rider.getPreferredPaymentMethod())
@@ -265,7 +264,7 @@ public class UserServiceImpl implements UserService {
             Wallet wallet = user.getWallet();
             responseBuilder.wallet(UserProfileResponse.WalletInfo.builder()
                     .walletId(wallet.getWalletId())
-                    .cachedBalance(wallet.getCachedBalance())
+//                    .shadowBalance(wallet.getShadowBalance())
                     .pendingBalance(wallet.getPendingBalance())
                     .isActive(wallet.getIsActive())
                     .build());

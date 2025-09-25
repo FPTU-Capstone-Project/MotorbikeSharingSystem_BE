@@ -25,6 +25,9 @@ public class EmergencyContacts {
     @Column(nullable = false)
     private String phone;
 
+    @Column(name = "fall_back_phone",nullable = false)
+    private String fallBackPhone;
+
     private String relationship;
     private Boolean isPrimary;
 

@@ -26,7 +26,7 @@ public class WalletServiceImpl implements WalletService {
         Wallet wallet = new Wallet();
         wallet.setUser(user);
         wallet.setPspAccountId("");
-        wallet.setCachedBalance(BigDecimal.ZERO);
+//        wallet.setCachedBalance(BigDecimal.ZERO);
 
         return null;
     }

@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Vehicle {
 
     @Id
@@ -39,9 +40,6 @@ public class Vehicle {
 
     @Column(name = "capacity")
     private Integer capacity;
-
-    @Column(name = "helmet_count")
-    private Integer helmetCount;
 
     @Column(name = "insurance_expiry")
     private LocalDateTime insuranceExpiry;

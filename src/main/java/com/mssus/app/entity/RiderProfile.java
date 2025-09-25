@@ -30,10 +30,6 @@ public class RiderProfile {
     @Column(name = "emergency_contact")
     private String emergencyContact;
 
-    @Column(name = "rating_avg")
-    @Builder.Default
-    private Float ratingAvg = 5.0f;
-
     @Column(name = "total_rides")
     @Builder.Default
     private Integer totalRides = 0;
@@ -41,6 +37,8 @@ public class RiderProfile {
     @Column(name = "total_spent", precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal totalSpent = BigDecimal.ZERO;
+
+    private String status;
 
     @Column(name = "preferred_payment_method", length = 20)
     @Builder.Default

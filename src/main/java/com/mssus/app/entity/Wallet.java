@@ -31,9 +31,9 @@ public class Wallet {
     @Column(name = "psp_account_id")
     private String pspAccountId;
 
-    @Column(name = "cached_balance", precision = 10, scale = 2)
+    @Column(name = "shadow_balance", precision = 10, scale = 2)
     @Builder.Default
-    private BigDecimal cachedBalance = BigDecimal.ZERO;
+    private BigDecimal shadowBalance = BigDecimal.ZERO;
 
     @Column(name = "pending_balance", precision = 10, scale = 2)
     @Builder.Default

@@ -34,8 +34,8 @@ public class Promotions {
     @Column(name = "discount_type", nullable = false)
     private String discountType;
 
-    @Column(name = "discount_value", nullable = false, precision = 19, scale = 2)
-    private BigDecimal discountValue;
+    @Column(name = "discount_rate", nullable = false, precision = 19, scale = 2)
+    private BigDecimal discountRate;
 
     @Column(name = "target_user_type")
     private String targetUserType;

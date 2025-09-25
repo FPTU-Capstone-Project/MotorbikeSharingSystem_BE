@@ -64,7 +64,7 @@ public class AuthServiceImpl implements AuthService {
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
                 .userType(Constants.USER_TYPE_STUDENT)
-                .isActive(true)
+                .isActive(false)
                 .emailVerified(false)
                 .phoneVerified(false)
                 .build();
@@ -223,7 +223,6 @@ public class AuthServiceImpl implements AuthService {
     private void createRiderProfile(Users user) {
         RiderProfile riderProfile = RiderProfile.builder()
                 .user(user)
-                .ratingAvg(Constants.DEFAULT_RATING)
                 .totalRides(0)
                 .totalSpent(BigDecimal.ZERO)
                 .preferredPaymentMethod(Constants.PAYMENT_METHOD_WALLET)
@@ -235,7 +234,7 @@ public class AuthServiceImpl implements AuthService {
     private void createWallet(Users user) {
         Wallet wallet = Wallet.builder()
                 .user(user)
-                .cachedBalance(BigDecimal.ZERO)
+                .shadowBalance(BigDecimal.ZERO)
                 .pendingBalance(BigDecimal.ZERO)
                 .totalToppedUp(BigDecimal.ZERO)
                 .totalSpent(BigDecimal.ZERO)
