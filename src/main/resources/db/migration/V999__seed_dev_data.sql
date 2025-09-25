@@ -83,3 +83,5 @@ FROM driver_profiles dp
 JOIN users u ON u.user_id = dp.driver_id
 WHERE u.email = 'driver@student.edu'
 ON CONFLICT (plate_number) DO NOTHING;
+
+

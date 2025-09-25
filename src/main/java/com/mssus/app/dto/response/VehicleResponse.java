@@ -26,10 +26,6 @@ public class VehicleResponse {
     @Schema(description = "Driver ID", example = "1")
     private Integer driverId;
 
-    @JsonProperty("driver_name")
-    @Schema(description = "Driver full name", example = "Nguyen Van A")
-    private String driverName;
-
     @JsonProperty("plate_number")
     @Schema(description = "Vehicle plate number", example = "29A-12345")
     private String plateNumber;
@@ -55,7 +51,7 @@ public class VehicleResponse {
     private LocalDateTime lastMaintenance;
 
     @JsonProperty("fuel_type")
-    @Schema(description = "Fuel type", example = "Gasoline")
+    @Schema(description = "Fuel type", example = "gasoline")
     private String fuelType;
 
     @Schema(description = "Vehicle status", example = "active")

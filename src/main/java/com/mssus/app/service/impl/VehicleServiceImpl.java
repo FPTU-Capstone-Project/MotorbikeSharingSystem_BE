@@ -47,7 +47,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .insuranceExpiry(request.getInsuranceExpiry())
                 .lastMaintenance(request.getLastMaintenance())
                 .fuelType(request.getFuelType())
-                .status(request.getStatus() != null ? request.getStatus() : "pending_verification")
+                .status(request.getStatus() != null ? request.getStatus() : "pending")
                 .build();
 
         Vehicle savedVehicle = vehicleRepository.save(vehicle);
@@ -182,8 +182,6 @@ public class VehicleServiceImpl implements VehicleService {
         return VehicleResponse.builder()
                 .vehicleId(vehicle.getVehicleId())
                 .driverId(vehicle.getDriver().getDriverId())
-                .driverName(vehicle.getDriver().getUser() != null ?
-                           vehicle.getDriver().getUser().getFullName() : null)
                 .plateNumber(vehicle.getPlateNumber())
                 .model(vehicle.getModel())
                 .color(vehicle.getColor())

@@ -13,25 +13,36 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Verification response")
-public class VerificationResponse {
+@Schema(description = "Student verification response")
+public class StudentVerificationResponse {
 
     @JsonProperty("verification_id")
-    @Schema(description = "Verification ID", example = "1001")
+    @Schema(description = "Verification ID", example = "1")
     private Integer verificationId;
 
     @JsonProperty("user_id")
     @Schema(description = "User ID", example = "1")
     private Integer userId;
 
-    @Schema(description = "Verification type", example = "student_id")
-    private String type;
+    @JsonProperty("full_name")
+    @Schema(description = "Student full name", example = "Nguyen Van A")
+    private String fullName;
+
+    @Schema(description = "Email address", example = "student@example.edu")
+    private String email;
+
+    @Schema(description = "Phone number", example = "0901234567")
+    private String phone;
+
+    @JsonProperty("student_id")
+    @Schema(description = "Student ID", example = "SV001")
+    private String studentId;
 
     @Schema(description = "Verification status", example = "pending")
     private String status;
 
     @JsonProperty("document_url")
-    @Schema(description = "Document URL", example = "https://cdn.example.com/verification/1001.jpg")
+    @Schema(description = "Student ID card image URL")
     private String documentUrl;
 
     @JsonProperty("document_type")
@@ -39,7 +50,7 @@ public class VerificationResponse {
     private String documentType;
 
     @JsonProperty("rejection_reason")
-    @Schema(description = "Rejection reason (if rejected)")
+    @Schema(description = "Rejection reason if rejected")
     private String rejectionReason;
 
     @JsonProperty("verified_by")
@@ -50,14 +61,7 @@ public class VerificationResponse {
     @Schema(description = "Verification date")
     private LocalDateTime verifiedAt;
 
-    @JsonProperty("expires_at")
-    @Schema(description = "Expiry date")
-    private LocalDateTime expiresAt;
-
-    @Schema(description = "Additional metadata")
-    private String metadata;
-
     @JsonProperty("created_at")
-    @Schema(description = "Creation date")
+    @Schema(description = "Submission date")
     private LocalDateTime createdAt;
 }

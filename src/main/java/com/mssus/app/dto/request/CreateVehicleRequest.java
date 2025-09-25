@@ -49,12 +49,12 @@ public class CreateVehicleRequest {
     @Schema(description = "Last maintenance date")
     private LocalDateTime lastMaintenance;
 
-    @Size(max = 50, message = "Fuel type must not exceed 50 characters")
-    @Schema(description = "Fuel type", example = "Gasoline")
+    @Pattern(regexp = "^(gasoline|electric)$", message = "Fuel type must be either 'gasoline' or 'electric'")
+    @Schema(description = "Fuel type", example = "gasoline")
     private String fuelType;
 
-    @Pattern(regexp = "^(active|inactive|maintenance|pending_verification)$",
-             message = "Status must be one of: active, inactive, maintenance, pending_verification")
-    @Schema(description = "Vehicle status", example = "pending_verification")
+    @Pattern(regexp = "^(active|inactive|maintenance|pending)$",
+             message = "Status must be one of: active, inactive, maintenance, pending")
+    @Schema(description = "Vehicle status", example = "pending")
     private String status;
 }

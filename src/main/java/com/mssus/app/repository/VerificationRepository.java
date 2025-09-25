@@ -32,4 +32,8 @@ public interface VerificationRepository extends JpaRepository<Verification, Inte
     @Query("SELECT COUNT(v) > 0 FROM Verification v WHERE v.user.userId = :userId " +
            "AND v.type = :type AND v.status = 'approved'")
     boolean isUserVerifiedForType(@Param("userId") Integer userId, @Param("type") String type);
+
+    Long countByTypeAndStatus(String type, String status);
+
+    Long countByStatus(String status);
 }

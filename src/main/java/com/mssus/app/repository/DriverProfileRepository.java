@@ -40,4 +40,8 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, In
     @Modifying
     @Query("UPDATE DriverProfile d SET d.isAvailable = :available WHERE d.driverId = :driverId")
     void updateAvailability(@Param("driverId") Integer driverId, @Param("available") Boolean available);
+
+    org.springframework.data.domain.Page<DriverProfile> findByStatus(String status, org.springframework.data.domain.Pageable pageable);
+
+    Long countByStatus(String status);
 }
