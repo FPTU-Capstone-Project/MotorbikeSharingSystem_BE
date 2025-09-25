@@ -1,6 +1,8 @@
 package com.mssus.app.repository;
 
+import com.mssus.app.common.enums.DriverProfileStatus;
 import com.mssus.app.entity.DriverProfile;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -20,7 +22,7 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, In
 
     boolean existsByLicenseNumber(String licenseNumber);
 
-    List<DriverProfile> findByStatus(String status);
+    List<DriverProfile> findByStatus(DriverProfileStatus status);
 
     List<DriverProfile> findByIsAvailable(Boolean isAvailable);
 
@@ -35,13 +37,13 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, In
 
     @Modifying
     @Query("UPDATE DriverProfile d SET d.status = :status WHERE d.driverId = :driverId")
-    void updateStatus(@Param("driverId") Integer driverId, @Param("status") String status);
+    void updateStatus(@Param("driverId") Integer driverId, @Param("status") DriverProfileStatus status);
 
     @Modifying
     @Query("UPDATE DriverProfile d SET d.isAvailable = :available WHERE d.driverId = :driverId")
     void updateAvailability(@Param("driverId") Integer driverId, @Param("available") Boolean available);
 
-    org.springframework.data.domain.Page<DriverProfile> findByStatus(String status, org.springframework.data.domain.Pageable pageable);
+    org.springframework.data.domain.Page<DriverProfile> findByStatus(DriverProfileStatus status, Pageable pageable);
 
-    Long countByStatus(String status);
+    Long countByStatus(DriverProfileStatus status);
 }

@@ -4,7 +4,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 @Entity
@@ -22,11 +21,11 @@ public class UserPromotion {
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
-    private Users user;
+    private User user;
 
     @ManyToOne
     @JoinColumn(name = "promotion_id", nullable = false)
-    private Promotions promotion;
+    private Promotion promotion;
 
     @ManyToOne
     @JoinColumn(name = "shared_ride_request_id", nullable = false)

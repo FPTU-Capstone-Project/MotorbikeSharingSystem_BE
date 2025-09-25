@@ -1,5 +1,7 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.PaymentMethod;
+import com.mssus.app.common.enums.RiderProfileStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -25,7 +27,7 @@ public class RiderProfile {
     @OneToOne
     @MapsId
     @JoinColumn(name = "rider_id", referencedColumnName = "user_id")
-    private Users user;
+    private User user;
 
     @Column(name = "emergency_contact")
     private String emergencyContact;
@@ -38,11 +40,15 @@ public class RiderProfile {
     @Builder.Default
     private BigDecimal totalSpent = BigDecimal.ZERO;
 
-    private String status;
+    @Column(name = "status", length = 20)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private RiderProfileStatus status = RiderProfileStatus.ACTIVE;
 
     @Column(name = "preferred_payment_method", length = 20)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private String preferredPaymentMethod = "wallet";
+    private PaymentMethod preferredPaymentMethod = PaymentMethod.WALLET;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

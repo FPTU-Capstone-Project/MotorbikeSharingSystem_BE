@@ -1,6 +1,6 @@
 package com.mssus.app.service.notification;
 
-import com.mssus.app.exception.EmailTemplateException;
+import com.mssus.app.common.exception.EmailTemplateException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;

@@ -1,9 +1,15 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.DriverProfileStatus;
+import com.mssus.app.common.enums.PaymentMethod;
+import com.mssus.app.common.enums.UserStatus;
+import com.mssus.app.common.enums.UserType;
+import com.mssus.app.common.exception.ConflictException;
+import com.mssus.app.common.exception.NotFoundException;
+import com.mssus.app.common.exception.UnauthorizedException;
 import com.mssus.app.dto.request.*;
 import com.mssus.app.dto.response.*;
 import com.mssus.app.entity.*;
-import com.mssus.app.exception.*;
 import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
 import com.mssus.app.service.AuthService;
@@ -18,11 +24,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -58,13 +65,13 @@ public class AuthServiceImpl implements AuthService {
         }
         
         // Create user entity
-        Users user = Users.builder()
+        User user = User.builder()
                 .email(request.getEmail())
                 .phone(normalizedPhone)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
-                .userType(Constants.USER_TYPE_STUDENT)
-                .isActive(false)
+                .userType(UserType.USER)
+                .status(UserStatus.PENDING)
                 .emailVerified(false)
                 .phoneVerified(false)
                 .build();
@@ -85,7 +92,8 @@ public class AuthServiceImpl implements AuthService {
         // Generate JWT token
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getUserId());
-        claims.put("role", user.getPrimaryRole());
+        claims.put("active_role", user.getPrimaryRole());
+        claims.put("iss", "mssus-app");
         String token = jwtService.generateToken(user.getEmail(), claims);
         
         return RegisterResponse.builder()
@@ -105,14 +113,18 @@ public class AuthServiceImpl implements AuthService {
         
         // Find user by email or phone
         String identifier = request.getEmailOrPhone();
-        Users user = ValidationUtil.isValidEmail(identifier)
+        User user = ValidationUtil.isValidEmail(identifier)
                 ? userRepository.findByEmail(identifier)
                     .orElseThrow(UnauthorizedException::invalidCredentials)
                 : userRepository.findByPhone(ValidationUtil.normalizePhone(identifier))
                     .orElseThrow(UnauthorizedException::invalidCredentials);
         
-        if (!user.getIsActive()) {
+        if (UserStatus.SUSPENDED.equals(user.getStatus())) {
             throw UnauthorizedException.accountDisabled();
+        }
+
+        if (UserStatus.PENDING.equals(user.getStatus())) {
+            throw UnauthorizedException.accountPending();
         }
         
         // Authenticate
@@ -121,9 +133,10 @@ public class AuthServiceImpl implements AuthService {
         );
         
         // Generate tokens
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getUserId());
-        claims.put("role", user.getPrimaryRole());
+        Map<String, Object> claims = buildTokenClaims(user);
+//        Map<String, Object> claims = new HashMap<>();
+//        claims.put("userId", user.getUserId());
+//        claims.put("role", user.getPrimaryRole());
         
         String accessToken = jwtService.generateToken(user.getEmail(), claims);
         String refreshToken = jwtService.generateRefreshToken(user.getEmail());
@@ -136,7 +149,7 @@ public class AuthServiceImpl implements AuthService {
         
         return LoginResponse.builder()
                 .userId(user.getUserId())
-                .userType(user.getPrimaryRole().toLowerCase())
+                .userType(user.getUserType().name())
                 .token(accessToken)
                 .refreshToken(refreshToken)
                 .expiresIn(jwtService.getExpirationTime() / 1000) // Convert to seconds
@@ -156,7 +169,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public MessageResponse forgotPassword(ForgotPasswordRequest request) {
         String identifier = request.getEmailOrPhone();
-        Users user = ValidationUtil.isValidEmail(identifier)
+        User user = ValidationUtil.isValidEmail(identifier)
                 ? userRepository.findByEmail(identifier).orElse(null)
                 : userRepository.findByPhone(ValidationUtil.normalizePhone(identifier)).orElse(null);
         
@@ -178,7 +191,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public OtpResponse requestOtp(String username, String otpFor) {
-        Users user = userRepository.findByEmail(username)
+        User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
         
         // Generate OTP
@@ -220,18 +233,18 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    private void createRiderProfile(Users user) {
+    private void createRiderProfile(User user) {
         RiderProfile riderProfile = RiderProfile.builder()
                 .user(user)
                 .totalRides(0)
                 .totalSpent(BigDecimal.ZERO)
-                .preferredPaymentMethod(Constants.PAYMENT_METHOD_WALLET)
+                .preferredPaymentMethod(PaymentMethod.WALLET)
                 .build();
 
         riderProfileRepository.save(riderProfile);
     }
 
-    private void createWallet(Users user) {
+    private void createWallet(User user) {
         Wallet wallet = Wallet.builder()
                 .user(user)
                 .shadowBalance(BigDecimal.ZERO)
@@ -242,5 +255,71 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         walletRepository.save(wallet);
+    }
+
+    private Map<String, Object> buildTokenClaims(User user) {
+        Map<String, Object> claims = new HashMap<>();
+
+        // Standard claims
+        claims.put("iss", "mssus.api");
+        claims.put("sub", "user-" + user.getUserId());
+
+        // User information
+        claims.put("email", user.getEmail());
+
+        // Roles array - all roles user has
+        List<String> roles = getUserRoles(user);
+        claims.put("roles", roles);
+
+        // Active role - primary role or client-selected
+        claims.put("active_role", user.getPrimaryRole());
+
+        // Role status for ABAC (Attribute-Based Access Control)
+        Map<String, String> roleStatus = buildRoleStatus(user);
+        claims.put("role_status", roleStatus);
+
+        // Token version for invalidation
+        claims.put("token_version", user.getTokenVersion());
+
+        return claims;
+    }
+
+    private List<String> getUserRoles(User user) {
+        List<String> roles = new ArrayList<>();
+        if (user.hasRole("ADMIN")) {
+            roles.add("ADMIN");
+            return roles; // Admin has all access, no need to check further
+        }
+
+        // Check all possible roles
+        if (user.hasRole("RIDER")) {
+            roles.add("RIDER");
+        }
+
+        if (user.hasRole("DRIVER") &&
+            DriverProfileStatus.ACTIVE.equals(user.getDriverProfile().getStatus())) {
+            roles.add("DRIVER");
+        }
+
+        return roles;
+    }
+
+    private Map<String, String> buildRoleStatus(User user) {
+        Map<String, String> roleStatus = new HashMap<>();
+
+        if (user.hasRole("ADMIN")) {
+            roleStatus.put("ADMIN", "ACTIVE");
+            return roleStatus; // Admin has all access, no need to check further
+        }
+
+        if (user.hasRole("RIDER")) {
+            roleStatus.put("RIDER", user.getRiderProfile().getStatus().name());
+        }
+
+        if (user.hasRole("DRIVER")) {
+            roleStatus.put("DRIVER", user.getDriverProfile().getStatus().name());
+        }
+
+        return roleStatus;
     }
 }

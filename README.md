@@ -4,6 +4,34 @@ A Spring Boot backend application for motorbike sharing system with PostgreSQL d
 
 ---
 
+## **Table of Contents**
+
+- [Architecture](#architecture)
+  - [System Context (C4 Level 1)](docs/architecture/C4-Context.puml) - High-level view of system actors and external integrations
+  - [Container Architecture (C4 Level 2)](docs/architecture/C4-Containers.puml) - Applications, databases, and infrastructure components
+  - [Backend Components](docs/architecture/Backend-Components.puml) - Internal component structure of the backend API
+  - [Package Structure](docs/architecture/Backend-Packages.puml) - Layered package organization and module boundaries
+- [Setup Guide](#choose-your-setup-path)
+- [Development](#development-setup)
+- [API Documentation](#api-documentation)
+- [Project Structure](#project-structure)
+- [Support](#support)
+
+---
+
+## **Architecture**
+
+The MSSUS platform follows a microservices-ready architecture with clean separation of concerns. For detailed architecture documentation:
+
+- **[System Context Diagram](docs/architecture/C4-Context.puml)** - Shows how MSSUS interacts with users and external systems (payment gateways, maps, notifications)
+- **[Container Diagram](docs/architecture/C4-Containers.puml)** - Details the mobile apps, web admin, backend API, database, cache, and message queue components
+- **[Backend Components Diagram](docs/architecture/Backend-Components.puml)** - Illustrates controllers, services, repositories, and adapters within the Spring Boot backend
+- **[Package Structure Diagram](docs/architecture/Backend-Packages.puml)** - Presents the layered package organization following Domain-Driven Design principles
+
+All diagrams are in PlantUML format and can be rendered using PlantUML tools or IDE plugins.
+
+---
+
 ## **Choose Your Setup Path**
 
 ### **For Non-Technical Users or First-Time Setup**

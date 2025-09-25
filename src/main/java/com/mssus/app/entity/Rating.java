@@ -1,4 +1,6 @@
 package com.mssus.app.entity;
+
+import com.mssus.app.common.enums.RatingType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -33,7 +35,8 @@ public class Rating {
     private DriverProfile target;
 
     @Column(name = "rating_type")
-    private String ratingType;
+    @Enumerated(EnumType.STRING)
+    private RatingType ratingType;
 
     @Column(name = "score")
     private Integer score;

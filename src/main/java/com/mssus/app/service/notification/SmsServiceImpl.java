@@ -5,7 +5,7 @@ import com.mssus.app.config.properties.SmsConfigurationProperties;
 import com.mssus.app.dto.request.SmsRequest;
 import com.mssus.app.dto.response.notification.SmsProvider;
 import com.mssus.app.dto.response.notification.SmsResult;
-import com.mssus.app.exception.SmsException;
+import com.mssus.app.common.exception.SmsException;
 import com.mssus.app.service.SmsService;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;

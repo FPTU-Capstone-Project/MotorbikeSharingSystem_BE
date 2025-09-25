@@ -1,0 +1,99 @@
+@startuml C4-Containers
+!define C4_CONTAINER
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Container Diagram for MSSUS - Motorbike Sharing System for University Students
+
+Person(student, "University Student", "Rider/Driver dual role")
+Person(admin, "System Administrator", "Platform management")
+
+System_Boundary(mssus, "MSSUS Platform") {
+    Container(mobile_app, "Mobile Application", "Flutter", "Native mobile app for riders and drivers")
+    Container(admin_web, "Admin Web Application", "ReactJS", "Web interface for system administration")
+    Container(backend_api, "Backend API", "Spring Boot 3", "REST API handling business logic")
+    ContainerDb(database, "Database", "PostgreSQL 15", "Stores users, rides, transactions")
+    Container(cache, "Cache", "Redis", "Session storage, temporary data")
+    Container(queue, "Message Queue", "RabbitMQ", "Async processing for notifications")
+}
+
+System_Ext(payment_psp, "MoMo PSP", "E-wallet payment processing")
+System_Ext(maps_service, "Google Maps", "Navigation & routing")
+System_Ext(fcm, "Firebase Cloud Messaging", "Push notifications")
+System_Ext(sms_gateway, "SMS Provider", "OTP delivery")
+System_Ext(smtp, "Email Service", "Email notifications")
+
+Rel(student, mobile_app, "Uses", "HTTPS")
+Rel(admin, admin_web, "Uses", "HTTPS")
+
+Rel(mobile_app, backend_api, "Makes API calls", "HTTPS/REST, JWT")
+Rel(admin_web, backend_api, "Makes API calls", "HTTPS/REST, JWT")
+
+Rel(backend_api, database, "Reads/Writes", "JDBC")
+Rel(backend_api, cache, "Caches data", "Redis Protocol")
+Rel(backend_api, queue, "Publishes events", "AMQP")
+
+Rel(queue, fcm, "Sends push notifications", "HTTPS")
+Rel(backend_api, payment_psp, "Process payments", "HTTPS/REST API")
+Rel(backend_api, maps_service, "Get routes", "HTTPS/REST API")
+Rel(backend_api, sms_gateway, "Send OTP", "HTTPS/API")
+Rel(backend_api, smtp, "Send emails", "SMTP")
+
+note bottom of backend_api
+  **Key Features:**
+  - JWT authentication
+  - Multi-profile management
+  - AI-based ride matching
+  - Real-time GPS tracking
+  - Transaction processing
+  - SOS handling
+  
+  **Tech Stack:**
+  - Java 17, Spring Boot 3
+  - Spring Security + JWT
+  - Spring Data JPA
+  - Swagger/OpenAPI
+end note
+
+note right of database
+  **Data Storage:**
+  - Users & profiles
+  - Rides & requests
+  - Wallets & transactions
+  - Vehicles
+  - Notifications
+  - Reviews & ratings
+  
+  **Optimization:**
+  - Indexed queries
+  - Connection pooling
+  - Read replicas (future)
+end note
+
+note left of mobile_app
+  **Features:**
+  - Rider booking
+  - Driver management
+  - Real-time tracking
+  - In-app wallet
+  - Push notifications
+  - SOS button
+  
+  **Platforms:**
+  - iOS
+  - Android
+end note
+
+legend
+  **Legend**
+  This diagram shows the containers (applications and data stores)
+  that make up the MSSUS system. All internal communications
+  are secured with JWT tokens. External integrations use
+  secure API protocols.
+  
+  **Scalability:** Backend API and Queue are stateless for horizontal scaling
+  **Security:** HTTPS everywhere, JWT auth, encrypted sensitive data
+  **Performance:** Redis cache for frequently accessed data
+end legend
+
+@enduml
+

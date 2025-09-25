@@ -1,5 +1,6 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.DriverProfileStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -28,7 +29,7 @@ public class DriverProfile {
     @OneToOne
     @MapsId
     @JoinColumn(name = "driver_id", referencedColumnName = "user_id")
-    private Users user;
+    private User user;
 
     @Column(name = "license_number", unique = true, nullable = false)
     private String licenseNumber;
@@ -37,8 +38,9 @@ public class DriverProfile {
     private LocalDateTime licenseVerifiedAt;
 
     @Column(name = "status", length = 20)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private String status = "pending";
+    private DriverProfileStatus status = DriverProfileStatus.PENDING;
 
     @Column(name = "rating_avg")
     @Builder.Default

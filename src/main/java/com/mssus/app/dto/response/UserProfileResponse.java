@@ -60,8 +60,8 @@ public class UserProfileResponse {
         @JsonProperty("profile_photo_url")
         private String profilePhotoUrl;
 
-        @JsonProperty("is_active")
-        private Boolean isActive;
+        @JsonProperty("status")
+        private String status;
 
         @JsonProperty("email_verified")
         private Boolean emailVerified;
