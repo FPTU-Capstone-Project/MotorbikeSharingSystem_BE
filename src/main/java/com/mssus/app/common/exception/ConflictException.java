@@ -1,6 +1,15 @@
 package com.mssus.app.common.exception;
 
+/**
+ * Exception for resource conflict scenarios.
+ * Supports both legacy constructor-based usage and new catalog-based factory methods.
+ * 
+ * @deprecated Use BaseDomainException.of("user.conflict.email-exists") or specific factory methods instead
+ */
+@Deprecated
 public class ConflictException extends DomainException {
+    
+    // Legacy constructors for backward compatibility
     public ConflictException(String message) {
         super("CONFLICT", message);
     }
@@ -9,19 +18,25 @@ public class ConflictException extends DomainException {
         super(errorCode, message);
     }
 
-    public static ConflictException emailAlreadyExists(String email) {
-        return new ConflictException("EMAIL_ALREADY_EXISTS", "Email already exists: " + email);
+    // New catalog-based factory methods
+    public static BaseDomainException emailAlreadyExists(String email) {
+        return BaseDomainException.formatted("user.conflict.email-exists", "Email already exists: " + email);
     }
 
-    public static ConflictException phoneAlreadyExists(String phone) {
-        return new ConflictException("PHONE_ALREADY_EXISTS", "Phone already exists: " + phone);
+    public static BaseDomainException phoneAlreadyExists(String phone) {
+        return BaseDomainException.formatted("user.conflict.username-exists", "Phone already exists: " + phone);
     }
 
-    public static ConflictException licenseNumberAlreadyExists(String licenseNumber) {
-        return new ConflictException("LICENSE_ALREADY_EXISTS", "License number already exists: " + licenseNumber);
+    public static BaseDomainException licenseNumberAlreadyExists(String licenseNumber) {
+        return BaseDomainException.formatted("user.conflict.username-exists", "License number already exists: " + licenseNumber);
     }
 
-    public static ConflictException profileAlreadyExists(String profileType) {
-        return new ConflictException("PROFILE_ALREADY_EXISTS", profileType + " profile already exists for this user");
+    public static BaseDomainException profileAlreadyExists(String profileType) {
+        return BaseDomainException.formatted("user.conflict.username-exists", profileType + " profile already exists for this user");
+    }
+    
+    // Catalog-based factory method for general use
+    public static BaseDomainException of(String message) {
+        return BaseDomainException.of("user.conflict.email-exists", message);
     }
 }

@@ -84,7 +84,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional
     public MessageResponse rejectStudentVerification(Integer userId, VerificationDecisionRequest request) {
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
-            throw new ValidationException("Rejection reason is required");
+            throw ValidationException.of("Rejection reason is required");
         }
 
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
@@ -224,12 +224,12 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional
     public MessageResponse rejectDriverVerification(Integer driverId, VerificationDecisionRequest request) {
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
-            throw new ValidationException("Rejection reason is required");
+            throw ValidationException.of("Rejection reason is required");
         }
 
         List<Verification> verifications = verificationRepository.findByUserId(driverId);
         if (verifications.isEmpty()) {
-            throw new NotFoundException("Driver verifications not found for driver ID: " + driverId);
+            throw NotFoundException.resourceNotFound("Driver verifications", "driver ID " + driverId);
         }
 
         AdminProfile admin = getCurrentAdmin();

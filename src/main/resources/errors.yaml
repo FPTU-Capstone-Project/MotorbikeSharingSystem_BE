@@ -1,0 +1,282 @@
+# Error Catalog for MSSUS Backend
+# Format: <domain>.<category>.<name>
+# Domain: auth, user, wallet, notification, system
+# Category: validation, not-found, conflict, unauthorized, internal, operation
+# HTTP Status derived from first digit: 4xx -> 400-level, 5xx -> 500-level
+
+errors:
+  # Authentication & Authorization Errors
+  - id: auth.validation.missing-credential
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Authentication credentials are required"
+    domain: auth
+    category: validation
+    owner: auth-team
+    remediation: "Provide valid credentials in the request"
+
+  - id: auth.validation.invalid-credentials
+    httpStatus: 401
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Invalid username or password"
+    domain: auth
+    category: validation
+    owner: auth-team
+    remediation: "Check credentials and try again"
+
+  - id: auth.unauthorized.token-expired
+    httpStatus: 401
+    severity: INFO
+    isRetryable: true
+    messageTemplate: "Authentication token has expired"
+    domain: auth
+    category: unauthorized
+    owner: auth-team
+    remediation: "Refresh your authentication token"
+
+  - id: auth.unauthorized.token-invalid
+    httpStatus: 401
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Authentication token is invalid"
+    domain: auth
+    category: unauthorized
+    owner: auth-team
+    remediation: "Provide a valid authentication token"
+
+  - id: auth.unauthorized.access-denied
+    httpStatus: 403
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "You don't have permission to access this resource"
+    domain: auth
+    category: unauthorized
+    owner: auth-team
+    remediation: "Contact administrator for access permissions"
+
+  - id: auth.unauthorized.account-pending
+    httpStatus: 403
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "Account is pending approval"
+    domain: auth
+    category: unauthorized
+    owner: auth-team
+    remediation: "Wait for account approval"
+
+  - id: auth.unauthorized.account-suspended
+    httpStatus: 403
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Account is suspended"
+    domain: auth
+    category: unauthorized
+    owner: auth-team
+    remediation: "Contact support for account status"
+
+
+  # User Management Errors
+  - id: user.not-found.by-id
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "User not found"
+    domain: user
+    category: not-found
+    owner: user-team
+
+  - id: user.conflict.email-exists
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Email address already exists"
+    domain: user
+    category: conflict
+    owner: user-team
+    remediation: "Use a different email address or recover existing account"
+
+  - id: user.conflict.username-exists
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Username already exists"
+    domain: user
+    category: conflict
+    owner: user-team
+    remediation: "Choose a different username"
+
+  - id: user.validation.invalid-email
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Invalid email format"
+    domain: user
+    category: validation
+    owner: user-team
+    remediation: "Provide a valid email address"
+
+  - id: user.validation.password-too-weak
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Password does not meet security requirements"
+    domain: user
+    category: validation
+    owner: user-team
+    remediation: "Password must be at least 8 characters with mixed case, numbers, and symbols"
+
+  # Wallet Management Errors
+  - id: wallet.not-found.by-user
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "Wallet not found for user"
+    domain: wallet
+    category: not-found
+    owner: wallet-team
+
+  - id: wallet.conflict.already-exists
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Wallet already exists for this user"
+    domain: wallet
+    category: conflict
+    owner: wallet-team
+
+  - id: wallet.operation.insufficient-balance
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Insufficient wallet balance for this operation"
+    domain: wallet
+    category: operation
+    owner: wallet-team
+    remediation: "Add funds to your wallet or reduce the transaction amount"
+
+  - id: wallet.operation.inactive-wallet
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Wallet is inactive and cannot be used"
+    domain: wallet
+    category: operation
+    owner: wallet-team
+    remediation: "Contact support to reactivate your wallet"
+
+  - id: wallet.operation.failed
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: "Wallet operation failed"
+    domain: wallet
+    category: operation
+    owner: wallet-team
+    remediation: "Try again later or contact support if the issue persists"
+
+  # Notification Errors
+  - id: notification.operation.email-send-failed
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: "Failed to send email notification"
+    domain: notification
+    category: operation
+    owner: notification-team
+
+  - id: notification.operation.sms-send-failed
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: "Failed to send SMS notification"
+    domain: notification
+    category: operation
+    owner: notification-team
+
+  - id: notification.operation.template-not-found
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: false
+    messageTemplate: "Email template not found"
+    domain: notification
+    category: operation
+    owner: notification-team
+
+  # Validation Errors
+  - id: validation.request.invalid-body
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Request body is invalid"
+    domain: validation
+    category: validation
+    owner: platform-team
+
+  - id: validation.request.missing-parameter
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Required request parameter is missing"
+    domain: validation
+    category: validation
+    owner: platform-team
+
+  - id: validation.request.invalid-parameter-type
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Request parameter has invalid type"
+    domain: validation
+    category: validation
+    owner: platform-team
+
+  - id: validation.file.size-exceeded
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "File size exceeds maximum limit"
+    domain: validation
+    category: validation
+    owner: platform-team
+    remediation: "Reduce file size and try again"
+
+  # System Errors
+  - id: system.internal.unexpected
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: false
+    messageTemplate: "An unexpected error occurred"
+    domain: system
+    category: internal
+    owner: platform-team
+
+  - id: system.internal.database-error
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: "Database operation failed"
+    domain: system
+    category: internal
+    owner: platform-team
+
+  - id: system.internal.service-unavailable
+    httpStatus: 503
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: "Service is temporarily unavailable"
+    domain: system
+    category: internal
+    owner: platform-team
+    remediation: "Please try again later"
+
+  - id: system.not-found.resource
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "Requested resource not found"
+    domain: system
+    category: not-found
+    owner: platform-team
+    remediation: "Check the resource identifier and try again"

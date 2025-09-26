@@ -98,7 +98,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         // Validate file
         if (file.isEmpty()) {
-            throw new ValidationException("File is empty");
+            throw ValidationException.of("File is empty");
         }
 
         if (file.getSize() > Constants.MAX_IMAGE_SIZE) {
@@ -125,17 +125,17 @@ public class ProfileServiceImpl implements ProfileService {
         // Validate user has the target profile
         if ("driver".equals(targetRole)) {
             if (user.getDriverProfile() == null) {
-                throw new ValidationException("You don't have a driver profile");
+                throw ValidationException.of("You don't have a driver profile");
             }
             if (!DriverProfileStatus.ACTIVE.equals(user.getDriverProfile().getStatus())) {
                 throw UnauthorizedException.profileNotActive("Driver");
             }
         } else if ("rider".equals(targetRole)) {
             if (user.getRiderProfile() == null) {
-                throw new ValidationException("You don't have a rider profile");
+                throw ValidationException.of("You don't have a rider profile");
             }
         } else {
-            throw new ValidationException("Invalid target role: " + targetRole);
+            throw ValidationException.of("Invalid target role: " + targetRole);
         }
 
         // Note: Actual role switching is handled by generating new tokens
@@ -150,7 +150,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         // Check if already verified
         if (verificationRepository.isUserVerifiedForType(user.getUserId(), VerificationType.STUDENT_ID)) {
-            throw new ConflictException("Student verification already approved");
+            throw ConflictException.of("Student verification already approved");
         }
 
         // TODO: Implement file storage
@@ -209,8 +209,8 @@ public class ProfileServiceImpl implements ProfileService {
 
         return VerificationResponse.builder()
                 .verificationId(1) // Placeholder
-                .status(Constants.STATUS_PENDING)
-                .type(Constants.VERIFICATION_DRIVER_LICENSE)
+                .status(VerificationStatus.PENDING.name())
+                .type(VerificationType.DRIVER_LICENSE.name())
                 .build();
     }
 

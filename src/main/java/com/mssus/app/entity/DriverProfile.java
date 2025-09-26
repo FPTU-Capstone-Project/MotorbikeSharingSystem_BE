@@ -56,7 +56,7 @@ public class DriverProfile {
 
     @Column(name = "commission_rate", precision = 3, scale = 2)
     @Builder.Default
-    private BigDecimal commissionRate = new BigDecimal("0.15");
+    private BigDecimal commissionRate = new BigDecimal("0.15"); //TODO: Remove the field after implementing dynamic commission rates
 
     @Column(name = "is_available")
     @Builder.Default
@@ -64,7 +64,7 @@ public class DriverProfile {
 
     @Column(name = "max_passengers")
     @Builder.Default
-    private Integer maxPassengers = 1;
+    private Integer maxPassengers = 1; //TODO: Questionable, remove after implementing vehicle entity
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

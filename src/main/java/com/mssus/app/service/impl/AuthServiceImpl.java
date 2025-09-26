@@ -4,6 +4,7 @@ import com.mssus.app.common.enums.DriverProfileStatus;
 import com.mssus.app.common.enums.PaymentMethod;
 import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.enums.UserType;
+import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.common.exception.ConflictException;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.UnauthorizedException;
@@ -120,11 +121,11 @@ public class AuthServiceImpl implements AuthService {
                     .orElseThrow(UnauthorizedException::invalidCredentials);
         
         if (UserStatus.SUSPENDED.equals(user.getStatus())) {
-            throw UnauthorizedException.accountDisabled();
+            throw BaseDomainException.of("auth.unauthorized.account-suspended");
         }
 
         if (UserStatus.PENDING.equals(user.getStatus())) {
-            throw UnauthorizedException.accountPending();
+            throw BaseDomainException.of("auth.unauthorized.account-pending");
         }
         
         // Authenticate

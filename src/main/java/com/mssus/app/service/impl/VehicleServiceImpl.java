@@ -33,11 +33,11 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional
     public VehicleResponse createVehicle(CreateVehicleRequest request) {
         if (vehicleRepository.existsByPlateNumber(request.getPlateNumber())) {
-            throw new ConflictException("Vehicle with plate number " + request.getPlateNumber() + " already exists");
+            throw ConflictException.of("Vehicle with plate number " + request.getPlateNumber() + " already exists");
         }
 
         DriverProfile driver = driverProfileRepository.findById(request.getDriverId())
-                .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + request.getDriverId()));
+                .orElseThrow(() -> NotFoundException.resourceNotFound("Driver", "ID " + request.getDriverId()));
 
         Vehicle vehicle = Vehicle.builder()
                 .driver(driver)
@@ -60,7 +60,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional(readOnly = true)
     public VehicleResponse getVehicleById(Integer vehicleId) {
         Vehicle vehicle = vehicleRepository.findByIdWithDriver(vehicleId)
-                .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
+                .orElseThrow(() -> NotFoundException.resourceNotFound("Vehicle", "ID " + vehicleId));
         return mapToVehicleResponse(vehicle);
     }
 
@@ -68,12 +68,12 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional
     public VehicleResponse updateVehicle(Integer vehicleId, UpdateVehicleRequest request) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
+                .orElseThrow(() -> NotFoundException.resourceNotFound("Vehicle", "ID " + vehicleId));
 
         if (request.getPlateNumber() != null &&
             !request.getPlateNumber().equals(vehicle.getPlateNumber()) &&
             vehicleRepository.existsByPlateNumber(request.getPlateNumber())) {
-            throw new ConflictException("Vehicle with plate number " + request.getPlateNumber() + " already exists");
+            throw ConflictException.of("Vehicle with plate number " + request.getPlateNumber() + " already exists");
         }
 
         updateVehicleFields(vehicle, request);
@@ -85,7 +85,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional
     public MessageResponse deleteVehicle(Integer vehicleId) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
+                .orElseThrow(() -> NotFoundException.resourceNotFound("Vehicle", "ID " + vehicleId));
 
         vehicleRepository.delete(vehicle);
         return MessageResponse.builder()

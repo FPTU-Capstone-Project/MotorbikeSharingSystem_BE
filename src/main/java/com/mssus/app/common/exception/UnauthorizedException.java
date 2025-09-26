@@ -1,6 +1,15 @@
 package com.mssus.app.common.exception;
 
+/**
+ * Exception for authorization and authentication failures.
+ * Supports both legacy constructor-based usage and new catalog-based factory methods.
+ * 
+ * @deprecated Use BaseDomainException.of("auth.unauthorized.*") or specific factory methods instead
+ */
+@Deprecated
 public class UnauthorizedException extends DomainException {
+    
+    // Legacy constructors for backward compatibility
     public UnauthorizedException(String message) {
         super("UNAUTHORIZED", message);
     }
@@ -9,27 +18,37 @@ public class UnauthorizedException extends DomainException {
         super(errorCode, message);
     }
 
-    public static UnauthorizedException invalidCredentials() {
-        return new UnauthorizedException("INVALID_CREDENTIALS", "Invalid email/phone or password");
+    // New catalog-based factory methods
+    public static BaseDomainException invalidCredentials() {
+        return BaseDomainException.of("auth.validation.invalid-credentials");
     }
 
-    public static UnauthorizedException tokenExpired() {
-        return new UnauthorizedException("TOKEN_EXPIRED", "Authentication token has expired");
+    public static BaseDomainException tokenExpired() {
+        return BaseDomainException.of("auth.unauthorized.token-expired");
     }
 
-    public static UnauthorizedException accessDenied() {
-        return new UnauthorizedException("ACCESS_DENIED", "You don't have permission to access this resource");
+    public static BaseDomainException tokenInvalid() {
+        return BaseDomainException.of("auth.unauthorized.token-invalid");
     }
 
-    public static UnauthorizedException accountDisabled() {
-        return new UnauthorizedException("ACCOUNT_DISABLED", "Your account has been disabled");
+    public static BaseDomainException accessDenied() {
+        return BaseDomainException.of("auth.unauthorized.access-denied");
     }
 
-    public static UnauthorizedException profileNotActive(String profileType) {
-        return new UnauthorizedException("PROFILE_NOT_ACTIVE", profileType + " profile is not active");
+    public static BaseDomainException accountDisabled() {
+        return BaseDomainException.formatted("auth.unauthorized.access-denied", "Your account has been disabled");
     }
 
-    public static UnauthorizedException accountPending() {
-        return new UnauthorizedException("ACCOUNT_PENDING", "Your account is pending approval");
+    public static BaseDomainException profileNotActive(String profileType) {
+        return BaseDomainException.formatted("auth.unauthorized.access-denied", profileType + " profile is not active");
+    }
+
+    public static BaseDomainException accountPending() {
+        return BaseDomainException.formatted("auth.unauthorized.access-denied", "Your account is pending approval");
+    }
+    
+    // Catalog-based factory method for general use
+    public static BaseDomainException of(String message) {
+        return BaseDomainException.of("auth.unauthorized.access-denied", message);
     }
 }
