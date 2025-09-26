@@ -9,6 +9,7 @@ import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Vehicle;
 import com.mssus.app.exception.ConflictException;
 import com.mssus.app.exception.NotFoundException;
+import com.mssus.app.mapper.VehicleMapper;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.VehicleRepository;
 import com.mssus.app.service.VehicleService;
@@ -26,6 +27,7 @@ public class VehicleServiceImpl implements VehicleService {
 
     private final VehicleRepository vehicleRepository;
     private final DriverProfileRepository driverProfileRepository;
+    private final VehicleMapper vehicleMapper;
 
     @Override
     @Transactional
@@ -51,7 +53,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .build();
 
         Vehicle savedVehicle = vehicleRepository.save(vehicle);
-        return mapToVehicleResponse(savedVehicle);
+        return vehicleMapper.mapToVehicleResponse(savedVehicle);
     }
 
     @Override
@@ -59,7 +61,7 @@ public class VehicleServiceImpl implements VehicleService {
     public VehicleResponse getVehicleById(Integer vehicleId) {
         Vehicle vehicle = vehicleRepository.findByIdWithDriver(vehicleId)
                 .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
-        return mapToVehicleResponse(vehicle);
+        return vehicleMapper.mapToVehicleResponse(vehicle);
     }
 
     @Override
@@ -76,7 +78,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         updateVehicleFields(vehicle, request);
         Vehicle updatedVehicle = vehicleRepository.save(vehicle);
-        return mapToVehicleResponse(updatedVehicle);
+        return vehicleMapper.mapToVehicleResponse(updatedVehicle);
     }
 
     @Override
@@ -96,7 +98,7 @@ public class VehicleServiceImpl implements VehicleService {
     public PageResponse<VehicleResponse> getAllVehicles(Pageable pageable) {
         Page<Vehicle> vehiclePage = vehicleRepository.findAll(pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
-                .map(this::mapToVehicleResponse)
+                .map(vehicleMapper::mapToVehicleResponse)
                 .toList();
 
         return PageResponse.<VehicleResponse>builder()
@@ -115,7 +117,7 @@ public class VehicleServiceImpl implements VehicleService {
     public PageResponse<VehicleResponse> getVehiclesByDriverId(Integer driverId, Pageable pageable) {
         Page<Vehicle> vehiclePage = vehicleRepository.findByDriverDriverId(driverId, pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
-                .map(this::mapToVehicleResponse)
+                .map(vehicleMapper::mapToVehicleResponse)
                 .toList();
 
         return PageResponse.<VehicleResponse>builder()
@@ -134,7 +136,7 @@ public class VehicleServiceImpl implements VehicleService {
     public PageResponse<VehicleResponse> getVehiclesByStatus(String status, Pageable pageable) {
         Page<Vehicle> vehiclePage = vehicleRepository.findByStatus(status, pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
-                .map(this::mapToVehicleResponse)
+                .map(vehicleMapper::mapToVehicleResponse)
                 .toList();
 
         return PageResponse.<VehicleResponse>builder()
@@ -178,21 +180,4 @@ public class VehicleServiceImpl implements VehicleService {
         }
     }
 
-    private VehicleResponse mapToVehicleResponse(Vehicle vehicle) {
-        return VehicleResponse.builder()
-                .vehicleId(vehicle.getVehicleId())
-                .driverId(vehicle.getDriver().getDriverId())
-                .plateNumber(vehicle.getPlateNumber())
-                .model(vehicle.getModel())
-                .color(vehicle.getColor())
-                .year(vehicle.getYear())
-                .capacity(vehicle.getCapacity())
-                .insuranceExpiry(vehicle.getInsuranceExpiry())
-                .lastMaintenance(vehicle.getLastMaintenance())
-                .fuelType(vehicle.getFuelType())
-                .status(vehicle.getStatus())
-                .verifiedAt(vehicle.getVerifiedAt())
-                .createdAt(vehicle.getCreatedAt())
-                .build();
-    }
 }
