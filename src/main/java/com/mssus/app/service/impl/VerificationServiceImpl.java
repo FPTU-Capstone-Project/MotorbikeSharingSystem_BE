@@ -41,11 +41,10 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional(readOnly = true)
     public PageResponse<StudentVerificationResponse> getPendingStudentVerifications(Pageable pageable) {
         Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus("student_id", "pending", pageable);
-        List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
-                .map(this::mapToStudentVerificationResponse)
-                .toList();
-
-        return buildPageResponse(verificationsPage, students);
+       List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
+               .map(this :: mapToStudentVerificationResponse)
+               .toList();
+       return buildPageResponse(verificationsPage, students);
     }
 
     @Override
@@ -126,18 +125,10 @@ public class VerificationServiceImpl implements VerificationService {
                 Verification verification = verificationRepository.findById(verificationId)
                         .orElseThrow(() -> new NotFoundException("Verification not found"));
 
-                if (!"student_id".equals(verification.getType())) {
+                if (!"student_id".equals(verification.getType()) || !"pending".equals(verification.getStatus())) {
                     failedItems.add(BulkOperationResponse.FailedItem.builder()
                             .id(verificationId)
-                            .reason("Not a student verification")
-                            .build());
-                    continue;
-                }
-
-                if (!"pending".equals(verification.getStatus())) {
-                    failedItems.add(BulkOperationResponse.FailedItem.builder()
-                            .id(verificationId)
-                            .reason("Verification not in pending status")
+                            .reason("Not a student verification or Verification not in pending status")
                             .build());
                     continue;
                 }

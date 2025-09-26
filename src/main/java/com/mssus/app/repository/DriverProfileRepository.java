@@ -1,6 +1,8 @@
 package com.mssus.app.repository;
 
 import com.mssus.app.entity.DriverProfile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -41,7 +43,7 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, In
     @Query("UPDATE DriverProfile d SET d.isAvailable = :available WHERE d.driverId = :driverId")
     void updateAvailability(@Param("driverId") Integer driverId, @Param("available") Boolean available);
 
-    org.springframework.data.domain.Page<DriverProfile> findByStatus(String status, org.springframework.data.domain.Pageable pageable);
+    Page<DriverProfile> findByStatus(String status, Pageable pageable);
 
     Long countByStatus(String status);
 }
