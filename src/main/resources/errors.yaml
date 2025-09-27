@@ -176,6 +176,16 @@ errors:
     owner: user-team
     remediation: "Check profile fields and try again"
 
+  - id: user.validation.profile-not-active
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "User profile is not active"
+    domain: user
+    category: validation
+    owner: user-team
+    remediation: "Contact support to activate your profile"
+
   - id: otp.validation.invalid-otp
     httpStatus: 400
     severity: WARN

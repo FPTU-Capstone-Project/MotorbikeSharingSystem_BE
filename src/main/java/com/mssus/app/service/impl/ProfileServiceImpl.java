@@ -3,20 +3,20 @@ package com.mssus.app.service.impl;
 import com.mssus.app.BaseEvent.EmailChangedEvent;
 import com.mssus.app.BaseEvent.PhoneChangedEvent;
 import com.mssus.app.common.enums.*;
+import com.mssus.app.common.exception.*;
 import com.mssus.app.dto.request.DriverVerificationRequest;
 import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
 import com.mssus.app.dto.response.MessageResponse;
+import com.mssus.app.dto.response.SwitchProfileResponse;
 import com.mssus.app.dto.response.UserProfileResponse;
 import com.mssus.app.dto.response.VerificationResponse;
 import com.mssus.app.entity.*;
-import com.mssus.app.common.exception.ConflictException;
-import com.mssus.app.common.exception.NotFoundException;
-import com.mssus.app.common.exception.UnauthorizedException;
-import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.mapper.UserMapper;
 import com.mssus.app.repository.*;
+import com.mssus.app.security.JwtService;
+import com.mssus.app.service.AuthService;
 import com.mssus.app.service.ProfileService;
 import com.mssus.app.util.Constants;
 import com.mssus.app.util.ValidationUtil;
@@ -31,6 +31,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +43,8 @@ public class ProfileServiceImpl implements ProfileService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
     private final UserMapper userMapper;
+    private final AuthServiceImpl authService;
+    private final JwtService jwtService;
 
     @Override
     @Transactional(readOnly = true)
@@ -48,7 +52,41 @@ public class ProfileServiceImpl implements ProfileService {
         User user = userRepository.findByEmailWithProfiles(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
 
-        return userMapper.toProfileResponse(user);
+        if (UserType.ADMIN.equals(user.getUserType())) {
+            return userMapper.toAdminProfileResponse(user);
+        }
+
+        String activeProfile = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+            .filter(Map.class::isInstance)
+            .map(obj -> (Map<String, Object>) obj)
+            .map(claims -> (String) claims.get("active_profile"))
+            .orElse(null);
+
+        List<String> availableProfiles = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+            .filter(Map.class::isInstance)
+            .map(obj -> (Map<String, Object>) obj)
+            .map(claims -> (List<String>) claims.get("profiles"))
+            .map(profiles -> profiles.stream()
+                .filter(profile -> user.isProfileActive(profile))
+                .toList())
+            .orElse(List.of());
+
+        assert activeProfile != null;
+
+        return switch (UserProfileType.valueOf(activeProfile.toUpperCase())) {
+            case DRIVER -> {
+                UserProfileResponse response = userMapper.toDriverProfileResponse(user);
+                response.setAvailableProfiles(availableProfiles);
+                response.setActiveProfile(activeProfile);
+                yield response;
+            }
+            case RIDER -> {
+                UserProfileResponse response = userMapper.toRiderProfileResponse(user);
+                response.setAvailableProfiles(availableProfiles);
+                response.setActiveProfile(activeProfile);
+                yield response;
+            }
+        };
     }
 //
 //    @Override
@@ -69,7 +107,8 @@ public class ProfileServiceImpl implements ProfileService {
         updateRiderProfileIfExists(user, request);
 
         user = userRepository.save(user);
-        return userMapper.toProfileResponse(user);
+//        return userMapper.toProfileResponse(user);
+        return UserProfileResponse.builder().build();
     }
 
     @Override
@@ -116,30 +155,41 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    public MessageResponse switchProfile(String username, SwitchProfileRequest request) {
+    public SwitchProfileResponse switchProfile(String username, SwitchProfileRequest request) {
         User user = userRepository.findByEmailWithProfiles(username)
-                .orElseThrow(() -> NotFoundException.userNotFound(username));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not found: " + username));
 
-        String targetRole = request.getTargetRole().toLowerCase();
+        String targetProfile = request.getTargetProfile();
 
-        // Validate user has the target profile
-        if ("driver".equals(targetRole)) {
-            if (user.getDriverProfile() == null) {
-                throw ValidationException.of("You don't have a driver profile");
+        switch (UserProfileType.valueOf(targetProfile.toUpperCase())) {
+            case DRIVER -> {
+                if (user.getDriverProfile() == null) {
+                    throw BaseDomainException.of("user.validation.profile-not-exists");
+                }
+                if (!DriverProfileStatus.ACTIVE.equals(user.getDriverProfile().getStatus())) {
+                    throw BaseDomainException.of("user.validation.profile-not-active", "Driver profile is not active");
+                }
             }
-            if (!DriverProfileStatus.ACTIVE.equals(user.getDriverProfile().getStatus())) {
-                throw UnauthorizedException.profileNotActive("Driver");
+            case RIDER -> {
+                if (user.getRiderProfile() == null) {
+                    throw BaseDomainException.of("user.validation.profile-not-exists");
+                }
             }
-        } else if ("rider".equals(targetRole)) {
-            if (user.getRiderProfile() == null) {
-                throw ValidationException.of("You don't have a rider profile");
-            }
-        } else {
-            throw ValidationException.of("Invalid target role: " + targetRole);
+            default -> throw ValidationException.of("Invalid target role: " + targetProfile);
         }
 
-        // Note: Actual role switching is handled by generating new tokens
-        return MessageResponse.of("Switched to " + targetRole + " profile");
+        authService.validateUserBeforeGrantingToken(user);
+
+        Map<String, Object> claims = authService.buildTokenClaims(user, request.getTargetProfile());
+
+        AuthServiceImpl.userContext.put(user.getUserId().toString(), claims);
+
+        String accessToken = jwtService.generateToken(user.getEmail(), claims);
+
+        return SwitchProfileResponse.builder()
+                .accessToken(accessToken)
+                .activeProfile(request.getTargetProfile())
+                .build();
     }
 
     @Override

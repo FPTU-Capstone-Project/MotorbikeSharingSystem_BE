@@ -41,7 +41,7 @@ public class AuthServiceImpl implements AuthService {
     @Value("${app.file.upload-dir:uploads}")
     private String uploadDir;
 
-    Map<String, Object> userContext = new ConcurrentHashMap<>(); //TODO: improve context persistence later
+    static Map<String, Object> userContext = new ConcurrentHashMap<>(); //TODO: improve context persistence later
 
     @Override
     @Transactional
@@ -184,7 +184,7 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
-    private void validateUserBeforeGrantingToken(User user) {
+    public void validateUserBeforeGrantingToken(User user) {
         if (UserStatus.SUSPENDED.equals(user.getStatus())) {
             throw BaseDomainException.of("auth.unauthorized.account-suspended");
         }
@@ -246,7 +246,7 @@ public class AuthServiceImpl implements AuthService {
         walletRepository.save(wallet);
     }
 
-    private Map<String, Object> buildTokenClaims(User user, String activeProfile) {
+    public Map<String, Object> buildTokenClaims(User user, String activeProfile) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("iss", "mssus.api");
         claims.put("sub", "user-" + user.getUserId());
@@ -264,7 +264,7 @@ public class AuthServiceImpl implements AuthService {
         return claims;
     }
 
-    private List<String> getUserProfiles(User user) {
+    public List<String> getUserProfiles(User user) {
         List<String> profiles = new ArrayList<>();
 
         if (user.hasProfile("RIDER")) {
@@ -278,7 +278,7 @@ public class AuthServiceImpl implements AuthService {
         return profiles;
     }
 
-    private Map<String, String> buildProfileStatus(User user) {
+    public Map<String, String> buildProfileStatus(User user) {
         Map<String, String> roleStatus = new HashMap<>();
 
         if (user.hasProfile("RIDER")) {

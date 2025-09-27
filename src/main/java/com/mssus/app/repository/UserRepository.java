@@ -42,7 +42,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     Optional<User> findByIdWithProfiles(@Param("userId") Integer userId);
 
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.riderProfile LEFT JOIN FETCH u.driverProfile " +
-           "LEFT JOIN FETCH u.adminProfile LEFT JOIN FETCH u.wallet WHERE u.email = :email")
+           "LEFT JOIN FETCH u.wallet WHERE u.email = :email")
     Optional<User> findByEmailWithProfiles(@Param("email") String email);
 
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.riderProfile LEFT JOIN FETCH u.driverProfile " +

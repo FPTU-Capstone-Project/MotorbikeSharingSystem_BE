@@ -18,7 +18,7 @@ public interface ProfileMapper {
 
     UserProfileResponse.DriverProfile toDriverProfileResponse(DriverProfile entity);
 
-    UserProfileResponse.AdminProfile toAdminProfileResponse(AdminProfile entity);
+//    UserProfileResponse.AdminProfile toAdminProfileResponse(AdminProfile entity);
 
     UserProfileResponse.WalletInfo toWalletInfoResponse(Wallet entity);
 }

@@ -4,10 +4,7 @@ import com.mssus.app.dto.request.DriverVerificationRequest;
 import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
-import com.mssus.app.dto.response.ErrorResponse;
-import com.mssus.app.dto.response.MessageResponse;
-import com.mssus.app.dto.response.UserProfileResponse;
-import com.mssus.app.dto.response.VerificationResponse;
+import com.mssus.app.dto.response.*;
 import com.mssus.app.service.ProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -91,11 +89,11 @@ public class ProfileController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping("/switch-profile")
-    public ResponseEntity<MessageResponse> switchProfile(
+    public ResponseEntity<SwitchProfileResponse> switchProfile(
         Authentication authentication,
         @Valid @RequestBody SwitchProfileRequest request) {
         String username = authentication.getName();
-        MessageResponse response = profileService.switchProfile(username, request);
+        SwitchProfileResponse response = profileService.switchProfile(username, request);
         return ResponseEntity.ok(response);
     }
 

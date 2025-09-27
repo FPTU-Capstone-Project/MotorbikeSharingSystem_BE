@@ -130,6 +130,32 @@ ALTER TABLE rider_profiles
     ADD CONSTRAINT chk_payment_method
         CHECK (preferred_payment_method IN ('WALLET', 'CREDIT_CARD'));
 
+-- Insert ordinary user
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified, phone_verified)
+VALUES (
+           'john.doe@example.com',
+           '0987654321',
+           '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+           'John Doe',
+           'STU123456',
+           'USER',
+           'ACTIVE',
+           true,
+           true
+       ) ON CONFLICT (email) DO NOTHING;
+
+-- Insert rider profile for the user
+INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
+SELECT user_id, '0901234567', 'WALLET'
+FROM users
+WHERE email = 'john.doe@example.com';
+
+-- Insert driver profile for the user
+INSERT INTO driver_profiles (driver_id, license_number, status, is_available)
+SELECT user_id, 'DL123456789', 'ACTIVE', true
+FROM users
+WHERE email = 'john.doe@example.com';
+
 -- Create wallets table
 CREATE TABLE wallets
 (

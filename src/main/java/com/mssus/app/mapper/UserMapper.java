@@ -27,7 +27,7 @@ public interface UserMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "riderProfile", ignore = true)
     @Mapping(target = "driverProfile", ignore = true)
-    @Mapping(target = "adminProfile", ignore = true)
+//    @Mapping(target = "adminProfile", ignore = true)
     @Mapping(target = "wallet", ignore = true)
     @Mapping(target = "profilePhotoUrl", ignore = true)
     @Mapping(target = "studentId", ignore = true)
@@ -44,7 +44,7 @@ public interface UserMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "riderProfile", ignore = true)
     @Mapping(target = "driverProfile", ignore = true)
-    @Mapping(target = "adminProfile", ignore = true)
+//    @Mapping(target = "adminProfile", ignore = true)
     @Mapping(target = "wallet", ignore = true)
     @Mapping(target = "profilePhotoUrl", ignore = true)
     @Mapping(target = "studentId", ignore = true)
@@ -55,10 +55,27 @@ public interface UserMapper {
 
     @Mapping(target = "user", source = ".")
     @Mapping(target = "riderProfile", source = "riderProfile")
-    @Mapping(target = "driverProfile", source = "driverProfile")
-    @Mapping(target = "adminProfile", source = "adminProfile")
+    @Mapping(target = "driverProfile", ignore = true)
     @Mapping(target = "wallet", source = "wallet")
-    UserProfileResponse toProfileResponse(User user);
+    @Mapping(target = "availableProfiles", expression = "java(getUserProfiles(user))")
+    @Mapping(target = "activeProfile", ignore = true)
+    UserProfileResponse toRiderProfileResponse(User user);
+
+    @Mapping(target = "user", source = ".")
+    @Mapping(target = "riderProfile", ignore = true)
+    @Mapping(target = "driverProfile", source = "driverProfile")
+    @Mapping(target = "wallet", source = "wallet")
+    @Mapping(target = "availableProfiles", expression = "java(getUserProfiles(user))")
+    @Mapping(target = "activeProfile", ignore = true)
+    UserProfileResponse toDriverProfileResponse(User user);
+
+    @Mapping(target = "user", source = ".")
+    @Mapping(target = "riderProfile", ignore = true)
+    @Mapping(target = "driverProfile", ignore = true)
+    @Mapping(target = "wallet", ignore = true)
+    @Mapping(target = "availableProfiles", ignore = true)
+    @Mapping(target = "activeProfile", ignore = true)
+    UserProfileResponse toAdminProfileResponse(User user);
 
     @Mapping(target = "userType", expression = "java(toReadableType(user.getUserType()))")
     @Mapping(target = "status", expression = "java(toReadableStatus(user.getStatus()))")
@@ -66,6 +83,20 @@ public interface UserMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateUserFromRequest(UpdateAccountRequest request, @MappingTarget User user);
+
+    default java.util.List<String> getUserProfiles(User user) {
+        java.util.List<String> profiles = new java.util.ArrayList<>();
+
+        if (user.getRiderProfile() != null) {
+            profiles.add("RIDER");
+        }
+
+        if (user.getDriverProfile() != null) {
+            profiles.add("DRIVER");
+        }
+
+        return profiles;
+    }
 
     // Helper for enum conversion
     default UserStatus toUserStatus(String status) {

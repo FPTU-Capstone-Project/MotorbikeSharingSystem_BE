@@ -94,6 +94,14 @@ public class User {
     // Helper method to check if user has a specific role
     public boolean hasProfile(String profile) {
         return switch (profile.toLowerCase()) {
+            case "rider" -> riderProfile != null;
+            case "driver" -> driverProfile != null;
+            default -> false;
+        };
+    }
+
+    public boolean isProfileActive(String profile) {
+        return switch (profile.toLowerCase()) {
             case "rider" -> riderProfile != null && RiderProfileStatus.ACTIVE.equals(riderProfile.getStatus());
             case "driver" -> driverProfile != null && DriverProfileStatus.ACTIVE.equals(driverProfile.getStatus());
             default -> false;
