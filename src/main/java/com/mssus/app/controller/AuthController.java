@@ -56,7 +56,7 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "Login", description = "Authenticate an existing user")
+    @Operation(summary = "Login", description = "Authenticate an existing user, if user is admin, no need to specify target profile")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Login successful",
                     content = @Content(schema = @Schema(implementation = LoginResponse.class))),
@@ -81,6 +81,20 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<MessageResponse> logout(@Valid @RequestBody LogoutRequest request) {
         MessageResponse response = authService.logout(request.refreshToken());
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Refresh token", description = "Refresh authentication token using a valid refresh token",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Token refreshed successfully",
+            content = @Content(schema = @Schema(implementation = TokenRefreshResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenRefreshResponse> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
+        TokenRefreshResponse response = authService.refreshToken(request);
         return ResponseEntity.ok(response);
     }
 

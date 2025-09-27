@@ -2,17 +2,12 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.common.exception.ConflictException;
-import com.mssus.app.common.exception.NotFoundException;
-import com.mssus.app.common.exception.UnauthorizedException;
 import com.mssus.app.dto.request.*;
 import com.mssus.app.dto.response.*;
-import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.entity.*;
 import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
 import com.mssus.app.service.AuthService;
-import com.mssus.app.service.EmailService;
 import com.mssus.app.service.RefreshTokenService;
 import com.mssus.app.util.Constants;
 import com.mssus.app.util.OtpUtil;
@@ -22,17 +17,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -41,17 +32,16 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final RiderProfileRepository riderProfileRepository;
-    private final DriverProfileRepository driverProfileRepository;
     private final WalletRepository walletRepository;
-    private final VerificationRepository verificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-    private final EmailService emailService;
     private final RefreshTokenService refreshTokenService;
 
     @Value("${app.file.upload-dir:uploads}")
     private String uploadDir;
+
+    Map<String, Object> userContext = new ConcurrentHashMap<>(); //TODO: improve context persistence later
 
     @Override
     @Transactional
@@ -124,17 +114,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(identifier)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email"));
 
-        if (UserStatus.SUSPENDED.equals(user.getStatus())) {
-            throw BaseDomainException.of("auth.unauthorized.account-suspended");
-        }
-
-        if (UserStatus.PENDING.equals(user.getStatus())) {
-            throw BaseDomainException.of("auth.unauthorized.account-pending");
-        }
-
-        if (UserStatus.EMAIL_VERIFYING.equals(user.getStatus())) {
-            throw BaseDomainException.of("auth.unauthorized.email-verification-pending");
-        }
+        validateUserBeforeGrantingToken(user);
 
         // Authenticate
         authenticationManager.authenticate(
@@ -143,6 +123,9 @@ public class AuthServiceImpl implements AuthService {
 
         // Generate tokens
         Map<String, Object> claims = buildTokenClaims(user, UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile());
+
+        //Persist context for refresh token use
+        userContext.put(user.getUserId().toString(), claims);
 
         String accessToken = jwtService.generateToken(user.getEmail(), claims);
         String refreshToken = refreshTokenService.generateRefreshToken(user);
@@ -166,6 +149,53 @@ public class AuthServiceImpl implements AuthService {
         log.info("User logged out");
         refreshTokenService.invalidateRefreshToken(refreshToken);
         return MessageResponse.of("Logged out successfully");
+    }
+
+    @Override
+    public TokenRefreshResponse refreshToken(TokenRefreshRequest request) {
+        log.info("Refreshing access token");
+
+        String requestRefreshToken = request.refreshToken();
+        if (!refreshTokenService.validateRefreshToken(requestRefreshToken)) {
+            throw BaseDomainException.of("auth.unauthorized.invalid-refresh-token");
+        }
+
+        String userId = refreshTokenService.getUserIdFromRefreshToken(requestRefreshToken);
+        if (userId == null) {
+            throw BaseDomainException.of("auth.unauthorized.invalid-refresh-token");
+        }
+
+        User user = userRepository.findById(Integer.valueOf(userId))
+            .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-id", "User with ID %s not found", userId));
+
+        validateUserBeforeGrantingToken(user);
+
+        //TODO: implement context persistence for refresh token
+        @SuppressWarnings("unchecked")
+        Map<String, Object> claims = Optional.ofNullable(userContext.get(userId))
+            .filter(Map.class::isInstance)
+            .map(obj -> (Map<String, Object>) obj)
+            .orElseGet(() -> buildTokenClaims(user, null));
+
+        String newAccessToken = jwtService.generateToken(user.getEmail(), claims);
+
+        return TokenRefreshResponse.builder()
+            .accessToken(newAccessToken)
+            .build();
+    }
+
+    private void validateUserBeforeGrantingToken(User user) {
+        if (UserStatus.SUSPENDED.equals(user.getStatus())) {
+            throw BaseDomainException.of("auth.unauthorized.account-suspended");
+        }
+
+        if (UserStatus.PENDING.equals(user.getStatus())) {
+            throw BaseDomainException.of("auth.unauthorized.account-pending");
+        }
+
+        if (UserStatus.EMAIL_VERIFYING.equals(user.getStatus())) {
+            throw BaseDomainException.of("auth.unauthorized.email-verification-pending");
+        }
     }
 
 

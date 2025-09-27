@@ -46,6 +46,16 @@ errors:
     owner: auth-team
     remediation: "Provide a valid authentication token"
 
+  - id: auth.unauthorized.refresh-token-invalid
+    httpStatus: 401
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Refresh token is invalid"
+    domain: auth
+    category: unauthorized
+    owner: auth-team
+    remediation: "Login again to obtain a new refresh token"
+
   - id: auth.unauthorized.access-denied
     httpStatus: 403
     severity: WARN

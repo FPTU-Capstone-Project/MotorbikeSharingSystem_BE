@@ -64,7 +64,8 @@ public class SecurityConfig {
             "/actuator/health",
             "/debug/throw-test",
             "/debug/catalog-test",
-            "/api/v1/otp"
+            "/api/v1/otp",
+            "/api/v1/auth/refresh"
         };
 
         // Endpoints requiring any authentication (general authenticated users)
