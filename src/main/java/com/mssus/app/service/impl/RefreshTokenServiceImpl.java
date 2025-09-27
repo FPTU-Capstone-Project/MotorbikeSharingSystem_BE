@@ -34,8 +34,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             RefreshToken refreshToken = new RefreshToken();
             refreshToken.setUser(user);
             refreshToken.setToken(tokenValue);
-            refreshToken.setExpiryDate(LocalDateTime.now().plusDays(30));
-            refreshToken.setCreatedAt(LocalDateTime.now());
+            refreshToken.setExpiresAt(LocalDateTime.now().plusDays(30));
 
             refreshTokenRepository.save(refreshToken);
             
@@ -65,7 +64,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             RefreshToken refreshToken = refreshTokenOpt.get();
             
 
-            if (refreshToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            if (refreshToken.getExpiresAt().isBefore(LocalDateTime.now())) {
                 log.warn("Refresh token has expired for user: {}", refreshToken.getUser().getEmail());
                 refreshTokenRepository.delete(refreshToken);
                 return false;
@@ -95,7 +94,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 RefreshToken refreshToken = refreshTokenOpt.get();
                 refreshTokenRepository.delete(refreshToken);
                 userRepository.findByEmail(refreshToken.getUser().getEmail()).ifPresent(user -> {
-                    user.setTokenVersion(user.getTokenVersion() + 1);
+                    user.incrementTokenVersion();
                     userRepository.save(user);
                 }); //TODO: Replace with UserService method later
                 log.info("Deleted refresh token for user: {}", refreshToken.getUser().getEmail());

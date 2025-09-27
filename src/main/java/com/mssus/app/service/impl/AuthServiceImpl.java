@@ -142,19 +142,19 @@ public class AuthServiceImpl implements AuthService {
         );
 
         // Generate tokens
-        Map<String, Object> claims = buildTokenClaims(user, request.getTargetProfile());
+        Map<String, Object> claims = buildTokenClaims(user, UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile());
 
         String accessToken = jwtService.generateToken(user.getEmail(), claims);
         String refreshToken = refreshTokenService.generateRefreshToken(user);
 
-        if (!user.hasProfile(request.getTargetProfile())) {
+        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
             throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
         }
 
         return LoginResponse.builder()
             .userId(user.getUserId())
             .userType(user.getUserType().name())
-            .activeProfile(request.getTargetProfile())
+            .activeProfile(UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile())
             .accessToken(accessToken)
             .refreshToken(refreshToken)
             .expiresIn(jwtService.getExpirationTime() / 1000) // Convert to seconds
