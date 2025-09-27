@@ -1,8 +1,10 @@
 package com.mssus.app.mapper;
 
+import com.mssus.app.dto.response.StudentVerificationResponse;
 import com.mssus.app.dto.response.VerificationResponse;
 import com.mssus.app.entity.Verification;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
 @Mapper(
@@ -11,5 +13,15 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 )
 public interface VerificationMapper {
 
-    VerificationResponse toResponse(Verification entity);
+    @Mapping(source = "user.userId", target = "userId")
+    @Mapping(source = "verifiedBy.user.fullName", target = "verifiedBy")
+    VerificationResponse mapToVerificationResponse(Verification verification);
+
+    @Mapping(source = "user.userId", target = "userId")
+    @Mapping(source = "user.fullName", target = "fullName")
+    @Mapping(source = "user.email", target = "email")
+    @Mapping(source = "user.phone", target = "phone")
+    @Mapping(source = "user.studentId", target = "studentId")
+    @Mapping(source = "verifiedBy.user.fullName", target = "verifiedBy")
+    StudentVerificationResponse mapToStudentVerificationResponse(Verification verification);
 }

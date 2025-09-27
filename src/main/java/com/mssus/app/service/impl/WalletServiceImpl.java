@@ -19,60 +19,45 @@ public class WalletServiceImpl implements WalletService {
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
 
-
     @Override
-    public WalletResponse initiateWallet(Integer userId) {
-        var user = userRepository.findById(userId).orElseThrow(() -> NotFoundException.userNotFound(userId));
-        Wallet wallet = new Wallet();
-        wallet.setUser(user);
-        wallet.setPspAccountId("");
-//        wallet.setCachedBalance(BigDecimal.ZERO);
+    public void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount) {
+        Wallet wallet = walletRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
 
-        return null;
+        wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
+        wallet.setTotalToppedUp(wallet.getTotalToppedUp().add(amount));
+        walletRepository.save(wallet);
     }
 
     @Override
-    public WalletResponse getWalletByUserId(Integer userId) {
-        return null;
+    public void increasePendingBalance(Integer userId, BigDecimal amount) {
+        Wallet wallet = walletRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+
+        wallet.setPendingBalance(wallet.getPendingBalance().add(amount));
+        walletRepository.save(wallet);
     }
 
     @Override
-    public WalletResponse getWalletById(Integer walletId) {
-        return null;
+    public void decreasePendingBalance(Integer userId, BigDecimal amount) {
+        Wallet wallet = walletRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+
+        wallet.setPendingBalance(wallet.getPendingBalance().subtract(amount));
+        walletRepository.save(wallet);
     }
 
     @Override
-    public void activateWallet(Integer walletId) {
-
-    }
-
-    @Override
-    public void deactivateWallet(Integer walletId) {
-
-    }
-
-    @Override
-    public BigDecimal getAvailableBalance(Integer userId) {
-        return null;
-    }
-
-    @Override
-    public BigDecimal getPendingBalance(Integer userId) {
-        return null;
-    }
-
-    @Override
-    public void syncWalletWithPSP(Integer walletId) {
-
-    }
-
-    @Override
-    public boolean isWalletOwner(Integer walletId, String username) {
-        return false;
-    }
-
-    @Override
-    public List<WalletResponse> getActiveWallets() {
-        return null;
+    public void transferPendingToAvailable(Integer userId, BigDecimal amount) {
+        Wallet wallet = walletRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+        BigDecimal shadowBalance = BigDecimal.ZERO;
+        if (wallet.getShadowBalance() != null){
+            shadowBalance = wallet.getShadowBalance();
+        }
+        wallet.setPendingBalance(wallet.getPendingBalance().subtract(amount));
+        wallet.setShadowBalance(shadowBalance.add(amount));
+        wallet.setTotalToppedUp(wallet.getTotalToppedUp().add(amount));
+        walletRepository.save(wallet);
     }
 }

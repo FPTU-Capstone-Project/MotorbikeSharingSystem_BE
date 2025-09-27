@@ -18,5 +18,6 @@ public interface WalletRepository extends JpaRepository<Wallet, Integer> {
     @Query("SELECT COUNT(w) > 0 FROM Wallet w WHERE w.user.userId = :userId")
     boolean existsByUserId(@Param("userId") Integer userId);
 
+    Optional<Wallet> findByUser_UserId(Integer userId);
 
 }

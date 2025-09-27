@@ -10,6 +10,7 @@ import com.mssus.app.entity.Users;
 import com.mssus.app.entity.Verification;
 import com.mssus.app.exception.NotFoundException;
 import com.mssus.app.exception.ValidationException;
+import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.AdminProfileRepository;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.UserRepository;
@@ -35,6 +36,7 @@ public class VerificationServiceImpl implements VerificationService {
     private final UserRepository userRepository;
     private final DriverProfileRepository driverProfileRepository;
     private final AdminProfileRepository adminProfileRepository;
+    private final VerificationMapper verificationMapper;
 
     // Student verification methods
     @Override
@@ -42,7 +44,7 @@ public class VerificationServiceImpl implements VerificationService {
     public PageResponse<StudentVerificationResponse> getPendingStudentVerifications(Pageable pageable) {
         Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus("student_id", "pending", pageable);
        List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
-               .map(this :: mapToStudentVerificationResponse)
+               .map(verificationMapper :: mapToStudentVerificationResponse)
                .toList();
        return buildPageResponse(verificationsPage, students);
     }
@@ -52,7 +54,7 @@ public class VerificationServiceImpl implements VerificationService {
     public StudentVerificationResponse getStudentVerificationById(Integer userId) {
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, "student_id", "pending")
                 .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
-        return mapToStudentVerificationResponse(verification);
+        return verificationMapper.mapToStudentVerificationResponse(verification);
     }
 
     @Override
@@ -107,7 +109,7 @@ public class VerificationServiceImpl implements VerificationService {
     public PageResponse<StudentVerificationResponse> getStudentVerificationHistory(Pageable pageable) {
         Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus("student_id", "approved", pageable);
         List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
-                .map(this::mapToStudentVerificationResponse)
+                .map(verificationMapper:: mapToStudentVerificationResponse)
                 .toList();
 
         return buildPageResponse(verificationsPage, students);
@@ -324,7 +326,7 @@ public class VerificationServiceImpl implements VerificationService {
     public VerificationResponse getVerificationById(Integer verificationId) {
         Verification verification = verificationRepository.findById(verificationId)
                 .orElseThrow(() -> new NotFoundException("Verification not found with ID: " + verificationId));
-        return mapToVerificationResponse(verification);
+        return verificationMapper.mapToVerificationResponse(verification);
     }
 
     @Override
@@ -332,7 +334,7 @@ public class VerificationServiceImpl implements VerificationService {
     public PageResponse<VerificationResponse> getAllVerifications(Pageable pageable) {
         Page<Verification> verificationsPage = verificationRepository.findAll(pageable);
         List<VerificationResponse> verifications = verificationsPage.getContent().stream()
-                .map(this::mapToVerificationResponse)
+                .map(verificationMapper::mapToVerificationResponse)
                 .toList();
 
         return buildPageResponse(verificationsPage, verifications);
@@ -343,7 +345,7 @@ public class VerificationServiceImpl implements VerificationService {
     public PageResponse<VerificationResponse> getAllPendingVerifications(Pageable pageable) {
         Page<Verification> verificationsPage = verificationRepository.findByStatus("pending", pageable);
         List<VerificationResponse> verifications = verificationsPage.getContent().stream()
-                .map(this::mapToVerificationResponse)
+                .map(verificationMapper::mapToVerificationResponse)
                 .toList();
 
         return buildPageResponse(verificationsPage, verifications);
@@ -361,7 +363,7 @@ public class VerificationServiceImpl implements VerificationService {
         verification.setVerifiedAt(LocalDateTime.now());
 
         verificationRepository.save(verification);
-        return mapToVerificationResponse(verification);
+        return verificationMapper.mapToVerificationResponse(verification);
     }
 
     // Helper methods
@@ -407,26 +409,6 @@ public class VerificationServiceImpl implements VerificationService {
                 .orElseThrow(() -> new NotFoundException("Admin profile not found"));
     }
 
-    private StudentVerificationResponse mapToStudentVerificationResponse(Verification verification) {
-        Users user = verification.getUser();
-        return StudentVerificationResponse.builder()
-                .verificationId(verification.getVerificationId())
-                .userId(user.getUserId())
-                .fullName(user.getFullName())
-                .email(user.getEmail())
-                .phone(user.getPhone())
-                .studentId(user.getStudentId())
-                .status(verification.getStatus())
-                .documentUrl(verification.getDocumentUrl())
-                .documentType(verification.getDocumentType())
-                .rejectionReason(verification.getRejectionReason())
-                .verifiedBy(verification.getVerifiedBy() != null ?
-                           verification.getVerifiedBy().getUser().getFullName() : null)
-                .verifiedAt(verification.getVerifiedAt())
-                .createdAt(verification.getCreatedAt())
-                .build();
-    }
-
     private DriverKycResponse mapToDriverKycResponse(DriverProfile driver) {
         List<Verification> verifications = verificationRepository.findByUserId(driver.getDriverId());
         List<DriverKycResponse.VerificationInfo> verificationInfos = verifications.stream()
@@ -456,25 +438,6 @@ public class VerificationServiceImpl implements VerificationService {
                 .createdAt(driver.getCreatedAt())
                 .build();
     }
-
-    private VerificationResponse mapToVerificationResponse(Verification verification) {
-        return VerificationResponse.builder()
-                .verificationId(verification.getVerificationId())
-                .userId(verification.getUser().getUserId())
-                .type(verification.getType())
-                .status(verification.getStatus())
-                .documentUrl(verification.getDocumentUrl())
-                .documentType(verification.getDocumentType())
-                .rejectionReason(verification.getRejectionReason())
-                .verifiedBy(verification.getVerifiedBy() != null ?
-                           verification.getVerifiedBy().getUser().getFullName() : null)
-                .verifiedAt(verification.getVerifiedAt())
-                .expiresAt(verification.getExpiresAt())
-                .metadata(verification.getMetadata())
-                .createdAt(verification.getCreatedAt())
-                .build();
-    }
-
     private <T> PageResponse<T> buildPageResponse(Page<?> page, List<T> content) {
         return PageResponse.<T>builder()
                 .data(content)
