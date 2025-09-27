@@ -68,22 +68,10 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     private List<GrantedAuthority> getAuthorities(User user) {
         List<GrantedAuthority> authorities = new ArrayList<>();
-        
-        // Base role for all authenticated users
-        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-        
-        // Add role based on profile
-        if (user.getUserType().equals(UserType.ADMIN)) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-        }
-        
-        if (user.getDriverProfile() != null && user.getDriverProfile().getStatus().equals(DriverProfileStatus.ACTIVE)) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_DRIVER"));
-        }
-        
-        if (user.getRiderProfile() != null && user.getRiderProfile().getStatus().equals(RiderProfileStatus.ACTIVE)) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_RIDER"));
-        }
+
+        if (user.getUserType().equals(UserType.USER)) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+        } else authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
         
         return authorities;
     }

@@ -94,28 +94,27 @@ public class User {
     private Long version;
 
     // Helper method to check if user has a specific role
-    public boolean hasRole(String role) {
-        return switch (role.toLowerCase()) {
-            case "rider" -> riderProfile != null;
-            case "driver" -> driverProfile != null;
-            case "admin" -> UserType.ADMIN.equals(userType);
+    public boolean hasProfile(String profile) {
+        return switch (profile.toLowerCase()) {
+            case "rider" -> riderProfile != null && RiderProfileStatus.ACTIVE.equals(riderProfile.getStatus());
+            case "driver" -> driverProfile != null && DriverProfileStatus.ACTIVE.equals(driverProfile.getStatus());
             default -> false;
         };
     }
 
     // Helper method to get the primary role
-    public String getPrimaryRole() {
-        if (adminProfile != null) {
-            return "ADMIN";
-        }
-        if (driverProfile != null && DriverProfileStatus.ACTIVE.equals(driverProfile.getStatus())) {
-            return "DRIVER";
-        }
-        if (riderProfile != null && RiderProfileStatus.ACTIVE.equals(riderProfile.getStatus())) {
-            return "RIDER";
-        }
-        return "USER";
-    }
+//    public String getPrimaryRole() {
+//        if (adminProfile != null) {
+//            return "ADMIN";
+//        }
+//        if (driverProfile != null && DriverProfileStatus.ACTIVE.equals(driverProfile.getStatus())) {
+//            return "DRIVER";
+//        }
+//        if (riderProfile != null && RiderProfileStatus.ACTIVE.equals(riderProfile.getStatus())) {
+//            return "RIDER";
+//        }
+//        return "USER";
+//    }
 
     public void incrementTokenVersion() {
         this.tokenVersion = this.tokenVersion + 1;

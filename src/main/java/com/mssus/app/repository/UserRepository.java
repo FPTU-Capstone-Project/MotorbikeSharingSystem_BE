@@ -1,5 +1,6 @@
 package com.mssus.app.repository;
 
+import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.enums.UserType;
 import com.mssus.app.entity.User;
 import jakarta.persistence.LockModeType;
@@ -22,9 +23,17 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     Optional<User> findByEmailOrPhone(String email, String phone);
 
+    Optional<User> findByEmailAndStatus(String phone, UserStatus status);
+
+    Optional<User> findByEmailAndStatusNot(String phone, UserStatus status);
+
     boolean existsByEmail(String email);
 
     boolean existsByPhone(String phone);
+
+    boolean existsByEmailAndStatusNot(String email, UserStatus status);
+
+    boolean existsByEmailAndStatus(String email, UserStatus status);
 
     boolean existsByStudentId(String studentId);
 

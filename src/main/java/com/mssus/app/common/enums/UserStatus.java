@@ -1,5 +1,5 @@
 package com.mssus.app.common.enums;
 
 public enum UserStatus {
-    PENDING, ACTIVE, SUSPENDED, REJECTED, DELETED;
+    EMAIL_VERIFYING, PENDING, ACTIVE, SUSPENDED, REJECTED, DELETED;
 }

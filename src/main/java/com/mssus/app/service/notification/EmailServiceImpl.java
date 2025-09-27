@@ -159,6 +159,51 @@ public class EmailServiceImpl implements EmailService {
         return sendEmailWithFallback(request);
     }
 
+    @Override
+    @Async("emailExecutor")
+    @Retryable(value = {EmailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2))
+    public CompletableFuture<EmailResult> sendEmail(String email, String subject, String templateName,
+                                                    Map<String, Object> templateVars, EmailPriority priority,
+                                                    Long userId, String emailType) {
+        try {
+            if (emailType != null && !checkRateLimit(email, emailType)) {
+                return CompletableFuture.completedFuture(
+                    EmailResult.failure("Rate limit exceeded", null));
+            }
+
+            EmailRequest request = new EmailRequest(
+                email,
+                subject,
+                templateName,
+                templateVars != null ? templateVars : Map.of(),
+                priority != null ? priority : EmailPriority.NORMAL,
+                null
+            );
+
+            EmailResult result = sendEmailWithFallback(request);
+
+            if (emailType != null) {
+                recordEmailMetrics(result, emailType);
+            }
+
+            if (userId != null) {
+                eventPublisher.publishEvent(new EmailSentEvent(userId, email, emailType, result.success()));
+            }
+
+            return CompletableFuture.completedFuture(result);
+
+        } catch (Exception e) {
+            log.error("Failed to send {} email to: {}", emailType, email, e);
+            EmailResult errorResult = EmailResult.failure("Internal error: " + e.getMessage(), null);
+
+            if (emailType != null) {
+                recordEmailMetrics(errorResult, emailType);
+            }
+
+            return CompletableFuture.completedFuture(errorResult);
+        }
+    }
+
     // Helper Method
 
     private boolean checkRateLimit(String email, String type){

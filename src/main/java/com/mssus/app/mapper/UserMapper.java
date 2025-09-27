@@ -50,7 +50,7 @@ public interface UserMapper {
     @Mapping(target = "studentId", ignore = true)
     User toEntity(CreateAccountRequest request);
 
-    @Mapping(target = "userType", source = "primaryRole")
+    @Mapping(target = "userType", expression = "java(toReadableType(user.getUserType()))")
     RegisterResponse toRegisterResponse(User user);
 
     @Mapping(target = "user", source = ".")
@@ -91,6 +91,7 @@ public interface UserMapper {
         if (status == null) return null;
         // Customize as needed
         return switch (status) {
+            case EMAIL_VERIFYING -> "Email Verifying";
             case PENDING -> "Pending";
             case ACTIVE -> "Active";
             case SUSPENDED -> "Suspended";

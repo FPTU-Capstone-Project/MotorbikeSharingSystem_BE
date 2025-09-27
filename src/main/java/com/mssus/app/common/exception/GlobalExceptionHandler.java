@@ -174,6 +174,59 @@ public class GlobalExceptionHandler {
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
+
+    /**
+     * Handle IllegalArgumentException - often from enum conversion errors
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex, HttpServletRequest request) {
+        String traceId = generateTraceId();
+        log.warn("IllegalArgumentException [{}]: {}", traceId, ex.getMessage());
+
+        String errorId;
+        String message;
+        Map<String, String> fieldErrors = null;
+
+        String exceptionMessage = ex.getMessage();
+
+        // Handle enum constant errors
+        if (exceptionMessage != null && exceptionMessage.startsWith("No enum constant")) {
+            // Extract enum class and invalid value from: "No enum constant com.mssus.app.common.enums.OtpFor.VERIFY_MAIL"
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("No enum constant ([^.]+\\.)+([^.]+)\\.(.+)");
+            java.util.regex.Matcher matcher = pattern.matcher(exceptionMessage);
+
+            if (matcher.find()) {
+                String enumClass = matcher.group(2); // e.g., "OtpFor"
+                String invalidValue = matcher.group(3); // e.g., "VERIFY_MAIL"
+
+                errorId = "validation.request.invalid-enum-value";
+                message = String.format("Invalid value '%s' for field type %s", invalidValue, enumClass);
+
+                // Create field error map
+                fieldErrors = new HashMap<>();
+                fieldErrors.put(enumClass.toLowerCase(), message);
+            } else {
+                errorId = "validation.request.invalid-enum-value";
+                message = "Invalid enum value provided";
+            }
+        } else {
+            // Handle other IllegalArgumentException cases
+            errorId = "validation.request.invalid-argument";
+            message = exceptionMessage != null ? exceptionMessage : "Invalid argument provided";
+        }
+
+        ErrorEntry errorEntry = errorCatalogService.getErrorEntry(errorId);
+
+        ErrorResponse errorResponse = buildErrorResponse(errorEntry, errorId,
+            message, null, traceId, request);
+
+        // Add field errors if present
+        if (fieldErrors != null) {
+            errorResponse.setFieldErrors(fieldErrors);
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
     
     /**
      * Handle malformed JSON

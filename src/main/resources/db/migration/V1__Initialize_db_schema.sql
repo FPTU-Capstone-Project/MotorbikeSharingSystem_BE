@@ -49,7 +49,7 @@ CREATE INDEX idx_users_status ON users (status);
 -- Add check constraints for users
 ALTER TABLE users
     ADD CONSTRAINT chk_status
-        CHECK (status IN ('PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'DELETED'));
+        CHECK (status IN ('EMAIL_VERIFYING', 'PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'DELETED'));
 ALTER TABLE users
     ADD CONSTRAINT chk_user_type
         CHECK (user_type IN ('USER', 'ADMIN'));

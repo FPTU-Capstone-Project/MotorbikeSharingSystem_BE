@@ -1,8 +1,10 @@
 package com.mssus.app.service;
 
+import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.dto.response.notification.EmailRequest;
 import com.mssus.app.dto.response.notification.EmailResult;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public interface EmailService {
@@ -10,4 +12,8 @@ public interface EmailService {
     CompletableFuture<EmailResult> sendWelcomeEmail(String email, String fullName);
     CompletableFuture<EmailResult> sendPasswordResetEmail(String email, String resetToken);
     EmailResult sendEmailSync(EmailRequest request);
+
+    CompletableFuture<EmailResult> sendEmail(String email, String subject, String templateName,
+                                             Map<String, Object> templateVars, EmailPriority priority,
+                                             Long userId, String emailType);
 }

@@ -63,13 +63,13 @@ public class SecurityConfig {
             "/webjars/**",
             "/actuator/health",
             "/debug/throw-test",
-            "/debug/catalog-test"
+            "/debug/catalog-test",
+            "/api/v1/otp"
         };
 
         // Endpoints requiring any authentication (general authenticated users)
         public static final String[] PRIVATE_PATHS = {
-            "/api/v1/auth/logout",
-            "/api/v1/otp" // GET method requires auth
+            "/api/v1/auth/logout"
         };
 
         // Endpoints requiring ADMIN role
