@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giao dịch không thành công</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px 40px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .transaction-details {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 25px 0;
+            border-left: 4px solid #e74c3c;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            color: #6c757d;
+            font-weight: 500;
+        }
+        .detail-value {
+            color: #333;
+            font-weight: 600;
+        }
+        .failed-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+            text-align: center;
+            font-weight: 500;
+        }
+        .reason-box {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border: 1px solid #ffeaa7;
+        }
+        .action-buttons {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .action-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            margin: 10px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .action-button:hover {
+            transform: translateY(-2px);
+        }
+        .retry-button {
+            background: linear-gradient(135deg, #20bf6b 0%, #26a69a 100%);
+        }
+        .help-section {
+            background-color: #e3f2fd;
+            color: #0d47a1;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border: 1px solid #bbdefb;
+        }
+        .help-section h4 {
+            margin-top: 0;
+            color: #1565c0;
+        }
+        .help-section ul {
+            margin-bottom: 0;
+            padding-left: 20px;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+            border-top: 1px solid #e9ecef;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .contact-info {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        @media (max-width: 600px) {
+            .content {
+                padding: 20px;
+            }
+            .detail-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .detail-value {
+                margin-top: 5px;
+            }
+            .action-button {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="icon">❌</div>
+            <h1>Giao dịch không thành công</h1>
+        </div>
+
+        <div class="content">
+            <div class="greeting">
+                Xin chào <strong th:text="${fullName}">Khách hàng</strong>,
+            </div>
+
+            <p>Chúng tôi rất tiếc phải thông báo rằng giao dịch của bạn không thể được xử lý thành công.</p>
+
+            <div class="failed-message">
+                ⚠️ Giao dịch không thành công - Vui lòng thử lại
+            </div>
+
+            <div class="transaction-details">
+                <h3 style="margin-top: 0; color: #333; margin-bottom: 20px;">Chi tiết giao dịch</h3>
+
+                <div class="detail-row">
+                    <span class="detail-label">Mã giao dịch:</span>
+                    <span class="detail-value" th:text="${transactionId}">TXN123456</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Số tiền:</span>
+                    <span class="detail-value" th:text="${amount}">500,000 ₫</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Thời gian:</span>
+                    <span class="detail-value" th:text="${transactionTime}">01/01/2024 10:30:00</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Trạng thái:</span>
+                    <span class="detail-value" style="color: #e74c3c;">❌ Không thành công</span>
+                </div>
+            </div>
+
+            <div class="reason-box">
+                <strong>📋 Lý do:</strong> <span th:text="${reason}">Payment was cancelled by user</span>
+            </div>
+
+            <div class="help-section">
+                <h4>🛠️ Các nguyên nhân có thể xảy ra:</h4>
+                <ul>
+                    <li>Số dư tài khoản ngân hàng không đủ</li>
+                    <li>Thông tin thẻ không chính xác</li>
+                    <li>Giao dịch bị hủy trong quá trình thanh toán</li>
+                    <li>Hết thời gian thanh toán</li>
+                    <li>Sự cố kỹ thuật từ ngân hàng</li>
+                </ul>
+            </div>
+
+            <div class="action-buttons">
+                <a th:href="${frontendUrl + '/wallet/topup'}" class="action-button retry-button">
+                    Thử lại nạp tiền
+                </a>
+                <a th:href="${frontendUrl + '/wallet'}" class="action-button">
+                    Xem ví của tôi
+                </a>
+            </div>
+
+            <div class="contact-info">
+                <strong>📞 Cần hỗ trợ?</strong><br>
+                Liên hệ với chúng tôi qua email:
+                <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}">support@motorbike.com</a><br>
+                Hotline: 1900-xxxx (24/7)
+            </div>
+
+            <p><strong>Bước tiếp theo:</strong></p>
+            <ul style="color: #555; margin-left: 20px;">
+                <li>Kiểm tra lại thông tin thanh toán</li>
+                <li>Đảm bảo tài khoản có đủ số dư</li>
+                <li>Thử lại với phương thức thanh toán khác</li>
+                <li>Liên hệ với chúng tôi nếu vấn đề vẫn tiếp tục</li>
+            </ul>
+
+            <p>Chúng tôi xin lỗi vì sự bất tiện này và mong được phục vụ bạn tốt hơn trong lần tới.</p>
+
+            <p>Trân trọng,<br>
+               <strong>Đội ngũ Motorbike Sharing</strong>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>Email này được gửi tự động, vui lòng không trả lời.</p>
+            <p>© 2024 Motorbike Sharing System. All rights reserved.</p>
+            <p>
+                <a th:href="${frontendUrl}">Trang chủ</a> |
+                <a th:href="${frontendUrl + '/wallet'}">Ví của tôi</a> |
+                <a th:href="${frontendUrl + '/contact'}">Liên hệ</a> |
+                <a th:href="${frontendUrl + '/help'}">Trợ giúp</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,7 +1,6 @@
 package com.mssus.app.service.impl;
 
-import com.mssus.app.BaseEvent.EmailChangedEvent;
-import com.mssus.app.BaseEvent.PhoneChangedEvent;
+
 import com.mssus.app.dto.request.DriverVerificationRequest;
 import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
@@ -290,7 +289,6 @@ public class UserServiceImpl implements UserService {
             String oldEmail = user.getEmail();
             user.setEmail(request.getEmail());
             user.setEmailVerified(false);
-            eventPublisher.publishEvent(new EmailChangedEvent(user.getUserId(), oldEmail, request.getEmail()));
         }
     }
 
@@ -302,7 +300,6 @@ public class UserServiceImpl implements UserService {
                 String oldPhone = user.getPhone();
                 user.setPhone(normalizedPhone);
                 user.setPhoneVerified(false);
-                eventPublisher.publishEvent(new PhoneChangedEvent(user.getUserId(), oldPhone, request.getPhone()));
             }
         }
     }

@@ -1,0 +1,175 @@
+package com.mssus.app.service.impl;
+
+import com.mssus.app.dto.response.notification.EmailRequest;
+import com.mssus.app.dto.response.notification.EmailResult;
+import com.mssus.app.dto.response.notification.EmailProviderType;
+import com.mssus.app.service.EmailService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
+
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class EmailServiceImpl implements EmailService {
+
+    private final JavaMailSender javaMailSender;
+    private final TemplateEngine templateEngine;
+
+    @Value("${app.email.from-address}")
+    private String fromAddress;
+
+    @Value("${app.email.from-name}")
+    private String fromName;
+
+    @Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+    private static final NumberFormat CURRENCY_FORMATTER = NumberFormat.getCurrencyInstance(new Locale("vi", "VN"));
+
+    @Override
+    public CompletableFuture<EmailResult> sendVerificationEmail(String email, Long userId) {
+        // Existing implementation
+        return CompletableFuture.completedFuture(EmailResult.success("Not implemented yet"));
+    }
+
+    @Override
+    public CompletableFuture<EmailResult> sendWelcomeEmail(String email, String fullName) {
+        // Existing implementation
+        return CompletableFuture.completedFuture(EmailResult.success("Not implemented yet"));
+    }
+
+    @Override
+    public CompletableFuture<EmailResult> sendPasswordResetEmail(String email, String resetToken) {
+        // Existing implementation
+        return CompletableFuture.completedFuture(EmailResult.success("Not implemented yet"));
+    }
+
+    @Override
+    public EmailResult sendEmailSync(EmailRequest request) {
+        // Existing implementation
+        return EmailResult.success("Not implemented yet");
+    }
+
+    @Override
+    @Async
+    public CompletableFuture<EmailResult> sendPaymentSuccessEmail(String email, String fullName, BigDecimal amount, String transactionId) {
+        try {
+            Context context = new Context();
+            context.setVariable("fullName", fullName);
+            context.setVariable("amount", formatCurrency(amount));
+            context.setVariable("transactionId", transactionId);
+            context.setVariable("transactionTime", LocalDateTime.now().format(DATE_FORMATTER));
+            context.setVariable("supportEmail", fromAddress);
+            context.setVariable("frontendUrl", frontendBaseUrl);
+
+            String htmlContent = templateEngine.process("emails/payment-success", context);
+
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(email);
+            helper.setSubject("[Motorbike Sharing] Thanh toán thành công - " + transactionId);
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(message);
+
+            log.info("Payment success email sent to: {} for transaction: {}", email, transactionId);
+            return CompletableFuture.completedFuture(EmailResult.success("Payment success email sent successfully"));
+
+        } catch (Exception e) {
+            log.error("Failed to send payment success email to: {} for transaction: {}", email, transactionId, e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send payment success email: " + e.getMessage()));
+        }
+    }
+
+    @Override
+    @Async
+    public CompletableFuture<EmailResult> sendTopUpSuccessEmail(String email, String fullName, BigDecimal amount, String transactionId, BigDecimal newBalance) {
+        try {
+            Context context = new Context();
+            context.setVariable("fullName", fullName);
+            context.setVariable("amount", formatCurrency(amount));
+            context.setVariable("newBalance", formatCurrency(newBalance));
+            context.setVariable("transactionId", transactionId);
+            context.setVariable("transactionTime", LocalDateTime.now().format(DATE_FORMATTER));
+            context.setVariable("supportEmail", fromAddress);
+            context.setVariable("frontendUrl", frontendBaseUrl);
+
+            String htmlContent = templateEngine.process("emails/topup-success", context);
+
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(email);
+            helper.setSubject("[Motorbike Sharing] Nạp tiền thành công - " + transactionId);
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(message);
+
+            log.info("Top-up success email sent to: {} for transaction: {}", email, transactionId);
+            return CompletableFuture.completedFuture(EmailResult.success("Top-up success email sent successfully"));
+
+        } catch (Exception e) {
+            log.error("Failed to send top-up success email to: {} for transaction: {}", email, transactionId, e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send top-up success email: " + e.getMessage()));
+        }
+    }
+
+    @Override
+    @Async
+    public CompletableFuture<EmailResult> sendPaymentFailedEmail(String email, String fullName, BigDecimal amount, String transactionId, String reason) {
+        try {
+            Context context = new Context();
+            context.setVariable("fullName", fullName);
+            context.setVariable("amount", formatCurrency(amount));
+            context.setVariable("transactionId", transactionId);
+            context.setVariable("reason", reason);
+            context.setVariable("transactionTime", LocalDateTime.now().format(DATE_FORMATTER));
+            context.setVariable("supportEmail", fromAddress);
+            context.setVariable("frontendUrl", frontendBaseUrl);
+
+            String htmlContent = templateEngine.process("emails/payment-failed", context);
+
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(email);
+            helper.setSubject("[Motorbike Sharing] Giao dịch không thành công - " + transactionId);
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(message);
+
+            log.info("Payment failed email sent to: {} for transaction: {}", email, transactionId);
+            return CompletableFuture.completedFuture(EmailResult.success("Payment failed email sent successfully"));
+
+        } catch (Exception e) {
+            log.error("Failed to send payment failed email to: {} for transaction: {}", email, transactionId, e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send payment failed email: " + e.getMessage()));
+        }
+    }
+
+    private String formatCurrency(BigDecimal amount) {
+        if (amount == null) return "0 ₫";
+        return String.format("%,.0f ₫", amount.doubleValue());
+    }
+}
