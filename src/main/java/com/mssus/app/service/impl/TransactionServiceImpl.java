@@ -1,7 +1,12 @@
 package com.mssus.app.service.impl;
 
 import com.mssus.app.entity.Transactions;
+import com.mssus.app.entity.Users;
+import com.mssus.app.entity.Wallet;
 import com.mssus.app.repository.TransactionRepository;
+import com.mssus.app.repository.UserRepository;
+import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.service.EmailService;
 import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +23,9 @@ public class TransactionServiceImpl implements TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final WalletService walletService;
+    private final EmailService emailService;
+    private final UserRepository userRepository;
+    private final WalletRepository walletRepository;
 
     @Override
     @Transactional
@@ -57,6 +65,23 @@ public class TransactionServiceImpl implements TransactionService {
 
         walletService.transferPendingToAvailable(userId, amount);
 
+        // Send success email
+        Users user = userRepository.findById(userId).orElse(null);
+        if (user != null && user.getEmail() != null) {
+            Wallet wallet = walletRepository.findByUser_UserId(userId).orElse(null);
+            BigDecimal newBalance = wallet != null ? wallet.getShadowBalance() : BigDecimal.ZERO;
+
+            emailService.sendTopUpSuccessEmail(
+                    user.getEmail(),
+                    user.getFullName(),
+                    amount,
+                    String.valueOf(transaction.getTxnId()),
+                    newBalance
+            );
+
+            log.info("Top-up success email sent to user {} for transaction {}", userId, transaction.getTxnId());
+        }
+
         log.info("Completed transaction {} for user {} with amount {}", pspRef, userId, amount);
     }
 
@@ -74,6 +99,20 @@ public class TransactionServiceImpl implements TransactionService {
         transactionRepository.save(transaction);
 
         walletService.decreasePendingBalance(userId, amount);
+
+        // Send failed email
+        Users user = userRepository.findById(userId).orElse(null);
+        if (user != null && user.getEmail() != null) {
+            emailService.sendPaymentFailedEmail(
+                    user.getEmail(),
+                    user.getFullName(),
+                    amount,
+                    String.valueOf(transaction.getTxnId()),
+                    reason
+            );
+
+            log.info("Payment failed email sent to user {} for transaction {}", userId, transaction.getTxnId());
+        }
 
         log.info("Failed transaction {} for user {} with reason: {}", pspRef, userId, reason);
     }
