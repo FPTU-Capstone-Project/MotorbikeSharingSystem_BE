@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @Builder
@@ -29,9 +30,14 @@ public class UserProfileResponse {
     @Schema(description = "Driver profile (if exists)")
     private DriverProfile driverProfile;
 
-    @JsonProperty("admin_profile")
-    @Schema(description = "Admin profile (if exists)")
-    private AdminProfile adminProfile;
+    @JsonProperty("available_profiles")
+    @Schema(description = "List of available profiles for the user")
+    private List<String> availableProfiles;
+
+    @JsonProperty("active_profile")
+    @Schema(description = "Currently active profile")
+    private String activeProfile;
+
 
     @Schema(description = "Wallet information")
     private WalletInfo wallet;
@@ -60,8 +66,8 @@ public class UserProfileResponse {
         @JsonProperty("profile_photo_url")
         private String profilePhotoUrl;
 
-        @JsonProperty("is_active")
-        private Boolean isActive;
+        @JsonProperty("status")
+        private String status;
 
         @JsonProperty("email_verified")
         private Boolean emailVerified;
@@ -122,15 +128,15 @@ public class UserProfileResponse {
         private Integer maxPassengers;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Schema(description = "Admin profile information")
-    public static class AdminProfile {
-        private String department;
-        private String permissions;
-    }
+//    @Data
+//    @Builder
+//    @NoArgsConstructor
+//    @AllArgsConstructor
+//    @Schema(description = "Admin profile information")
+//    public static class AdminProfile {
+//        private String department;
+//        private String permissions;
+//    }
 
     @Data
     @Builder

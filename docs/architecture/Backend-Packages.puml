@@ -1,0 +1,254 @@
+@startuml Backend-Packages
+!define PACKAGE
+skinparam packageStyle rectangle
+
+title Package Diagram - MSSUS Backend Layered Architecture
+
+package "com.mssus.app" {
+    
+    package "controller" {
+        class AuthController
+        class AccountController
+        class ProfileController
+        class RideController
+        class SharedRideController
+        class WalletController
+        class TransactionController
+        class NotificationController
+        class VehicleController
+        class AdminController
+        class SOSController
+        class ReviewController
+    }
+    
+    package "service" {
+        interface AuthService
+        interface UserService
+        interface ProfileService
+        interface RideService
+        interface MatchingService
+        interface WalletService
+        interface PaymentService
+        interface NotificationService
+        interface VerificationService
+        interface VehicleService
+        interface SOSService
+        interface AdminService
+        interface ReviewService
+        
+        package "impl" {
+            class AuthServiceImpl
+            class UserServiceImpl
+            class ProfileServiceImpl
+            class RideServiceImpl
+            class MatchingServiceImpl
+            class WalletServiceImpl
+            class PaymentServiceImpl
+            class NotificationServiceImpl
+            class VerificationServiceImpl
+            class VehicleServiceImpl
+            class SOSServiceImpl
+            class AdminServiceImpl
+            class ReviewServiceImpl
+        }
+    }
+    
+    package "domain" {
+        package "entity" {
+            class UserEntity
+            class RiderProfileEntity
+            class DriverProfileEntity
+            class AdminProfileEntity
+            class SharedRideEntity
+            class RideRequestEntity
+            class WalletEntity
+            class TransactionEntity
+            class VehicleEntity
+            class VerificationEntity
+            class NotificationEntity
+            class SOSAlertEntity
+            class ReviewEntity
+        }
+        
+        package "enums" {
+            enum UserType
+            enum RideStatus
+            enum PaymentStatus
+            enum VerificationStatus
+            enum NotificationType
+            enum VehicleType
+            enum SOSStatus
+        }
+        
+        package "dto" {
+            package "request" {
+                class LoginRequest
+                class RegisterRequest
+                class UpdateProfileRequest
+                class CreateRideRequest
+                class JoinRideRequest
+                class PaymentRequest
+                class VerificationRequest
+                class SOSRequest
+            }
+            
+            package "response" {
+                class LoginResponse
+                class UserProfileResponse
+                class RideResponse
+                class WalletResponse
+                class TransactionResponse
+                class NotificationResponse
+                class VerificationResponse
+                class PageResponse
+            }
+        }
+    }
+    
+    package "repository" {
+        interface UserRepository
+        interface RiderProfileRepository
+        interface DriverProfileRepository
+        interface AdminProfileRepository
+        interface SharedRideRepository
+        interface RideRequestRepository
+        interface WalletRepository
+        interface TransactionRepository
+        interface VehicleRepository
+        interface VerificationRepository
+        interface NotificationRepository
+        interface SOSAlertRepository
+        interface ReviewRepository
+    }
+    
+    package "config" {
+        class SecurityConfig
+        class DatabaseConfig
+        class CacheConfig
+        class OpenApiConfig
+        class WebConfig
+        class AsyncConfig
+        class JacksonConfig
+    }
+    
+    package "security" {
+        class JwtService
+        class JwtAuthenticationFilter
+        class JwtAuthenticationEntryPoint
+        class CustomUserDetailsService
+        class SecurityUtils
+    }
+    
+    package "adapter" {
+        package "payment" {
+            interface PaymentGateway
+            class MoMoPaymentAdapter
+            class PaymentWebhookHandler
+        }
+        
+        package "maps" {
+            interface MapsService
+            class GoogleMapsAdapter
+            class RouteCalculator
+        }
+        
+        package "notification" {
+            interface PushNotificationService
+            class FCMAdapter
+            interface SMSService
+            class SMSGatewayAdapter
+            interface EmailService
+            class SMTPEmailAdapter
+        }
+        
+        package "external" {
+            interface UniversityAPIClient
+            class StudentVerificationAdapter
+        }
+    }
+    
+    package "util" {
+        class ValidationUtil
+        class DateTimeUtil
+        class StringUtil
+        class OtpUtil
+        class Constants
+        class DistanceCalculator
+        class FareCalculator
+    }
+    
+    package "exception" {
+        class GlobalExceptionHandler
+        class DomainException
+        class ValidationException
+        class UnauthorizedException
+        class NotFoundException
+        class ConflictException
+        class PaymentException
+        class IntegrationException
+    }
+    
+    package "mapper" {
+        interface UserMapper
+        interface RideMapper
+        interface WalletMapper
+        interface VehicleMapper
+        interface NotificationMapper
+        class MapStructConfig
+    }
+}
+
+' Layer dependencies
+controller --> service : uses
+service.impl ..|> service : implements
+service --> repository : uses
+service --> domain.entity : manipulates
+service --> adapter : integrates
+controller --> domain.dto : uses
+repository --> domain.entity : persists
+security --> service : secures
+exception <.. controller : handles
+mapper --> domain : maps
+util <.. service : utilities
+
+note bottom
+  **Package Structure:**
+  - Follows Domain-Driven Design principles
+  - Clear separation of concerns
+  - Dependency flow: Controller → Service → Repository
+  - Domain objects are at the center
+  
+  **Key Packages:**
+  - controller: REST API endpoints
+  - service: Business logic interfaces and implementations
+  - domain: Core business entities and DTOs
+  - repository: Data access layer
+  - adapter: External service integrations
+  - config: Application configuration
+  - security: Authentication and authorization
+  - util: Shared utilities
+  - exception: Error handling
+  - mapper: Object mapping
+  
+  **Non-functional Implementation:**
+  - Security: JWT-based auth in security package
+  - Scalability: Stateless services, async processing
+  - Observability: Logging in GlobalExceptionHandler
+  - Performance: Caching configuration, optimized queries
+end note
+
+legend
+  **Package Organization:**
+  - Layered architecture with clear boundaries
+  - Dependencies flow downward only
+  - Domain model is independent
+  - External integrations isolated in adapters
+  - Cross-cutting concerns in separate packages
+  
+  --> Direct dependency
+  ..|> Interface implementation
+  <.. Exception handling/utility usage
+end legend
+
+@enduml
+

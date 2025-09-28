@@ -22,8 +22,13 @@ public class LoginResponse {
     @Schema(description = "User type", example = "driver")
     private String userType;
 
+    @JsonProperty("active_profile")
+    @Schema(description = "Active profile type", example = "rider")
+    private String activeProfile;
+
+    @JsonProperty("access_token")
     @Schema(description = "JWT access token")
-    private String token;
+    private String accessToken;
 
     @JsonProperty("refresh_token")
     @Schema(description = "JWT refresh token")

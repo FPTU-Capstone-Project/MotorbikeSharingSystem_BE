@@ -1,5 +1,7 @@
 package com.mssus.app.repository;
 
+import com.mssus.app.common.enums.VerificationStatus;
+import com.mssus.app.common.enums.VerificationType;
 import com.mssus.app.entity.Verification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,18 +24,18 @@ public interface VerificationRepository extends JpaRepository<Verification, Inte
 
     @Query("SELECT v FROM Verification v WHERE v.user.userId = :userId AND v.type = :type AND v.status = :status")
     Optional<Verification> findByUserIdAndTypeAndStatus(@Param("userId") Integer userId,
-                                                        @Param("type") String type,
-                                                        @Param("status") String status);
+                                                        @Param("type") VerificationType type,
+                                                        @Param("status") VerificationStatus status);
 
-    Page<Verification> findByStatus(String status, Pageable pageable);
+    Page<Verification> findByStatus(VerificationStatus status, Pageable pageable);
 
-    Page<Verification> findByTypeAndStatus(String type, String status, Pageable pageable);
+    Page<Verification> findByTypeAndStatus(VerificationType type, VerificationStatus status, Pageable pageable);
 
     @Query("SELECT COUNT(v) > 0 FROM Verification v WHERE v.user.userId = :userId " +
            "AND v.type = :type AND v.status = 'approved'")
-    boolean isUserVerifiedForType(@Param("userId") Integer userId, @Param("type") String type);
+    boolean isUserVerifiedForType(@Param("userId") Integer userId, @Param("type") VerificationType type);
 
-    Long countByTypeAndStatus(String type, String status);
+    Long countByTypeAndStatus(VerificationType type, VerificationStatus status);
 
-    Long countByStatus(String status);
+    Long countByStatus(VerificationStatus status);
 }

@@ -34,7 +34,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
         ErrorResponse errorResponse = ErrorResponse.builder()
-                .error("UNAUTHORIZED")
+                .legacyError("UNAUTHORIZED")
                 .message("Authentication required to access this resource")
                 .traceId(UUID.randomUUID().toString())
                 .timestamp(LocalDateTime.now())

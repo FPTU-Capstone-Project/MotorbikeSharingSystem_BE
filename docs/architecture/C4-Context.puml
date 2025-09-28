@@ -1,0 +1,54 @@
+@startuml C4-Context
+!define C4_CONTEXT
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title System Context Diagram for MSSUS - Motorbike Sharing System for University Students
+
+Person(student, "University Student", "Student who can request rides or offer rides as driver")
+Person(admin, "System Administrator", "University staff managing the platform")
+
+System(mssus, "MSSUS Platform", "Motorbike sharing platform for university students")
+
+System_Ext(payment, "Payment Service Provider", "MoMo E-wallet for digital payments")
+System_Ext(maps, "Mapping Service", "Google Maps/OpenStreetMap for navigation")
+System_Ext(notification, "Push Notification Service", "Firebase Cloud Messaging (FCM)")
+System_Ext(sms, "SMS Gateway", "SMS verification service")
+System_Ext(email, "Email Service", "SMTP server for email notifications")
+System_Ext(university, "University Systems", "Student ID verification service")
+
+Rel(student, mssus, "Books rides, offers rides, manages wallet", "HTTPS")
+Rel(admin, mssus, "Manages users, verifies drivers, monitors system", "HTTPS")
+
+Rel(mssus, payment, "Processes payments", "HTTPS/REST API")
+Rel(mssus, maps, "Gets routes, navigation", "HTTPS/REST API")
+Rel(mssus, notification, "Sends push notifications", "HTTPS/FCM API")
+Rel(mssus, sms, "Sends OTP codes", "HTTPS/API")
+Rel(mssus, email, "Sends email notifications", "SMTP")
+Rel(mssus, university, "Verifies student IDs", "HTTPS/API")
+
+note bottom of mssus
+  **Core Functions:**
+  - User authentication & profiles
+  - Ride matching & sharing
+  - In-app wallet & transactions
+  - Real-time GPS tracking
+  - SOS emergency features
+  - Driver/rider rating system
+  
+  **Non-functional Requirements:**
+  - Security: JWT authentication, encrypted data
+  - Scalability: Stateless design, horizontal scaling
+  - Observability: Centralized logging, metrics
+  - Performance: <100ms response time
+end note
+
+legend
+  **Legend**
+  This diagram shows the high-level view of the MSSUS system
+  and its interactions with external systems and users.
+  Students can act as both riders and drivers.
+  All communications use HTTPS for security.
+end legend
+
+@enduml
+

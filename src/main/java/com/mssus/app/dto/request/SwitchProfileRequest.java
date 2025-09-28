@@ -15,8 +15,8 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Switch profile request")
 public class SwitchProfileRequest {
 
-    @NotBlank(message = "Target role is required")
-    @Pattern(regexp = "^(rider|driver)$", message = "Target role must be either 'rider' or 'driver'")
-    @Schema(description = "Target role to switch to", example = "driver")
-    private String targetRole;
+    @NotBlank(message = "Target profile is required")
+    @Pattern(regexp = "^(rider|driver)$", message = "Target profile must be either 'rider' or 'driver'")
+    @Schema(description = "Target profile to switch to", example = "driver")
+    private String targetProfile;
 }

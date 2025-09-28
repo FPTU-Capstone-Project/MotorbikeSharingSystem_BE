@@ -1,0 +1,145 @@
+@startuml Backend-Components
+!define COMPONENT
+skinparam componentStyle uml2
+
+title Component Diagram - MSSUS Backend API Internal Architecture
+
+package "Presentation Layer" {
+    [Auth Controller] as AuthCtrl
+    [Account Controller] as AccountCtrl
+    [Ride Controller] as RideCtrl
+    [Wallet Controller] as WalletCtrl
+    [Notification Controller] as NotifCtrl
+    [Admin Controller] as AdminCtrl
+    [SOS Controller] as SOSCtrl
+}
+
+package "Business Logic Layer" {
+    [Auth Service] as AuthSvc
+    [User Service] as UserSvc
+    [Profile Service] as ProfileSvc
+    [Ride Service] as RideSvc
+    [Matching Service] as MatchSvc
+    [Wallet Service] as WalletSvc
+    [Payment Service] as PaymentSvc
+    [Notification Service] as NotifSvc
+    [Verification Service] as VerifySvc
+    [SOS Service] as SOSSvc
+    [Admin Service] as AdminSvc
+}
+
+package "Data Access Layer" {
+    [User Repository] as UserRepo
+    [Profile Repository] as ProfileRepo
+    [Ride Repository] as RideRepo
+    [Wallet Repository] as WalletRepo
+    [Transaction Repository] as TransRepo
+    [Vehicle Repository] as VehicleRepo
+    [Notification Repository] as NotifRepo
+    [Verification Repository] as VerifyRepo
+    [SOS Repository] as SOSRepo
+}
+
+package "Integration Adapters" {
+    [Payment Adapter] as PaymentAdapter
+    [Maps Adapter] as MapsAdapter
+    [SMS Adapter] as SMSAdapter
+    [Email Adapter] as EmailAdapter
+    [Push Notification Adapter] as PushAdapter
+    [University API Adapter] as UniAdapter
+}
+
+package "Cross-Cutting Concerns" {
+    [JWT Security Filter] as JWTFilter
+    [Exception Handler] as ExceptionHandler
+    [Request Validator] as Validator
+    [Audit Logger] as AuditLog
+    [Cache Manager] as CacheManager
+}
+
+' Controller to Service relationships
+AuthCtrl --> AuthSvc : uses
+AccountCtrl --> UserSvc : uses
+AccountCtrl --> ProfileSvc : uses
+RideCtrl --> RideSvc : uses
+RideCtrl --> MatchSvc : uses
+WalletCtrl --> WalletSvc : uses
+WalletCtrl --> PaymentSvc : uses
+NotifCtrl --> NotifSvc : uses
+AdminCtrl --> AdminSvc : uses
+AdminCtrl --> VerifySvc : uses
+SOSCtrl --> SOSSvc : uses
+
+' Service to Repository relationships
+AuthSvc --> UserRepo : queries
+UserSvc --> UserRepo : queries
+ProfileSvc --> ProfileRepo : queries
+RideSvc --> RideRepo : queries
+WalletSvc --> WalletRepo : queries
+PaymentSvc --> TransRepo : queries
+NotifSvc --> NotifRepo : queries
+VerifySvc --> VerifyRepo : queries
+SOSSvc --> SOSRepo : queries
+AdminSvc --> UserRepo : queries
+AdminSvc --> VerifyRepo : queries
+
+' Service to Service relationships
+RideSvc --> MatchSvc : delegates matching
+RideSvc --> NotifSvc : triggers notifications
+PaymentSvc --> WalletSvc : updates balance
+MatchSvc --> MapsAdapter : calculates routes
+SOSSvc --> NotifSvc : sends alerts
+
+' Service to Adapter relationships
+PaymentSvc --> PaymentAdapter : MoMo integration
+NotifSvc --> PushAdapter : FCM push
+NotifSvc --> SMSAdapter : OTP delivery
+NotifSvc --> EmailAdapter : email alerts
+VerifySvc --> UniAdapter : student verification
+
+' Cross-cutting relationships
+AuthCtrl ..> JWTFilter : secured by
+AccountCtrl ..> JWTFilter : secured by
+RideCtrl ..> JWTFilter : secured by
+WalletCtrl ..> JWTFilter : secured by
+AdminCtrl ..> JWTFilter : secured by
+
+AuthSvc ..> CacheManager : caches tokens
+UserSvc ..> CacheManager : caches profiles
+RideSvc ..> AuditLog : logs activities
+PaymentSvc ..> AuditLog : logs transactions
+
+note bottom
+  **Component Interactions:**
+  - Controllers handle HTTP requests and responses
+  - Services implement business logic and orchestration
+  - Repositories handle database operations
+  - Adapters integrate with external services
+  - Cross-cutting concerns provide shared functionality
+  
+  **Key Design Patterns:**
+  - Repository Pattern for data access
+  - Adapter Pattern for external integrations
+  - Service Layer Pattern for business logic
+  - Filter Chain for security
+  
+  **Non-functional Support:**
+  - Security: JWT authentication on all endpoints
+  - Performance: Caching for frequently accessed data
+  - Observability: Audit logging for critical operations
+  - Scalability: Stateless services for horizontal scaling
+end note
+
+legend
+  **Component Types:**
+  Controller: REST API endpoints
+  Service: Business logic implementation
+  Repository: Database access layer
+  Adapter: External system integration
+  Cross-cutting: Shared infrastructure concerns
+  
+  --> Direct dependency
+  ..> Uses/applies to
+end legend
+
+@enduml

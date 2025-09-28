@@ -19,6 +19,8 @@ DB_PASSWORD="Password@123"
 # Use non-standard ports to avoid conflicts with existing services
 DB_PORT="5433"  # Changed from 5432 to avoid PostgreSQL conflicts
 APP_PORT="8081" # Changed from 8080 to avoid common app conflicts
+REDIS_PORT="6380" # Changed from 6379 to avoid Redis conflicts
+REDIS_PASSWORD="123456"
 
 echo -e "${BLUE}Motorbike Sharing System - Local Development${NC}"
 echo "=============================================="
@@ -41,6 +43,38 @@ check_docker() {
     
     echo -e "${GREEN}Docker is ready${NC}"
 }
+
+start_redis() {
+    echo -e "${YELLOW}Starting Redis cache on port $REDIS_PORT...${NC}"
+    echo -e "${BLUE}Using port $REDIS_PORT to avoid conflicts with system Redis (port 6379)${NC}"
+
+    # Stop and remove existing container if exists
+    docker stop motorbike-dev-redis 2>/dev/null || true
+    docker rm motorbike-dev-redis 2>/dev/null || true
+
+    # Start Redis container with password authentication
+    docker run -d \
+        --name motorbike-dev-redis \
+        -p "$REDIS_PORT:6379" \
+        -v motorbike-dev-redis-data:/data \
+        redis:alpine \
+        redis-server --requirepass "$REDIS_PASSWORD"
+
+    echo -e "${YELLOW}Waiting for Redis to be ready...${NC}"
+
+    # Wait for Redis to be ready
+    for i in {1..30}; do
+        if docker exec motorbike-dev-redis redis-cli -a "$REDIS_PASSWORD" --no-auth-warning ping &> /dev/null; then
+            echo -e "${GREEN}Redis is ready!${NC}"
+            return
+        fi
+        sleep 2
+    done
+
+    echo -e "${RED}Redis failed to start${NC}"
+    exit 1
+}
+
 
 # Start PostgreSQL database
 start_database() {
@@ -121,6 +155,10 @@ EOF
     
     # Remove temporary Dockerfile
     rm .Dockerfile.dev
+
+    # Get container IP addresses for internal communication
+    DB_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' motorbike-dev-db)
+    REDIS_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' motorbike-dev-redis)
     
     # Start application container
     echo -e "${YELLOW}Starting application on port $APP_PORT...${NC}"
@@ -134,6 +172,10 @@ EOF
         -e SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \
         -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
         -e SPRING_JPA_SHOW_SQL=true \
+        -e SPRING_DATA_REDIS_HOST="$REDIS_IP" \
+        -e SPRING_DATA_REDIS_PORT=6379 \
+        -e SPRING_DATA_REDIS_PASSWORD="$REDIS_PASSWORD" \
+        -e REDIS_PASSWORD="$REDIS_PASSWORD" \
         motorbike-dev-app
     
     echo -e "${YELLOW}Waiting for application to start...${NC}"
@@ -164,6 +206,11 @@ show_status() {
     echo "  Username: $DB_USER"
     echo "  Password: $DB_PASSWORD"
     echo ""
+    echo -e "${BLUE}Redis Cache:${NC}"
+    echo "  Host: localhost"
+    echo "  Port: $REDIS_PORT"
+    echo "  Password: $REDIS_PASSWORD"
+    echo ""
     echo -e "${BLUE}Application:${NC}"
     echo "  URL: http://localhost:$APP_PORT"
     echo "  API Docs: http://localhost:$APP_PORT/swagger-ui.html"
@@ -183,10 +230,12 @@ stop_services() {
     
     # Stop containers
     docker stop motorbike-dev-app 2>/dev/null && echo -e "${GREEN}Application stopped${NC}" || echo -e "${YELLOW}Application not running${NC}"
+    docker stop motorbike-dev-redis 2>/dev/null && echo -e "${GREEN}Redis stopped${NC}" || echo -e "${YELLOW}Redis not running${NC}"
     docker stop motorbike-dev-db 2>/dev/null && echo -e "${GREEN}Database stopped${NC}" || echo -e "${YELLOW}Database not running${NC}"
     
     # Remove containers
     docker rm motorbike-dev-app 2>/dev/null || true
+    docker rm motorbike-dev-redis 2>/dev/null || true
     docker rm motorbike-dev-db 2>/dev/null || true
     
     # Ask about data removal
@@ -196,6 +245,7 @@ stop_services() {
     
     if [[ $remove_data =~ ^[Yy]$ ]]; then
         docker volume rm motorbike-dev-data 2>/dev/null && echo -e "${GREEN}Database data removed${NC}" || echo -e "${YELLOW}No data volume found${NC}"
+        docker volume rm motorbike-dev-redis-data 2>/dev/null && echo -e "${GREEN}Redis data removed${NC}" || echo -e "${YELLOW}No Redis volume found${NC}"
         echo -e "${RED}All data deleted!${NC}"
     else
         echo -e "${GREEN}Database data preserved${NC}"
@@ -228,6 +278,9 @@ show_help() {
     echo "  - Run from MotorbikeSharingSystem_BE directory"
     echo ""
     echo "This script:"
+    echo "  - Starts PostgreSQL database on port $DB_PORT"
+    echo "  - Starts Redis cache on port $REDIS_PORT"
+    echo "  - Starts Spring Boot application on port $APP_PORT"
     echo "  - Does not modify any existing project files"
     echo "  - Creates separate containers for development"
     echo "  - Preserves data between restarts"
@@ -239,6 +292,7 @@ main() {
     case "${1:-start}" in
         "start"|"")
             check_docker
+            start_redis
             start_database
             start_application
             show_status

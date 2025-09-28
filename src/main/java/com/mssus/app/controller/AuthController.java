@@ -1,5 +1,6 @@
 package com.mssus.app.controller;
 
+import com.mssus.app.common.enums.OtpFor;
 import com.mssus.app.dto.request.*;
 import com.mssus.app.dto.response.*;
 import com.mssus.app.service.AuthService;
@@ -23,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 @Tag(name = "Account", description = "Account & Personal Information Management")
 public class AuthController {
@@ -39,23 +40,23 @@ public class AuthController {
             @ApiResponse(responseCode = "409", description = "Email or phone already exists",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PostMapping("/auth/register")
+    @PostMapping("/register")
     public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
         log.info("Registration request for email: {}", request.getEmail());
         RegisterResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "Login", description = "Authenticate an existing user")
+    @Operation(summary = "Login", description = "Authenticate an existing user, if user is admin, no need to specify target profile")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Login successful",
                     content = @Content(schema = @Schema(implementation = LoginResponse.class))),
             @ApiResponse(responseCode = "401", description = "Invalid credentials",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PostMapping("/auth/login")
+    @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        log.info("Login request for: {}", request.getEmailOrPhone());
+        log.info("Login request for: {}", request.getEmail());
         LoginResponse response = authService.login(request);
         return ResponseEntity.ok(response);
     }
@@ -68,10 +69,23 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Unauthorized",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PostMapping("/auth/logout")
-    public ResponseEntity<MessageResponse> logout(@RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7); // Remove "Bearer " prefix
-        MessageResponse response = authService.logout(token);
+    @PostMapping("/logout")
+    public ResponseEntity<MessageResponse> logout(@Valid @RequestBody LogoutRequest request) {
+        MessageResponse response = authService.logout(request.refreshToken());
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Refresh token", description = "Refresh authentication token using a valid refresh token",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Token refreshed successfully",
+            content = @Content(schema = @Schema(implementation = TokenRefreshResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenRefreshResponse> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
+        TokenRefreshResponse response = authService.refreshToken(request);
         return ResponseEntity.ok(response);
     }
 
@@ -80,41 +94,12 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "OTP sent to registered contact",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class)))
     })
-    @PostMapping("/users/forgot-password")
+    @PostMapping("/forgot-password")
     public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         MessageResponse response = authService.forgotPassword(request);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Get OTP Code", description = "Request an OTP for verification",
-            security = @SecurityRequirement(name = "bearerAuth"))
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "OTP sent successfully",
-                    content = @Content(schema = @Schema(implementation = OtpResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthorized",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    @GetMapping("/otp")
-    public ResponseEntity<OtpResponse> getOtp(
-            Authentication authentication,
-            @Parameter(description = "OTP purpose", required = true)
-            @RequestParam String otpFor) {
-        String username = authentication.getName();
-        OtpResponse response = authService.requestOtp(username, otpFor);
-        return ResponseEntity.ok(response);
-    }
 
-    @Operation(summary = "Submit OTP Code", description = "Submit an OTP code for verification")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "OTP verified successfully",
-                    content = @Content(schema = @Schema(implementation = OtpResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid or expired OTP",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    @PostMapping("/otp")
-    public ResponseEntity<OtpResponse> submitOtp(@Valid @RequestBody OtpRequest request) {
-        OtpResponse response = authService.verifyOtp(request);
-        return ResponseEntity.ok(response);
-    }
 
 }

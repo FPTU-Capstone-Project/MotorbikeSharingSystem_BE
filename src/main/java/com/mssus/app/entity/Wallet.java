@@ -26,7 +26,7 @@ public class Wallet {
 
     @OneToOne
     @JoinColumn(name = "user_id", referencedColumnName = "user_id", unique = true)
-    private Users user;
+    private User user;
 
     @Column(name = "psp_account_id")
     private String pspAccountId;

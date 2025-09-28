@@ -1,5 +1,7 @@
 package com.mssus.app.util;
 
+import com.mssus.app.common.enums.OtpFor;
+
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -19,12 +21,12 @@ public class OtpUtil {
         return String.valueOf(otp);
     }
     
-    public static void storeOtp(String key, String otp, String purpose) {
+    public static void storeOtp(String key, String otp, OtpFor purpose) {
         OtpData data = new OtpData(otp, purpose, LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
         otpStore.put(key, data);
     }
     
-    public static boolean validateOtp(String key, String otp, String purpose) {
+    public static boolean validateOtp(String key, String otp, OtpFor purpose) {
         OtpData data = otpStore.get(key);
         if (data == null) {
             return false;
@@ -40,21 +42,16 @@ public class OtpUtil {
         
         return valid;
     }
+
+    public static void removeOtp(String key) {
+        otpStore.remove(key);
+    }
     
     public static void clearExpiredOtps() {
         LocalDateTime now = LocalDateTime.now();
         otpStore.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiryTime));
     }
-    
-    private static class OtpData {
-        final String otp;
-        final String purpose;
-        final LocalDateTime expiryTime;
-        
-        OtpData(String otp, String purpose, LocalDateTime expiryTime) {
-            this.otp = otp;
-            this.purpose = purpose;
-            this.expiryTime = expiryTime;
-        }
+
+    private record OtpData(String otp, OtpFor purpose, LocalDateTime expiryTime) {
     }
 }

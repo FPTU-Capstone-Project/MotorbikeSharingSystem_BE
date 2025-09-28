@@ -1,4 +1,6 @@
 package com.mssus.app.entity;
+
+import com.mssus.app.common.enums.MessageType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -34,7 +36,8 @@ public class Message {
     private String conversationId;
 
     @Column(name = "message_type")
-    private String messageType;
+    @Enumerated(EnumType.STRING)
+    private MessageType messageType;
 
     @Column(name = "content", columnDefinition = "TEXT")
     private String content;

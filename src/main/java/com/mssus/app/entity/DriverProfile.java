@@ -1,5 +1,6 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.DriverProfileStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -28,7 +29,7 @@ public class DriverProfile {
     @OneToOne
     @MapsId
     @JoinColumn(name = "driver_id", referencedColumnName = "user_id")
-    private Users user;
+    private User user;
 
     @Column(name = "license_number", unique = true, nullable = false)
     private String licenseNumber;
@@ -37,8 +38,9 @@ public class DriverProfile {
     private LocalDateTime licenseVerifiedAt;
 
     @Column(name = "status", length = 20)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private String status = "pending";
+    private DriverProfileStatus status = DriverProfileStatus.PENDING;
 
     @Column(name = "rating_avg")
     @Builder.Default
@@ -54,7 +56,7 @@ public class DriverProfile {
 
     @Column(name = "commission_rate", precision = 3, scale = 2)
     @Builder.Default
-    private BigDecimal commissionRate = new BigDecimal("0.15");
+    private BigDecimal commissionRate = new BigDecimal("0.15"); //TODO: Remove the field after implementing dynamic commission rates
 
     @Column(name = "is_available")
     @Builder.Default
@@ -62,7 +64,7 @@ public class DriverProfile {
 
     @Column(name = "max_passengers")
     @Builder.Default
-    private Integer maxPassengers = 1;
+    private Integer maxPassengers = 1; //TODO: Questionable, remove after implementing vehicle entity
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -24,7 +24,7 @@ public class AdminProfile {
     @OneToOne
     @MapsId
     @JoinColumn(name = "admin_id", referencedColumnName = "user_id")
-    private Users user;
+    private User user;
 
     @Column(name = "department")
     private String department;

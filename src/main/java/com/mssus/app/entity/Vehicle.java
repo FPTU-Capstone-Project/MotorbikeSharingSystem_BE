@@ -1,5 +1,7 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.FuelType;
+import com.mssus.app.common.enums.VehicleStatus;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -48,10 +50,12 @@ public class Vehicle {
     private LocalDateTime lastMaintenance;
 
     @Column(name = "fuel_type")
-    private String fuelType;
+    @Enumerated(EnumType.STRING)
+    private FuelType fuelType;
 
     @Column(name = "status")
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private VehicleStatus status;
 
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;

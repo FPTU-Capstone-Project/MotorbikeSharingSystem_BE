@@ -1,5 +1,6 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.SharedRideRequestStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,7 +28,7 @@ public class SharedRideRequest {
 
     @ManyToOne
     @JoinColumn(name = "share_ride_id", nullable = false)
-    private SharedRides sharedRide;
+    private SharedRide sharedRide;
 
     @ManyToOne
     @JoinColumn(name = "rider_id", nullable = false)
@@ -40,7 +41,8 @@ public class SharedRideRequest {
     private Integer dropoffLocationId;
 
     @Column(name = "status")
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private SharedRideRequestStatus status;
 
     @Column(name = "fare_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal fareAmount;

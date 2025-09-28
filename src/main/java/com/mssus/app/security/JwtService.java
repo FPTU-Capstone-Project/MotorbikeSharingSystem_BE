@@ -1,5 +1,8 @@
 package com.mssus.app.security;
 
+import com.mssus.app.common.exception.BaseDomainException;
+import com.mssus.app.entity.User;
+import com.mssus.app.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
@@ -9,6 +12,7 @@ import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -22,6 +26,8 @@ import java.util.function.Function;
 @Slf4j
 @Service
 public class JwtService {
+    @Autowired
+    private UserRepository userRepository;
 
     @Value("${security.jwt.secret-key}")
     private String jwtSecret;
@@ -54,6 +60,34 @@ public class JwtService {
                 .getBody();
     }
 
+    private int extractTokenVersion(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            Object version = claims.get("token_version");
+            if (version instanceof Integer) {
+                return (Integer) version;
+            } else if (version instanceof String) {
+                return Integer.parseInt((String) version);
+            } else if (version == null) {
+                log.error("Token version claim is missing");
+                throw new IllegalArgumentException("Token version claim is missing");
+            } else {
+                log.error("Invalid token version type: {}", version.getClass().getSimpleName());
+                throw new IllegalArgumentException("Invalid token version type");
+            }
+        } catch (ClassCastException ex) {
+            log.error("Error casting token version: {}", ex.getMessage());
+            throw new IllegalArgumentException("Invalid token version format", ex);
+        } catch (NumberFormatException ex) {
+            log.error("Error parsing token version string: {}", ex.getMessage());
+            throw new IllegalArgumentException("Invalid token version number format", ex);
+        } catch (Exception ex) {
+            log.error("Unexpected error extracting token version: {}", ex.getMessage());
+            throw new IllegalArgumentException("Error extracting token version", ex);
+        }
+    }
+
+
     private Boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }
@@ -61,7 +95,13 @@ public class JwtService {
     public Boolean validateToken(String token, UserDetails userDetails) {
         try {
             final String username = extractUsername(token);
-            return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+            final User user = userRepository.findByEmail(username)
+                    .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-email", "User with email not found: %s", username));
+
+            return (username.equals(userDetails.getUsername())
+                && !isTokenExpired(token)
+                && user.getTokenVersion() == extractTokenVersion(token));
+
         } catch (MalformedJwtException ex) {
             log.error("Invalid JWT token: {}", ex.getMessage());
         } catch (ExpiredJwtException ex) {
@@ -84,9 +124,10 @@ public class JwtService {
         return createToken(claims, username, jwtExpiration);
     }
 
-    public String generateRefreshToken(String username) {
+    public String generateRefreshToken(String username, int tokenVersion) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("type", "refresh");
+        claims.put("token_version", tokenVersion);
         return createToken(claims, username, refreshExpiration);
     }
 

@@ -1,5 +1,7 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.AlertType;
+import com.mssus.app.common.enums.SosAlertStatus;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -24,13 +26,14 @@ public class SosAlert {
 
     @ManyToOne
     @JoinColumn(name = "share_ride_id", nullable = false)
-    private SharedRides sharedRide;
+    private SharedRide sharedRide;
 
     @Column(name = "triggered_by", nullable = false)
     private Integer triggeredBy;
 
     @Column(name = "alert_type")
-    private String alertType;
+    @Enumerated(EnumType.STRING)
+    private AlertType alertType;
 
     @Column(name = "current_lat")
     private Double currentLat;
@@ -45,7 +48,8 @@ public class SosAlert {
     private String description;
 
     @Column(name = "status")
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private SosAlertStatus status;
 
     @Column(name = "acknowledged_by")
     private Integer acknowledgedBy;

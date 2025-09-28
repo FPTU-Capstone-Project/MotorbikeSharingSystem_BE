@@ -1,9 +1,8 @@
 package com.mssus.app.service.impl;
 
 import com.mssus.app.dto.response.wallet.WalletResponse;
-import com.mssus.app.entity.Users;
 import com.mssus.app.entity.Wallet;
-import com.mssus.app.exception.NotFoundException;
+import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
 import com.mssus.app.service.WalletService;

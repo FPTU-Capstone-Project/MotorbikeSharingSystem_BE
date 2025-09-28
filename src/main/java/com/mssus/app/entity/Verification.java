@@ -1,5 +1,8 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.DocumentType;
+import com.mssus.app.common.enums.VerificationStatus;
+import com.mssus.app.common.enums.VerificationType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -27,20 +30,23 @@ public class Verification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    private Users user;
+    private User user;
 
     @Column(name = "type", nullable = false)
-    private String type; // student_id, driver_license, background_check, vehicle_registration
+    @Enumerated(EnumType.STRING)
+    private VerificationType type; // student_id, driver_license, background_check, vehicle_registration
 
     @Column(name = "status", length = 20)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private String status = "pending"; // pending, approved, rejected, expired
+    private VerificationStatus status = VerificationStatus.PENDING; // pending, approved, rejected, expired
 
     @Column(name = "document_url")
     private String documentUrl;
 
     @Column(name = "document_type")
-    private String documentType; // image, pdf
+    @Enumerated(EnumType.STRING)
+    private DocumentType documentType; // image, pdf
 
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;

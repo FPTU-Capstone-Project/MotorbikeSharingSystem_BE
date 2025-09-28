@@ -33,8 +33,8 @@ public class CreateAccountRequest {
     private String phone;
 
     @NotBlank(message = "User type is required")
-    @Pattern(regexp = "^(student|admin)$", message = "User type must be either 'student' or 'admin'")
-    @Schema(description = "User type", example = "student")
+    @Pattern(regexp = "^(user|admin)$", message = "User type must be either 'user' or 'admin'")
+    @Schema(description = "User type", example = "user")
     private String userType;
 
     @NotBlank(message = "Password is required")

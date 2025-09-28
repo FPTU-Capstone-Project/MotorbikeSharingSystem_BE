@@ -1,12 +1,15 @@
 package com.mssus.app.security;
 
-import com.mssus.app.entity.Users;
+import com.mssus.app.common.enums.DriverProfileStatus;
+import com.mssus.app.common.enums.RiderProfileStatus;
+import com.mssus.app.common.enums.UserStatus;
+import com.mssus.app.common.enums.UserType;
+import com.mssus.app.entity.User;
 import com.mssus.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -27,11 +30,11 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         // Username can be either email or phone
-        Users user = userRepository.findByEmailOrPhone(username, username)
+        User user = userRepository.findByEmailOrPhone(username, username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email or phone: " + username));
 
-        if (!user.getIsActive()) {
-            throw new UsernameNotFoundException("User account is disabled");
+        if (UserStatus.SUSPENDED.equals(user.getStatus())) {
+            throw new UsernameNotFoundException("User account is suspended");
         }
 
         return createUserDetails(user);
@@ -39,51 +42,36 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Transactional(readOnly = true)
     public UserDetails loadUserById(Integer userId) {
-        Users user = userRepository.findByIdWithProfiles(userId)
+        User user = userRepository.findByIdWithProfiles(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with id: " + userId));
 
-        if (!user.getIsActive()) {
-            throw new UsernameNotFoundException("User account is disabled");
+        if (UserStatus.SUSPENDED.equals(user.getStatus())) {
+            throw new UsernameNotFoundException("User account is suspended");
         }
 
         return createUserDetails(user);
     }
 
-    private UserDetails createUserDetails(Users user) {
+    private UserDetails createUserDetails(User user) {
         List<GrantedAuthority> authorities = getAuthorities(user);
         
-        return User.builder()
+        return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail()) // Use email as username for Spring Security
                 .password(user.getPasswordHash())
                 .authorities(authorities)
                 .accountExpired(false)
-                .accountLocked(!user.getIsActive())
+                .accountLocked(user.getStatus().equals(UserStatus.SUSPENDED))
                 .credentialsExpired(false)
-                .disabled(!user.getIsActive())
+                .disabled(user.getStatus().equals(UserStatus.SUSPENDED))
                 .build();
     }
 
-    private List<GrantedAuthority> getAuthorities(Users user) {
+    private List<GrantedAuthority> getAuthorities(User user) {
         List<GrantedAuthority> authorities = new ArrayList<>();
-        
-        // Base role for all authenticated users
-        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-        
-        // Add role based on profile
-        if (user.getAdminProfile() != null) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-        }
-        
-        if (user.getDriverProfile() != null) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_DRIVER"));
-            if ("active".equals(user.getDriverProfile().getStatus())) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_DRIVER_ACTIVE"));
-            }
-        }
-        
-        if (user.getRiderProfile() != null) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_RIDER"));
-        }
+
+        if (user.getUserType().equals(UserType.USER)) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+        } else authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
         
         return authorities;
     }
