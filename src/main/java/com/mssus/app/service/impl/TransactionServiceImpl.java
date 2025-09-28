@@ -1,7 +1,11 @@
 package com.mssus.app.service.impl;
 
-import com.mssus.app.entity.Transactions;
-import com.mssus.app.entity.Users;
+import com.mssus.app.common.enums.ActorKind;
+import com.mssus.app.common.enums.TransactionDirection;
+import com.mssus.app.common.enums.TransactionStatus;
+import com.mssus.app.common.enums.TransactionType;
+import com.mssus.app.entity.Transaction;
+import com.mssus.app.entity.User;
 import com.mssus.app.entity.Wallet;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
@@ -29,19 +33,19 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    public Transactions createPendingTopUpTransaction(Integer userId, BigDecimal amount, String pspRef, String description) {
-        Transactions transaction = new Transactions();
-        transaction.setType("TOP_UP");
-        transaction.setDirection("INBOUND");
-        transaction.setActorKind("USER");
-        transaction.setActorUserId(userId);
+    public Transaction createPendingTopUpTransaction(Integer userId, BigDecimal amount, String pspRef, String description) {
+        Transaction transaction = new Transaction();
+        transaction.setType(TransactionType.TOPUP);
+        transaction.setDirection(TransactionDirection.IN);
+        transaction.setActorKind(ActorKind.USER);
+        transaction.setActorUser(userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found")));
         transaction.setAmount(amount);
         transaction.setCurrency("VND");
         transaction.setPspRef(pspRef);
-        transaction.setStatus("PENDING");
+        transaction.setStatus(TransactionStatus.PENDING);
         transaction.setNote(description);
 
-        Transactions savedTransaction = transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
 
         walletService.increasePendingBalance(userId, amount);
 
@@ -54,19 +58,19 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public void completeTransaction(String pspRef) {
-        Transactions transaction = transactionRepository.findPendingTransactionByPspRef(pspRef)
+        Transaction transaction = transactionRepository.findPendingTransactionByPspRef(pspRef)
                 .orElseThrow(() -> new RuntimeException("Pending transaction not found for pspRef: " + pspRef));
 
         BigDecimal amount = transaction.getAmount();
-        Integer userId = transaction.getActorUserId();
+        Integer userId = transaction.getActorUser().getUserId();
 
-        transaction.setStatus("COMPLETED");
+        transaction.setStatus(TransactionStatus.SUCCESS);
         transactionRepository.save(transaction);
 
         walletService.transferPendingToAvailable(userId, amount);
 
         // Send success email
-        Users user = userRepository.findById(userId).orElse(null);
+        User user = userRepository.findById(userId).orElse(null);
         if (user != null && user.getEmail() != null) {
             Wallet wallet = walletRepository.findByUser_UserId(userId).orElse(null);
             BigDecimal newBalance = wallet != null ? wallet.getShadowBalance() : BigDecimal.ZERO;
@@ -88,20 +92,20 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public void failTransaction(String pspRef, String reason) {
-        Transactions transaction = transactionRepository.findPendingTransactionByPspRef(pspRef)
+        Transaction transaction = transactionRepository.findPendingTransactionByPspRef(pspRef)
                 .orElseThrow(() -> new RuntimeException("Pending transaction not found for pspRef: " + pspRef));
 
         BigDecimal amount = transaction.getAmount();
-        Integer userId = transaction.getActorUserId();
+        Integer userId = transaction.getActorUser().getUserId();
 
-        transaction.setStatus("FAILED");
+        transaction.setStatus(TransactionStatus.FAILED);
         transaction.setNote(transaction.getNote() + " - Failed: " + reason);
         transactionRepository.save(transaction);
 
         walletService.decreasePendingBalance(userId, amount);
 
         // Send failed email
-        Users user = userRepository.findById(userId).orElse(null);
+        User user = userRepository.findById(userId).orElse(null);
         if (user != null && user.getEmail() != null) {
             emailService.sendPaymentFailedEmail(
                     user.getEmail(),
@@ -118,7 +122,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public Transactions getTransactionByPspRef(String pspRef) {
+    public Transaction getTransactionByPspRef(String pspRef) {
         return transactionRepository.findByPspRef(pspRef)
                 .orElseThrow(() -> new RuntimeException("Transaction not found for pspRef: " + pspRef));
     }

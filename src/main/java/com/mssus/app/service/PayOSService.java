@@ -1,6 +1,6 @@
 package com.mssus.app.service;
 
-import com.mssus.app.entity.Transactions;
+import com.mssus.app.entity.Transaction;
 import jakarta.annotation.Nonnull;
 import vn.payos.type.CheckoutResponseData;
 

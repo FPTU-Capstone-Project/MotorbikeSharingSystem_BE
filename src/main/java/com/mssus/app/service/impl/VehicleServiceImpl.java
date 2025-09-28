@@ -1,5 +1,7 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.FuelType;
+import com.mssus.app.common.enums.VehicleStatus;
 import com.mssus.app.dto.request.CreateVehicleRequest;
 import com.mssus.app.dto.request.UpdateVehicleRequest;
 import com.mssus.app.dto.response.MessageResponse;
@@ -7,8 +9,8 @@ import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.VehicleResponse;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Vehicle;
-import com.mssus.app.exception.ConflictException;
-import com.mssus.app.exception.NotFoundException;
+import com.mssus.app.common.exception.ConflictException;
+import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.mapper.VehicleMapper;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.VehicleRepository;
@@ -48,8 +50,8 @@ public class VehicleServiceImpl implements VehicleService {
                 .capacity(request.getCapacity())
                 .insuranceExpiry(request.getInsuranceExpiry())
                 .lastMaintenance(request.getLastMaintenance())
-                .fuelType(request.getFuelType())
-                .status(request.getStatus() != null ? request.getStatus() : "pending")
+                .fuelType(FuelType.valueOf(request.getFuelType()))
+                .status(VehicleStatus.valueOf(request.getStatus() != null ? request.getStatus() : "PENDING"))
                 .build();
 
         Vehicle savedVehicle = vehicleRepository.save(vehicle);
@@ -173,10 +175,10 @@ public class VehicleServiceImpl implements VehicleService {
             vehicle.setLastMaintenance(request.getLastMaintenance());
         }
         if (request.getFuelType() != null) {
-            vehicle.setFuelType(request.getFuelType());
+            vehicle.setFuelType(FuelType.valueOf(request.getFuelType()));
         }
         if (request.getStatus() != null) {
-            vehicle.setStatus(request.getStatus());
+            vehicle.setStatus(VehicleStatus.valueOf(request.getStatus()));
         }
     }
 

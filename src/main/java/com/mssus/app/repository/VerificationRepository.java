@@ -20,7 +20,7 @@ public interface VerificationRepository extends JpaRepository<Verification, Inte
     List<Verification> findByUserId(@Param("userId") Integer userId);
 
     @Query("SELECT v FROM Verification v WHERE v.user.userId = :userId AND v.type = :type")
-    List<Verification> findByUserIdAndType(@Param("userId") Integer userId, @Param("type") String type);
+    List<Verification> findByUserIdAndType(@Param("userId") Integer userId, @Param("type") VerificationType type);
 
     @Query("SELECT v FROM Verification v WHERE v.user.userId = :userId AND v.type = :type AND v.status = :status")
     Optional<Verification> findByUserIdAndTypeAndStatus(@Param("userId") Integer userId,
@@ -32,7 +32,7 @@ public interface VerificationRepository extends JpaRepository<Verification, Inte
     Page<Verification> findByTypeAndStatus(VerificationType type, VerificationStatus status, Pageable pageable);
 
     @Query("SELECT COUNT(v) > 0 FROM Verification v WHERE v.user.userId = :userId " +
-           "AND v.type = :type AND v.status = 'approved'")
+           "AND v.type = :type AND v.status = 'APPROVED'")
     boolean isUserVerifiedForType(@Param("userId") Integer userId, @Param("type") VerificationType type);
 
     Long countByTypeAndStatus(VerificationType type, VerificationStatus status);

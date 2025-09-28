@@ -1,5 +1,7 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.exception.EmailException;
+import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.dto.response.notification.EmailRequest;
 import com.mssus.app.dto.response.notification.EmailResult;
 import com.mssus.app.dto.response.notification.EmailProviderType;
@@ -9,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
@@ -21,6 +25,7 @@ import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @Service
@@ -165,6 +170,41 @@ public class EmailServiceImpl implements EmailService {
         } catch (Exception e) {
             log.error("Failed to send payment failed email to: {} for transaction: {}", email, transactionId, e);
             return CompletableFuture.completedFuture(EmailResult.failure("Failed to send payment failed email: " + e.getMessage()));
+        }
+    }
+
+    @Override
+    @Async
+    @Retryable(value = {EmailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2))
+    public CompletableFuture<EmailResult> sendEmail(String email, String subject, String templateName,
+                                                    Map<String, Object> templateVars, EmailPriority priority,
+                                                    Long userId, String emailType) {
+        try {
+            Context context = new Context();
+            if (templateVars != null) {
+                templateVars.forEach(context::setVariable);
+            }
+            context.setVariable("supportEmail", fromAddress);
+            context.setVariable("frontendUrl", frontendBaseUrl);
+
+            String htmlContent = templateEngine.process(templateName, context);
+
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(email);
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(message);
+
+            log.info("Email sent to: {} with template: {}", email, templateName);
+            return CompletableFuture.completedFuture(EmailResult.success("Email sent successfully"));
+
+        } catch (Exception e) {
+            log.error("Failed to send email to: {} with template: {}", email, templateName, e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send email: " + e.getMessage()));
         }
     }
 

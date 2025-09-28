@@ -1,7 +1,5 @@
 package com.mssus.app.service.impl;
 
-import com.mssus.app.BaseEvent.EmailChangedEvent;
-import com.mssus.app.BaseEvent.PhoneChangedEvent;
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.*;
 import com.mssus.app.dto.request.DriverVerificationRequest;
@@ -98,15 +96,16 @@ public class ProfileServiceImpl implements ProfileService {
     @Transactional
     @Retryable(value = {OptimisticLockingFailureException.class}, maxAttempts = 3)
     public UserProfileResponse updateProfile(String username, UpdateProfileRequest request) {
-        User user = findUserWithLock(username);
-        updateBasicInfo(user, request);
-        updateEmailIfChanged(user, request);
-        updatePhoneIfChanged(user, request);
-        updateRiderProfileIfExists(user, request);
-
-        user = userRepository.save(user);
-//        return userMapper.toProfileResponse(user);
-        return UserProfileResponse.builder().build();
+        throw new UnsupportedOperationException("Not implemented yet");
+//        User user = findUserWithLock(username);
+//        updateBasicInfo(user, request);
+//        updateEmailIfChanged(user, request);
+//        updatePhoneIfChanged(user, request);
+//        updateRiderProfileIfExists(user, request);
+//
+//        user = userRepository.save(user);
+////        return userMapper.toProfileResponse(user);
+//        return UserProfileResponse.builder().build();
     }
 
     @Override
@@ -332,28 +331,28 @@ public class ProfileServiceImpl implements ProfileService {
         }
     }
 
-    private void updateEmailIfChanged(User user, UpdateProfileRequest request) {
-        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
-            validateEmailUniqueness(request.getEmail());
-            String oldEmail = user.getEmail();
-            user.setEmail(request.getEmail());
-            user.setEmailVerified(false);
-            eventPublisher.publishEvent(new EmailChangedEvent(user.getUserId(), oldEmail, request.getEmail()));
-        }
-    }
-
-    private void updatePhoneIfChanged(User user, UpdateProfileRequest request) {
-        if (request.getPhone() != null) {
-            String normalizedPhone = ValidationUtil.normalizePhone(request.getPhone());
-            if (!normalizedPhone.equals(user.getPhone())) {
-                validatePhoneUniqueness(normalizedPhone);
-                String oldPhone = user.getPhone();
-                user.setPhone(normalizedPhone);
-                user.setPhoneVerified(false);
-                eventPublisher.publishEvent(new PhoneChangedEvent(user.getUserId(), oldPhone, request.getPhone()));
-            }
-        }
-    }
+//    private void updateEmailIfChanged(User user, UpdateProfileRequest request) {
+//        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
+//            validateEmailUniqueness(request.getEmail());
+//            String oldEmail = user.getEmail();
+//            user.setEmail(request.getEmail());
+//            user.setEmailVerified(false);
+//            eventPublisher.publishEvent(new EmailChangedEvent(user.getUserId(), oldEmail, request.getEmail()));
+//        }
+//    }
+//
+//    private void updatePhoneIfChanged(User user, UpdateProfileRequest request) {
+//        if (request.getPhone() != null) {
+//            String normalizedPhone = ValidationUtil.normalizePhone(request.getPhone());
+//            if (!normalizedPhone.equals(user.getPhone())) {
+//                validatePhoneUniqueness(normalizedPhone);
+//                String oldPhone = user.getPhone();
+//                user.setPhone(normalizedPhone);
+//                user.setPhoneVerified(false);
+//                eventPublisher.publishEvent(new PhoneChangedEvent(user.getUserId(), oldPhone, request.getPhone()));
+//            }
+//        }
+//    }
 
     private void updateRiderProfileIfExists(User user, UpdateProfileRequest request) {
         if (user.getRiderProfile() != null) {

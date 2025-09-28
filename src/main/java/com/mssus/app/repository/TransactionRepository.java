@@ -1,6 +1,6 @@
 package com.mssus.app.repository;
 
-import com.mssus.app.entity.Transactions;
+import com.mssus.app.entity.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,17 +10,19 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface TransactionRepository extends JpaRepository<Transactions, Long> {
+public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
-    Optional<Transactions> findByPspRef(String pspRef);
+    Optional<Transaction> findByPspRef(String pspRef);
 
-    List<Transactions> findByActorUserIdAndType(Integer userId, String type);
+    @Query("SELECT t FROM Transaction t WHERE t.actorUser.userId = :userId AND t.type = :type")
+    List<Transaction> findByActorUserIdAndType(Integer userId, String type);
 
-    List<Transactions> findByActorUserIdOrderByCreatedAtDesc(Integer userId);
+    @Query("SELECT t FROM Transaction t WHERE t.actorUser.userId = :userId ORDER BY t.createdAt DESC")
+    List<Transaction> findByActorUserIdOrderByCreatedAtDesc(Integer userId);
 
-    @Query("SELECT t FROM Transactions t WHERE t.actorUserId = :userId AND t.status = :status")
-    List<Transactions> findByUserIdAndStatus(@Param("userId") Integer userId, @Param("status") String status);
+    @Query("SELECT t FROM Transaction t WHERE t.actorUser.userId = :userId AND t.status = :status")
+    List<Transaction> findByUserIdAndStatus(@Param("userId") Integer userId, @Param("status") String status);
 
-    @Query("SELECT t FROM Transactions t WHERE t.pspRef = :pspRef AND t.status = 'PENDING'")
-    Optional<Transactions> findPendingTransactionByPspRef(@Param("pspRef") String pspRef);
+    @Query("SELECT t FROM Transaction t WHERE t.pspRef = :pspRef AND t.status = 'PENDING'")
+    Optional<Transaction> findPendingTransactionByPspRef(@Param("pspRef") String pspRef);
 }

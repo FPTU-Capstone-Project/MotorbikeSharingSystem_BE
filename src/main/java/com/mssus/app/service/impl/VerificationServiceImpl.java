@@ -1,15 +1,18 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.DriverProfileStatus;
 import com.mssus.app.dto.request.BackgroundCheckRequest;
 import com.mssus.app.dto.request.BulkApprovalRequest;
 import com.mssus.app.dto.request.VerificationDecisionRequest;
 import com.mssus.app.dto.response.*;
 import com.mssus.app.entity.AdminProfile;
 import com.mssus.app.entity.DriverProfile;
-import com.mssus.app.entity.Users;
 import com.mssus.app.entity.Verification;
-import com.mssus.app.exception.NotFoundException;
-import com.mssus.app.exception.ValidationException;
+import com.mssus.app.entity.User;
+import com.mssus.app.common.enums.VerificationStatus;
+import com.mssus.app.common.enums.VerificationType;
+import com.mssus.app.common.exception.NotFoundException;
+import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.AdminProfileRepository;
 import com.mssus.app.repository.DriverProfileRepository;
@@ -42,7 +45,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<StudentVerificationResponse> getPendingStudentVerifications(Pageable pageable) {
-        Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus("student_id", "pending", pageable);
+        Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus(VerificationType.STUDENT_ID, VerificationStatus.PENDING, pageable);
        List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
                .map(verificationMapper :: mapToStudentVerificationResponse)
                .toList();
@@ -52,7 +55,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional(readOnly = true)
     public StudentVerificationResponse getStudentVerificationById(Integer userId) {
-        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, "student_id", "pending")
+        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
         return verificationMapper.mapToStudentVerificationResponse(verification);
     }
@@ -60,11 +63,11 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional
     public MessageResponse approveStudentVerification(Integer userId, VerificationDecisionRequest request) {
-        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, "student_id", "pending")
+        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
 
         AdminProfile admin = getCurrentAdmin();
-        verification.setStatus("approved");
+        verification.setStatus(VerificationStatus.APPROVED);
         verification.setVerifiedBy(admin);
         verification.setVerifiedAt(LocalDateTime.now());
 
@@ -85,11 +88,11 @@ public class VerificationServiceImpl implements VerificationService {
             throw new ValidationException("Rejection reason is required");
         }
 
-        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, "student_id", "pending")
+        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
 
         AdminProfile admin = getCurrentAdmin();
-        verification.setStatus("rejected");
+        verification.setStatus(VerificationStatus.REJECTED);
         verification.setRejectionReason(request.getRejectionReason());
         verification.setVerifiedBy(admin);
         verification.setVerifiedAt(LocalDateTime.now());
@@ -107,7 +110,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<StudentVerificationResponse> getStudentVerificationHistory(Pageable pageable) {
-        Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus("student_id", "approved", pageable);
+        Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus(VerificationType.STUDENT_ID, VerificationStatus.APPROVED, pageable);
         List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
                 .map(verificationMapper:: mapToStudentVerificationResponse)
                 .toList();
@@ -127,7 +130,7 @@ public class VerificationServiceImpl implements VerificationService {
                 Verification verification = verificationRepository.findById(verificationId)
                         .orElseThrow(() -> new NotFoundException("Verification not found"));
 
-                if (!"student_id".equals(verification.getType()) || !"pending".equals(verification.getStatus())) {
+                if (!VerificationType.STUDENT_ID.equals(verification.getType()) || !VerificationStatus.PENDING.equals(verification.getStatus())) {
                     failedItems.add(BulkOperationResponse.FailedItem.builder()
                             .id(verificationId)
                             .reason("Not a student verification or Verification not in pending status")
@@ -135,7 +138,7 @@ public class VerificationServiceImpl implements VerificationService {
                     continue;
                 }
 
-                verification.setStatus("approved");
+                verification.setStatus(VerificationStatus.APPROVED);
                 verification.setVerifiedBy(admin);
                 verification.setVerifiedAt(LocalDateTime.now());
 
@@ -168,7 +171,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<DriverKycResponse> getPendingDriverVerifications(Pageable pageable) {
-        Page<DriverProfile> driversPage = driverProfileRepository.findByStatus("pending", pageable);
+        Page<DriverProfile> driversPage = driverProfileRepository.findByStatus(DriverProfileStatus.PENDING, pageable);
         List<DriverKycResponse> drivers = driversPage.getContent().stream()
                 .map(this::mapToDriverKycResponse)
                 .toList();
@@ -187,13 +190,13 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional
     public MessageResponse approveDriverDocuments(Integer driverId, VerificationDecisionRequest request) {
-        return approveDriverVerificationType(driverId, "driver_documents", request);
+        return approveDriverVerificationType(driverId, VerificationType.DRIVER_DOCUMENTS, request);
     }
 
     @Override
     @Transactional
     public MessageResponse approveDriverLicense(Integer driverId, VerificationDecisionRequest request) {
-        MessageResponse response = approveDriverVerificationType(driverId, "driver_license", request);
+        MessageResponse response = approveDriverVerificationType(driverId, VerificationType.DRIVER_LICENSE, request);
 
         // Update driver profile license verification
         DriverProfile driver = driverProfileRepository.findById(driverId)
@@ -207,7 +210,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional
     public MessageResponse approveDriverVehicle(Integer driverId, VerificationDecisionRequest request) {
-        return approveDriverVerificationType(driverId, "vehicle_registration", request);
+        return approveDriverVerificationType(driverId, VerificationType.VEHICLE_REGISTRATION, request);
     }
 
     @Override
@@ -226,8 +229,8 @@ public class VerificationServiceImpl implements VerificationService {
 
         // Reject all pending verifications for this driver
         for (Verification verification : verifications) {
-            if ("pending".equals(verification.getStatus())) {
-                verification.setStatus("rejected");
+            if (VerificationStatus.PENDING.equals(verification.getStatus())) {
+                verification.setStatus(VerificationStatus.REJECTED);
                 verification.setRejectionReason(request.getRejectionReason());
                 verification.setVerifiedBy(admin);
                 verification.setVerifiedAt(LocalDateTime.now());
@@ -243,7 +246,7 @@ public class VerificationServiceImpl implements VerificationService {
         // Update driver profile status
         DriverProfile driver = driverProfileRepository.findById(driverId)
                 .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + driverId));
-        driver.setStatus("rejected");
+        driver.setStatus(DriverProfileStatus.REJECTED);
         driverProfileRepository.save(driver);
 
         return MessageResponse.builder()
@@ -258,30 +261,35 @@ public class VerificationServiceImpl implements VerificationService {
                 .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + driverId));
 
         // Find or create background check verification
-        Verification bgCheck = verificationRepository.findByUserIdAndTypeAndStatus(driverId, "background_check", "pending")
+        Verification bgCheck = verificationRepository.findByUserIdAndTypeAndStatus(driverId, VerificationType.BACKGROUND_CHECK, VerificationStatus.PENDING)
                 .orElse(Verification.builder()
                         .user(driver.getUser())
-                        .type("background_check")
-                        .status("pending")
+                        .type(VerificationType.BACKGROUND_CHECK)
+                        .status(VerificationStatus.PENDING)
                         .build());
 
         AdminProfile admin = getCurrentAdmin();
-        bgCheck.setStatus(request.getResult());
+        if ("failed".equals(request.getResult())) {
+            bgCheck.setStatus(VerificationStatus.REJECTED);
+        } else if ("passed".equals(request.getResult())) {
+            bgCheck.setStatus(VerificationStatus.APPROVED);
+        }
+
         bgCheck.setVerifiedBy(admin);
         bgCheck.setVerifiedAt(LocalDateTime.now());
         bgCheck.setMetadata("{\"details\":\"" + request.getDetails() + "\",\"conductedBy\":\"" + request.getConductedBy() + "\"}");
 
         if ("failed".equals(request.getResult())) {
             bgCheck.setRejectionReason("Background check failed: " + request.getDetails());
-            driver.setStatus("rejected");
+            driver.setStatus(DriverProfileStatus.REJECTED);
         } else if ("passed".equals(request.getResult())) {
             // Check if all other verifications are approved to activate driver
             boolean allApproved = verificationRepository.findByUserId(driverId).stream()
-                    .filter(v -> !"background_check".equals(v.getType()))
-                    .allMatch(v -> "approved".equals(v.getStatus()));
+                    .filter(v -> !VerificationType.BACKGROUND_CHECK.equals(v.getType()))
+                    .allMatch(v -> VerificationStatus.APPROVED.equals(v.getStatus()));
 
             if (allApproved) {
-                driver.setStatus("active");
+                driver.setStatus(DriverProfileStatus.ACTIVE);
             }
         }
 
@@ -297,13 +305,13 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional(readOnly = true)
     public DriverStatsResponse getDriverVerificationStats() {
         Long totalDrivers = driverProfileRepository.count();
-        Long pendingDocs = verificationRepository.countByTypeAndStatus("driver_documents", "pending");
-        Long pendingLicenses = verificationRepository.countByTypeAndStatus("driver_license", "pending");
-        Long pendingVehicles = verificationRepository.countByTypeAndStatus("vehicle_registration", "pending");
-        Long pendingBgChecks = verificationRepository.countByTypeAndStatus("background_check", "pending");
+        Long pendingDocs = verificationRepository.countByTypeAndStatus(VerificationType.DRIVER_DOCUMENTS, VerificationStatus.PENDING);
+        Long pendingLicenses = verificationRepository.countByTypeAndStatus(VerificationType.DRIVER_LICENSE, VerificationStatus.PENDING);
+        Long pendingVehicles = verificationRepository.countByTypeAndStatus(VerificationType.VEHICLE_REGISTRATION, VerificationStatus.PENDING);
+        Long pendingBgChecks = verificationRepository.countByTypeAndStatus(VerificationType.BACKGROUND_CHECK, VerificationStatus.PENDING);
         Long pendingVerifications = pendingDocs + pendingLicenses + pendingVehicles + pendingBgChecks;
-        Long approvedDrivers = driverProfileRepository.countByStatus("active");
-        Long rejectedVerifications = verificationRepository.countByStatus("rejected");
+        Long approvedDrivers = driverProfileRepository.countByStatus(DriverProfileStatus.ACTIVE);
+        Long rejectedVerifications = verificationRepository.countByStatus(VerificationStatus.REJECTED);
 
         Double completionRate = totalDrivers > 0 ? (approvedDrivers.doubleValue() / totalDrivers.doubleValue()) * 100 : 0.0;
 
@@ -343,7 +351,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<VerificationResponse> getAllPendingVerifications(Pageable pageable) {
-        Page<Verification> verificationsPage = verificationRepository.findByStatus("pending", pageable);
+        Page<Verification> verificationsPage = verificationRepository.findByStatus(VerificationStatus.PENDING, pageable);
         List<VerificationResponse> verifications = verificationsPage.getContent().stream()
                 .map(verificationMapper::mapToVerificationResponse)
                 .toList();
@@ -358,7 +366,7 @@ public class VerificationServiceImpl implements VerificationService {
                 .orElseThrow(() -> new NotFoundException("Verification not found with ID: " + verificationId));
 
         AdminProfile admin = getCurrentAdmin();
-        verification.setStatus("approved");
+        verification.setStatus(VerificationStatus.APPROVED);
         verification.setVerifiedBy(admin);
         verification.setVerifiedAt(LocalDateTime.now());
 
@@ -367,12 +375,12 @@ public class VerificationServiceImpl implements VerificationService {
     }
 
     // Helper methods
-    private MessageResponse approveDriverVerificationType(Integer driverId, String type, VerificationDecisionRequest request) {
-        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(driverId, type, "pending")
+    private MessageResponse approveDriverVerificationType(Integer driverId, VerificationType type, VerificationDecisionRequest request) {
+        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(driverId, type, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException(type + " verification not found for driver ID: " + driverId));
 
         AdminProfile admin = getCurrentAdmin();
-        verification.setStatus("approved");
+        verification.setStatus(VerificationStatus.APPROVED);
         verification.setVerifiedBy(admin);
         verification.setVerifiedAt(LocalDateTime.now());
 
@@ -384,17 +392,17 @@ public class VerificationServiceImpl implements VerificationService {
 
         // Check if all verifications are approved to activate driver
         boolean allApproved = verificationRepository.findByUserId(driverId).stream()
-                .allMatch(v -> "approved".equals(v.getStatus()) || "background_check".equals(v.getType()));
+                .allMatch(v -> VerificationStatus.APPROVED.equals(v.getStatus()) || VerificationType.BACKGROUND_CHECK.equals(v.getType()));
 
         if (allApproved) {
             DriverProfile driver = driverProfileRepository.findById(driverId)
                     .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + driverId));
-            driver.setStatus("active");
+            driver.setStatus(DriverProfileStatus.ACTIVE);
             driverProfileRepository.save(driver);
         }
 
         return MessageResponse.builder()
-                .message(type.replace("_", " ") + " approved successfully")
+                .message(type.name().toLowerCase().replace("_", " ") + " approved successfully")
                 .build();
     }
 
@@ -402,7 +410,7 @@ public class VerificationServiceImpl implements VerificationService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
 
-        Users user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new NotFoundException("Current user not found"));
 
         return adminProfileRepository.findById(user.getUserId())
@@ -414,10 +422,10 @@ public class VerificationServiceImpl implements VerificationService {
         List<DriverKycResponse.VerificationInfo> verificationInfos = verifications.stream()
                 .map(v -> DriverKycResponse.VerificationInfo.builder()
                         .verificationId(v.getVerificationId())
-                        .type(v.getType())
-                        .status(v.getStatus())
+                        .type(v.getType().name())
+                        .status(v.getStatus().name())
                         .documentUrl(v.getDocumentUrl())
-                        .documentType(v.getDocumentType())
+                        .documentType(v.getDocumentType().name())
                         .rejectionReason(v.getRejectionReason())
                         .verifiedBy(v.getVerifiedBy() != null ?
                                    v.getVerifiedBy().getUser().getFullName() : null)
@@ -426,14 +434,14 @@ public class VerificationServiceImpl implements VerificationService {
                         .build())
                 .toList();
 
-        Users user = driver.getUser();
+        User user = driver.getUser();
         return DriverKycResponse.builder()
                 .userId(user.getUserId())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .licenseNumber(driver.getLicenseNumber())
-                .driverStatus(driver.getStatus())
+                .driverStatus(driver.getStatus().name())
                 .verifications(verificationInfos)
                 .createdAt(driver.getCreatedAt())
                 .build();
