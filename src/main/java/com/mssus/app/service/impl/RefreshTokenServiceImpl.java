@@ -1,5 +1,6 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.entity.RefreshToken;
 import com.mssus.app.entity.User;
 import com.mssus.app.repository.RefreshTokenRepository;
@@ -71,7 +72,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             }
 
             if (refreshToken.getUser().getStatus() == null || 
-                !refreshToken.getUser().getStatus().name().equals("ACTIVE")) {
+                !UserStatus.ACTIVE.equals(refreshToken.getUser().getStatus())) {
                 log.warn("User is not active for refresh token: {}", refreshToken.getUser().getEmail());
                 return false;
             }

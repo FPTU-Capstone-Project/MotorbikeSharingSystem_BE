@@ -71,8 +71,6 @@ public class ProfileServiceImpl implements ProfileService {
                 .toList())
             .orElse(List.of());
 
-        assert activeProfile != null;
-
         return switch (UserProfileType.valueOf(activeProfile.toUpperCase())) {
             case DRIVER -> {
                 UserProfileResponse response = userMapper.toDriverProfileResponse(user);

@@ -61,16 +61,32 @@ public class JwtService {
     }
 
     private int extractTokenVersion(String token) {
-        Claims claims = extractAllClaims(token);
-        Object version = claims.get("token_version");
-        if (version instanceof Integer) {
-            return (Integer) version;
-        } else if (version instanceof String) {
-            return Integer.parseInt((String) version);
-        } else {
-            throw new IllegalArgumentException("Invalid token version type");
+        try {
+            Claims claims = extractAllClaims(token);
+            Object version = claims.get("token_version");
+            if (version instanceof Integer) {
+                return (Integer) version;
+            } else if (version instanceof String) {
+                return Integer.parseInt((String) version);
+            } else if (version == null) {
+                log.error("Token version claim is missing");
+                throw new IllegalArgumentException("Token version claim is missing");
+            } else {
+                log.error("Invalid token version type: {}", version.getClass().getSimpleName());
+                throw new IllegalArgumentException("Invalid token version type");
+            }
+        } catch (ClassCastException ex) {
+            log.error("Error casting token version: {}", ex.getMessage());
+            throw new IllegalArgumentException("Invalid token version format", ex);
+        } catch (NumberFormatException ex) {
+            log.error("Error parsing token version string: {}", ex.getMessage());
+            throw new IllegalArgumentException("Invalid token version number format", ex);
+        } catch (Exception ex) {
+            log.error("Unexpected error extracting token version: {}", ex.getMessage());
+            throw new IllegalArgumentException("Error extracting token version", ex);
         }
     }
+
 
     private Boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());

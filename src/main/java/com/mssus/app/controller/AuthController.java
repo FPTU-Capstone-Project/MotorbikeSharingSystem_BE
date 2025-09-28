@@ -42,15 +42,6 @@ public class AuthController {
     })
     @PostMapping("/register")
     public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
-        log.info("Registration request received: fullName='{}', email='{}', phone='{}', password length={}, role='{}'",
-            request.getFullName(), request.getEmail(), request.getPhone(),
-            request.getPassword() != null ? request.getPassword().length() : 0, request.getRole());
-        if (request.getFullName() == null || request.getFullName().trim().isEmpty()) {
-            log.error("VALIDATION BYPASSED: Empty fullName should have been caught!");
-        }
-        if (request.getPassword() == null || request.getPassword().length() < 8) {
-            log.error("VALIDATION BYPASSED: Short password should have been caught!");
-        }
         log.info("Registration request for email: {}", request.getEmail());
         RegisterResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

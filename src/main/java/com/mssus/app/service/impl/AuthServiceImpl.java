@@ -105,18 +105,21 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse login(LoginRequest request) {
         log.info("Login attempt for: {}", request.getEmail());
 
-        if (!ValidationUtil.isValidEmail(request.getEmail())) {
-            throw BaseDomainException.of("user.validation.invalid-email");
-        }
-
-        // Find user by email
         String identifier = request.getEmail();
         User user = userRepository.findByEmail(identifier)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email"));
 
+        if (!ValidationUtil.isValidEmail(request.getEmail())) {
+            throw BaseDomainException.of("user.validation.invalid-email");
+        }
+
+        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
+            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
+        }
+
         validateUserBeforeGrantingToken(user);
 
-        // Authenticate
+
         authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(user.getEmail(), request.getPassword())
         );
@@ -129,10 +132,6 @@ public class AuthServiceImpl implements AuthService {
 
         String accessToken = jwtService.generateToken(user.getEmail(), claims);
         String refreshToken = refreshTokenService.generateRefreshToken(user);
-
-        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
-            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
-        }
 
         return LoginResponse.builder()
             .userId(user.getUserId())
