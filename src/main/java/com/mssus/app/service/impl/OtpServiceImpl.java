@@ -35,7 +35,7 @@ public class OtpServiceImpl implements OtpService {
 
         User user = switch (otpFor) {
             case VERIFY_EMAIL -> userRepository.findByEmailAndStatus(email, UserStatus.EMAIL_VERIFYING)
-                .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-email", "User with email not in verifying state: %s", email));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not in verifying state: " + email));
             case FORGOT_PASSWORD -> userRepository.findByEmailAndStatusNot(email, UserStatus.EMAIL_VERIFYING)
                 .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-email", "User with email not found: %s", email));
         };
@@ -51,8 +51,8 @@ public class OtpServiceImpl implements OtpService {
         };
 
         String templateName = switch (otpFor) {
-            case VERIFY_EMAIL -> "otp-email-verification";
-            case FORGOT_PASSWORD -> "otp-password-reset";
+            case VERIFY_EMAIL -> "email/otp-email-verification";
+            case FORGOT_PASSWORD -> "email/otp-password-reset";
         };
 
         Map<String, Object> templateVars = switch (otpFor) {
