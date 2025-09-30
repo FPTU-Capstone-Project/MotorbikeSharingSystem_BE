@@ -28,9 +28,6 @@ public class Wallet {
     @JoinColumn(name = "user_id", referencedColumnName = "user_id", unique = true)
     private User user;
 
-    @Column(name = "psp_account_id")
-    private String pspAccountId;
-
     @Column(name = "shadow_balance", precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal shadowBalance = BigDecimal.ZERO;

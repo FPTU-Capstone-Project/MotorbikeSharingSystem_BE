@@ -1,5 +1,6 @@
 package com.mssus.app.repository;
 
+import com.mssus.app.common.enums.TransactionStatus;
 import com.mssus.app.entity.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     Optional<Transaction> findByPspRef(String pspRef);
 
+    List<Transaction> findByPspRefAndStatus(String pspRef, TransactionStatus status);
+
     @Query("SELECT t FROM Transaction t WHERE t.actorUser.userId = :userId AND t.type = :type")
     List<Transaction> findByActorUserIdAndType(Integer userId, String type);
 
@@ -24,5 +27,5 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     List<Transaction> findByUserIdAndStatus(@Param("userId") Integer userId, @Param("status") String status);
 
     @Query("SELECT t FROM Transaction t WHERE t.pspRef = :pspRef AND t.status = 'PENDING'")
-    Optional<Transaction> findPendingTransactionByPspRef(@Param("pspRef") String pspRef);
+    List<Transaction> findPendingTransactionByPspRef(@Param("pspRef") String pspRef);
 }
