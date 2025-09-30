@@ -128,7 +128,7 @@ public class PayOSServiceImpl implements PayOSService {
                 switch (status.toUpperCase()) {
                     case "PAID":
                     case "PROCESSING":
-                        transactionService.completeTransaction(orderCode);
+                        transactionService.completeTopUpTransaction(orderCode);
                         log.info("Transaction completed for orderCode: {}", orderCode);
                         break;
                     case "CANCELLED":
