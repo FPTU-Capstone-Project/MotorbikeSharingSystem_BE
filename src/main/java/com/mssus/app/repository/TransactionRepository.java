@@ -28,4 +28,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     @Query("SELECT t FROM Transaction t WHERE t.pspRef = :pspRef AND t.status = 'PENDING'")
     List<Transaction> findPendingTransactionByPspRef(@Param("pspRef") String pspRef);
+
+    List<Transaction> findByGroupId(java.util.UUID groupId);
+
+    List<Transaction> findByGroupIdAndStatus(java.util.UUID groupId, TransactionStatus status);
 }
