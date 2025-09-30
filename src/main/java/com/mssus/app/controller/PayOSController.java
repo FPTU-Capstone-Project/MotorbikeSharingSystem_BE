@@ -20,19 +20,6 @@ public class PayOSController {
     private final PayOSService payOSService;
 
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Payment link created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "500", description = "Internal server error")
-    })
-    @PostMapping("/test")
-    public ResponseEntity<CheckoutResponseData> createPaymentLink() throws Exception {
-        long orderCode = System.currentTimeMillis() / 1000;
-        BigDecimal bigDecimal  = BigDecimal.valueOf(500000.0);
-        CheckoutResponseData response = payOSService.createPaymentLink(orderCode, bigDecimal, "Test Payment");
-        return ResponseEntity.ok(response);
-    }
-
-    @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Top-up payment link created successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
