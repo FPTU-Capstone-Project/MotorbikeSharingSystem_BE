@@ -44,38 +44,13 @@ public class PayOSServiceImpl implements PayOSService {
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
 
     @PostConstruct
-    public void init(){
+    public void init() {
         try {
             this.payOS = new PayOS(clientId, apiKey, checksumKey);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize PayOS client", e);
         }
     }
-
-    //test method
-    @Override
-    public CheckoutResponseData createPaymentLink(Long orderCode, BigDecimal amount, @Nonnull String description) throws Exception {
-        try{
-            if (orderCode == null) {
-                orderCode = generateUniqueOrderCode();
-            }
-            if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("Amount must be greater than zero");
-            }
-            PaymentData data = PaymentData.builder()
-                    .orderCode(orderCode)
-                    .amount(amount.intValue())
-                    .description(description)
-                    .returnUrl(returnUrl)
-                    .cancelUrl(cancelUrl)
-                    .build();
-            return payOS.createPaymentLink(data);
-        }catch (Exception e){
-            log.error("Error creating payment link: {}", orderCode, e);
-            throw new RuntimeException("Error creating payment link for orderCode: " + orderCode, e);
-        }
-    }
-
 
     public Long generateUniqueOrderCode() {
         return orderCodeCounter.incrementAndGet();
@@ -100,7 +75,7 @@ public class PayOSServiceImpl implements PayOSService {
 
             CheckoutResponseData response = payOS.createPaymentLink(data);
 
-            transactionService.createPendingTopUpTransaction(userId, amount, orderCode.toString(), description);
+            transactionService.initTopup(userId, amount, orderCode.toString(), description);
 
             log.info("Created top-up payment link for user {} with amount {} and orderCode {}",
                     userId, amount, orderCode);
@@ -128,12 +103,12 @@ public class PayOSServiceImpl implements PayOSService {
                 switch (status.toUpperCase()) {
                     case "PAID":
                     case "PROCESSING":
-                        transactionService.completeTopUpTransaction(orderCode);
+                        transactionService.handleTopupSuccess(orderCode);
                         log.info("Transaction completed for orderCode: {}", orderCode);
                         break;
                     case "CANCELLED":
                     case "EXPIRED":
-                        transactionService.failTransaction(orderCode, "Payment " + status.toLowerCase());
+                        transactionService.handleTopupFailed(orderCode, "Payment " + status.toLowerCase());
                         log.info("Transaction failed for orderCode: {} with reason: {}", orderCode, status);
                         break;
                     default:

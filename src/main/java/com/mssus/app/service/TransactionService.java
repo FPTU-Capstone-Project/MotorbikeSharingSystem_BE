@@ -8,10 +8,10 @@ import java.util.UUID;
 
 public interface TransactionService {
     // Existing methods
-    Transaction createPendingTopUpTransaction(Integer userId, BigDecimal amount, String pspRef, String description);
-    void completeTopUpTransaction(String pspRef);
-    void failTransaction(String pspRef, String reason);
-    Transaction getTransactionByPspRef(String pspRef);
+//    Transaction createPendingTopUpTransaction(Integer userId, BigDecimal amount, String pspRef, String description);
+//    void completeTopUpTransaction(String pspRef);
+//    void failTransaction(String pspRef, String reason);
+//    Transaction getTransactionByPspRef(String pspRef);
 
     // RIDER_TOPUP flows
     List<Transaction> initTopup(Integer userId, BigDecimal amount, String pspRef, String description);
