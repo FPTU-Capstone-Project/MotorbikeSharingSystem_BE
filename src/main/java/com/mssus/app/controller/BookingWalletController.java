@@ -3,6 +3,7 @@ package com.mssus.app.controller;
 import com.mssus.app.dto.request.wallet.*;
 import com.mssus.app.dto.response.wallet.BalanceCheckResponse;
 import com.mssus.app.dto.response.wallet.WalletOperationResponse;
+import com.mssus.app.service.BookingWalletService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -25,8 +26,7 @@ import java.math.BigDecimal;
 @Tag(name = "Booking Wallet", description = "Internal wallet operations for booking service")
 public class BookingWalletController {
 
-    // Note: Service layer methods need to be implemented
-    // private final BookingWalletService bookingWalletService;
+    private final BookingWalletService bookingWalletService;
 
     @Operation(
             summary = "Hold funds",
@@ -44,14 +44,8 @@ public class BookingWalletController {
         log.info("Hold funds request - userId: {}, bookingId: {}, amount: {}",
                 request.getUserId(), request.getBookingId(), request.getAmount());
 
-        // TODO: Implement service call
-        // 1. Validate user has sufficient balance
-        // 2. Create hold transaction (move from available to pending)
-        // 3. Return operation result
-        // WalletOperationResponse response = bookingWalletService.holdFunds(request);
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        WalletOperationResponse response = bookingWalletService.holdFunds(request);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(
@@ -70,16 +64,8 @@ public class BookingWalletController {
         log.info("Capture funds request - userId: {}, bookingId: {}, amount: {}, driverId: {}",
                 request.getUserId(), request.getBookingId(), request.getAmount(), request.getDriverId());
 
-        // TODO: Implement service call
-        // 1. Validate held funds exist for this booking
-        // 2. Deduct from rider's pending balance
-        // 3. Credit driver's available balance
-        // 4. Create capture transactions
-        // 5. Calculate and handle commission
-        // WalletOperationResponse response = bookingWalletService.captureFunds(request);
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        WalletOperationResponse response = bookingWalletService.captureFunds(request);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(
@@ -98,14 +84,8 @@ public class BookingWalletController {
         log.info("Release funds request - userId: {}, bookingId: {}, amount: {}",
                 request.getUserId(), request.getBookingId(), request.getAmount());
 
-        // TODO: Implement service call
-        // 1. Validate held funds exist for this booking
-        // 2. Move amount from pending back to available
-        // 3. Create release transaction
-        // WalletOperationResponse response = bookingWalletService.releaseFunds(request);
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        WalletOperationResponse response = bookingWalletService.releaseFunds(request);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(
@@ -124,15 +104,8 @@ public class BookingWalletController {
         log.info("Refund request - userId: {}, bookingId: {}, amount: {}, reason: {}",
                 request.getUserId(), request.getBookingId(), request.getAmount(), request.getReason());
 
-        // TODO: Implement service call
-        // 1. Validate booking and user
-        // 2. Credit user's available balance
-        // 3. Create refund transaction
-        // 4. Handle driver balance adjustment if payment was already captured
-        // WalletOperationResponse response = bookingWalletService.refundToUser(request);
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        WalletOperationResponse response = bookingWalletService.refundToUser(request);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(
@@ -150,10 +123,7 @@ public class BookingWalletController {
             @Parameter(description = "Required amount", required = true) @RequestParam BigDecimal amount) {
         log.info("Check balance request - userId: {}, requiredAmount: {}", userId, amount);
 
-        // TODO: Implement service call
-        // BalanceCheckResponse response = bookingWalletService.checkBalance(userId, amount);
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        BalanceCheckResponse response = bookingWalletService.checkBalance(userId, amount);
+        return ResponseEntity.ok(response);
     }
 }
