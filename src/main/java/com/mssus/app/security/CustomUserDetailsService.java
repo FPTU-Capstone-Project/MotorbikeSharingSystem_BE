@@ -72,7 +72,12 @@ public class CustomUserDetailsService implements UserDetailsService {
         if (user.getUserType().equals(UserType.USER)) {
             authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
         } else authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-        
+        if (user.getRiderProfile() != null){
+            authorities.add(new SimpleGrantedAuthority("ROLE_RIDER"));
+        }
+        if (user.getDriverProfile() != null){
+            authorities.add(new SimpleGrantedAuthority("ROLE_DRIVER"));
+        }
         return authorities;
     }
 }
