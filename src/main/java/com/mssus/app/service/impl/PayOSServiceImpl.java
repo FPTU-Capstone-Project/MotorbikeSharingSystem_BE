@@ -80,7 +80,7 @@ public class PayOSServiceImpl implements PayOSService {
 
             CheckoutResponseData response = payOS.createPaymentLink(data);
 
-//            transactionService.initTopup(userId, amount, orderCode.toString(), description);
+            transactionService.initTopup(userId, amount, orderCode.toString(), description);
 
             log.info("Created top-up payment link for user {} with amount {} and orderCode {}",
                     userId, amount, orderCode);
@@ -108,12 +108,12 @@ public class PayOSServiceImpl implements PayOSService {
                 switch (status.toUpperCase()) {
                     case "PAID":
                     case "PROCESSING":
-//                        transactionService.handleTopupSuccess(orderCode);
+                        transactionService.handleTopupSuccess(orderCode);
                         log.info("Transaction completed for orderCode: {}", orderCode);
                         break;
                     case "CANCELLED":
                     case "EXPIRED":
-//                        transactionService.handleTopupFailed(orderCode, "Payment " + status.toLowerCase());
+                        transactionService.handleTopupFailed(orderCode, "Payment " + status.toLowerCase());
                         log.info("Transaction failed for orderCode: {} with reason: {}", orderCode, status);
                         break;
                     default:

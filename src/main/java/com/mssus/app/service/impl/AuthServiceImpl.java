@@ -76,15 +76,15 @@ public class AuthServiceImpl implements AuthService {
         user = userRepository.save(user);
 
         // Create role-specific profile
-//        if ("rider".equalsIgnoreCase(request.getRole()) || request.getRole() == null) {
-//            createRiderProfile(user);
-//        } else if ("driver".equalsIgnoreCase(request.getRole())) {
-//            createRiderProfile(user); // Drivers also have rider profile
-//            // Driver profile will be created after verification
-//        }
-//
-//        // Create wallet
-//        createWallet(user);
+        if ("rider".equalsIgnoreCase(request.getRole()) || request.getRole() == null) {
+            createRiderProfile(user);
+        } else if ("driver".equalsIgnoreCase(request.getRole())) {
+            createRiderProfile(user); // Drivers also have rider profile
+            // Driver profile will be created after verification
+        }
+
+        // Create wallet
+        createWallet(user);
 
         // Generate JWT token
         Map<String, Object> claims = buildTokenClaims(user, null);
