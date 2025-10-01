@@ -18,7 +18,6 @@ import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
 import com.mssus.app.service.PayOSService;
-import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +41,6 @@ public class WalletServiceImpl implements WalletService {
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final PayOSService payOSService;
-    private final TransactionService transactionService;
 
     @Override
     public void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount) {

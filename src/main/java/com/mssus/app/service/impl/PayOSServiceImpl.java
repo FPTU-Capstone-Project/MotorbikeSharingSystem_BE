@@ -10,6 +10,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import vn.payos.PayOS;
 import vn.payos.type.CheckoutResponseData;
@@ -19,7 +20,6 @@ import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PayOSServiceImpl implements PayOSService {
 
@@ -42,6 +42,11 @@ public class PayOSServiceImpl implements PayOSService {
 
     private PayOS payOS;
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
+
+    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper) {
+        this.transactionService = transactionService;
+        this.objectMapper = objectMapper;
+    }
 
     @PostConstruct
     public void init() {
