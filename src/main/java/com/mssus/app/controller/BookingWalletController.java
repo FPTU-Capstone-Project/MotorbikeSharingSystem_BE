@@ -21,7 +21,7 @@ import java.math.BigDecimal;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/internal/wallet")
+@RequestMapping("/api/v1/internal/wallet")
 @RequiredArgsConstructor
 @Tag(name = "Booking Wallet", description = "Internal wallet operations for booking service")
 public class BookingWalletController {

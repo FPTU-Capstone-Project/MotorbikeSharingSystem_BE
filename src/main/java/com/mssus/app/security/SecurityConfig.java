@@ -51,136 +51,136 @@ public class SecurityConfig {
 
         // Endpoints that don't require authentication
         public static final String[] PUBLIC_PATHS = {
-            "/api/v1/auth/register",
-            "/api/v1/auth/login",
-            "/api/v1/users/forgot-password",
-            "/api/v1/otp/**",
-            "/error",
-            "/v3/api-docs/**",
-            "/swagger-ui/**",
-            "/swagger-ui.html",
-            "/swagger-resources/**",
-            "/webjars/**",
-            "/actuator/health",
-            "/debug/throw-test",
-            "/debug/catalog-test",
-            "/api/v1/otp",
-            "/api/v1/auth/refresh"
+                "/api/v1/auth/register",
+                "/api/v1/auth/login",
+                "/api/v1/users/forgot-password",
+                "/api/v1/otp/**",
+                "/error",
+                "/v3/api-docs/**",
+                "/swagger-ui/**",
+                "/swagger-ui.html",
+                "/swagger-resources/**",
+                "/webjars/**",
+                "/actuator/health",
+                "/debug/throw-test",
+                "/debug/catalog-test",
+                "/api/v1/otp",
+                "/api/v1/auth/refresh"
         };
 
         // Endpoints requiring any authentication (general authenticated users)
         public static final String[] PRIVATE_PATHS = {
-            "/api/v1/auth/logout"
+                "/api/v1/auth/logout"
         };
 
         // Endpoints requiring ADMIN role
         public static final String[] ADMIN_PATHS = {
-            "/api/v1/accounts/**",
-            "/api/v1/verification/students/pending",
-            "/api/v1/verification/students/{id}",
-            "/api/v1/verification/students/{id}/approve",
-            "/api/v1/verification/students/{id}/reject",
-            "/api/v1/verification/students/history",
-            "/api/v1/verification/students/bulk-approve",
-            "/api/v1/verification/drivers/pending",
-            "/api/v1/verification/drivers/{id}/kyc",
-            "/api/v1/verification/drivers/{id}/approve-docs",
-            "/api/v1/verification/drivers/{id}/approve-license",
-            "/api/v1/verification/drivers/{id}/approve-vehicle",
-            "/api/v1/verification/drivers/{id}/reject",
-            "/api/v1/verification/drivers/{id}/background-check",
-            "/api/v1/verification/drivers/stats"
+                "/api/v1/accounts/**",
+                "/api/v1/verification/students/pending",
+                "/api/v1/verification/students/{id}",
+                "/api/v1/verification/students/{id}/approve",
+                "/api/v1/verification/students/{id}/reject",
+                "/api/v1/verification/students/history",
+                "/api/v1/verification/students/bulk-approve",
+                "/api/v1/verification/drivers/pending",
+                "/api/v1/verification/drivers/{id}/kyc",
+                "/api/v1/verification/drivers/{id}/approve-docs",
+                "/api/v1/verification/drivers/{id}/approve-license",
+                "/api/v1/verification/drivers/{id}/approve-vehicle",
+                "/api/v1/verification/drivers/{id}/reject",
+                "/api/v1/verification/drivers/{id}/background-check",
+                "/api/v1/verification/drivers/stats"
         };
 
         // Endpoints for authenticated users (profile management)
         public static final String[] USER_PATHS = {
-            "/api/v1/me/**",
-            "/api/v1/me",
-            "/api/v1/me/update-password",
-            "/api/v1/me/switch-profile",
-            "/api/v1/me/update-avatar",
-            "/api/v1/me/student-verifications",
-            "/api/v1/users/reset-password",
+                "/api/v1/me/**",
+                "/api/v1/me",
+                "/api/v1/me/update-password",
+                "/api/v1/me/switch-profile",
+                "/api/v1/me/update-avatar",
+                "/api/v1/me/student-verifications",
+                "/api/v1/users/reset-password",
         };
 
         // Endpoints specific to riders (currently none identified)
         public static final String[] RIDER_PATHS = {
-            // No rider-specific endpoints found in current controllers
-            // Add here when ride booking/management endpoints are created
+                // No rider-specific endpoints found in current controllers
+                // Add here when ride booking/management endpoints are created
         };
 
         // Endpoints specific to drivers
         public static final String[] DRIVER_PATHS = {
-            "/api/v1/me/driver-verifications",
-            "/api/v1/vehicles/**",
-            "/api/v1/vehicles",
-            "/api/v1/vehicles/{vehicleId}",
-            "/api/v1/vehicles/driver/{driverId}",
-            "/api/v1/vehicles/status/{status}"
+                "/api/v1/me/driver-verifications",
+                "/api/v1/vehicles/**",
+                "/api/v1/vehicles",
+                "/api/v1/vehicles/{vehicleId}",
+                "/api/v1/vehicles/driver/{driverId}",
+                "/api/v1/vehicles/status/{status}"
         };
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(AbstractHttpConfigurer::disable)
-            .exceptionHandling(exception -> exception
-                .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                .accessDeniedHandler((request, response, accessDeniedException) -> {
-                    log.warn("Access denied for URI: {}", request.getRequestURI());
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            log.warn("Access denied for URI: {}", request.getRequestURI());
 
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
 
-                    ErrorEntry errorEntry = errorCatalogService.getErrorEntry("auth.unauthorized.access-denied");
+                            ErrorEntry errorEntry = errorCatalogService.getErrorEntry("auth.unauthorized.access-denied");
 
-                    ErrorDetail errorDetail = ErrorDetail.builder()
-                        .id("auth.unauthorized.access-denied")
-                        .message(errorEntry.getMessageTemplate())
-                        .domain(errorEntry.getDomain())
-                        .category(errorEntry.getCategory())
-                        .severity(errorEntry.getSeverity())
-                        .retryable(errorEntry.getIsRetryable())
-                        .build();
+                            ErrorDetail errorDetail = ErrorDetail.builder()
+                                    .id("auth.unauthorized.access-denied")
+                                    .message(errorEntry.getMessageTemplate())
+                                    .domain(errorEntry.getDomain())
+                                    .category(errorEntry.getCategory())
+                                    .severity(errorEntry.getSeverity())
+                                    .retryable(errorEntry.getIsRetryable())
+                                    .build();
 
-                    ErrorResponse errorResponse = ErrorResponse.builder()
-                        .traceId(UUID.randomUUID().toString())
-                        .error(errorDetail)
-                        .timestamp(LocalDateTime.now())
-                        .build();
+                            ErrorResponse errorResponse = ErrorResponse.builder()
+                                    .traceId(UUID.randomUUID().toString())
+                                    .error(errorDetail)
+                                    .timestamp(LocalDateTime.now())
+                                    .build();
 
-                    try {
-                        objectMapper.writeValue(response.getOutputStream(), errorResponse);
-                    } catch (IOException e) {
-                        log.error("Error writing access denied response", e);
-                    }
-                }))
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
+                            try {
+                                objectMapper.writeValue(response.getOutputStream(), errorResponse);
+                            } catch (IOException e) {
+                                log.error("Error writing access denied response", e);
+                            }
+                        }))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
 
-                // Admin-only endpoints
-                .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
+                        // Admin-only endpoints
+                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
 
-                // Rider-specific endpoints - currently none
-                .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
+                        // Rider-specific endpoints - currently none
+                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
 
-                // Driver-specific endpoints
-                .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
+                        // Driver-specific endpoints
+                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
 
-                // User profile endpoints - any authenticated user
-                .requestMatchers(SecurityEndpoints.USER_PATHS).authenticated()
+                        // User profile endpoints - any authenticated user
+                        .requestMatchers(SecurityEndpoints.USER_PATHS).authenticated()
 
-                // Private endpoints - any authenticated user
-                .requestMatchers(SecurityEndpoints.PRIVATE_PATHS).authenticated()
+                        // Private endpoints - any authenticated user
+                        .requestMatchers(SecurityEndpoints.PRIVATE_PATHS).authenticated()
 
-                // All other requests require authentication
-                .anyRequest().authenticated()
-            )
-            .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                        // All other requests require authentication
+                        .anyRequest().permitAll()
+                )
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

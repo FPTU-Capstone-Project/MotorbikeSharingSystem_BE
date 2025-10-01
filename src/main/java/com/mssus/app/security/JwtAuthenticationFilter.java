@@ -46,31 +46,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String username;
         String path = request.getRequestURI();
 
-        if (isInvalidPath(path)) {
-            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
-            ErrorEntry errorEntry = errorCatalogService.getErrorEntry("system.not-found.resource");
-
-            ErrorDetail errorDetail = ErrorDetail.builder()
-                .id("system.not-found.resource")
-                .message(errorEntry.getMessageTemplate())
-                .domain(errorEntry.getDomain())
-                .category(errorEntry.getCategory())
-                .severity(errorEntry.getSeverity())
-                .retryable(errorEntry.getIsRetryable())
-                .build();
-
-            ErrorResponse errorResponse = ErrorResponse.builder()
-                .traceId(UUID.randomUUID().toString())
-                .error(errorDetail)
-                .timestamp(LocalDateTime.now())
-                .path(path)
-                .build();
-
-            objectMapper.writeValue(response.getOutputStream(), errorResponse);
-            return;
-        }
+//        if (isInvalidPath(path)) {
+//            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+//            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+//
+//            ErrorEntry errorEntry = errorCatalogService.getErrorEntry("system.not-found.resource");
+//
+//            ErrorDetail errorDetail = ErrorDetail.builder()
+//                .id("system.not-found.resource")
+//                .message(errorEntry.getMessageTemplate())
+//                .domain(errorEntry.getDomain())
+//                .category(errorEntry.getCategory())
+//                .severity(errorEntry.getSeverity())
+//                .retryable(errorEntry.getIsRetryable())
+//                .build();
+//
+//            ErrorResponse errorResponse = ErrorResponse.builder()
+//                .traceId(UUID.randomUUID().toString())
+//                .error(errorDetail)
+//                .timestamp(LocalDateTime.now())
+//                .path(path)
+//                .build();
+//
+//            objectMapper.writeValue(response.getOutputStream(), errorResponse);
+//            return;
+//        }
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
