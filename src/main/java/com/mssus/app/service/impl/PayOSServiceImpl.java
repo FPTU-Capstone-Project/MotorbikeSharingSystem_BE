@@ -34,11 +34,11 @@ public class PayOSServiceImpl implements PayOSService {
     @Value("${payos.checksum-key}")
     private String checksumKey;
 
-    @Value("${payos.return-url}")
-    private String returnUrl;
-
-    @Value("${payos.cancel-url}")
-    private String cancelUrl;
+//    @Value("${payos.return-url}")
+//    private String returnUrl;
+//
+//    @Value("${payos.cancel-url}")
+//    private String cancelUrl;
 
     private PayOS payOS;
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
@@ -62,7 +62,7 @@ public class PayOSServiceImpl implements PayOSService {
     }
 
     @Override
-    public CheckoutResponseData createTopUpPaymentLink(Integer userId, BigDecimal amount, @Nonnull String description) throws Exception {
+    public CheckoutResponseData createTopUpPaymentLink(Integer userId, BigDecimal amount, @Nonnull String description, String returnUrl, String cancelUrl) throws Exception {
         try {
             Long orderCode = generateUniqueOrderCode();
 

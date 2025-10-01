@@ -145,14 +145,14 @@ public class WalletServiceImpl implements WalletService {
 
         try {
             // Create payment link with PayOS
-            String description = request.getReturnUrl() != null ?
-                    "Top-up wallet - " + user.getFullName() :
-                    "Wallet Top-up";
+            String description = "Wallet top up";
             // transaction dc cap nhat qua payosservice
             CheckoutResponseData paymentData = payOSService.createTopUpPaymentLink(
                     user.getUserId(),
                     request.getAmount(),
-                    description
+                    description,
+                    request.getReturnUrl(),
+                    request.getCancelUrl()
             );
 
             log.info("Top-up initiated for user {} - amount: {}, orderCode: {}",

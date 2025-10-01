@@ -17,9 +17,12 @@ public class TopUpInitRequest {
     private BigDecimal amount;
 
     @NotNull(message = "Payment method is required")
-    @Schema(description = "Payment method (MOMO, VNPAY)", example = "MOMO", required = true)
+    @Schema(description = "Payment method (PAYOS)", example = "PAYOS", required = true)
     private String paymentMethod;
 
     @Schema(description = "Return URL after payment", example = "https://app.example.com/wallet/callback")
     private String returnUrl;
+
+    @Schema(description = "Cancel URL if payment is cancelled", example = "https://app.example.com/wallet/cancel")
+    private String cancelUrl;
 }

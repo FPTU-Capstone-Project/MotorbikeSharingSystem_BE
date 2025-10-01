@@ -7,6 +7,6 @@ import vn.payos.type.CheckoutResponseData;
 import java.math.BigDecimal;
 
 public interface PayOSService {
-    CheckoutResponseData createTopUpPaymentLink(Integer userId, BigDecimal amount, @Nonnull String description) throws Exception;
+    CheckoutResponseData createTopUpPaymentLink(Integer userId, BigDecimal amount, @Nonnull String description,String returnUrl,String cancelUrl) throws Exception;
     void handleWebhook(String payload);
 }

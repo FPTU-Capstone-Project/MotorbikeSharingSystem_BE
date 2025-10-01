@@ -6,8 +6,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.view.RedirectView;
 import vn.payos.type.CheckoutResponseData;
 
 import java.math.BigDecimal;
@@ -28,21 +30,24 @@ public class PayOSController {
     public ResponseEntity<CheckoutResponseData> createTopUpPaymentLink(
             @RequestParam Integer userId,
             @RequestParam BigDecimal amount,
-            @RequestParam(defaultValue = "Wallet Top-up") String description) throws Exception {
+            @RequestParam(defaultValue = "Wallet Top-up") String description,
+            @RequestParam String returnUrl,
+            @RequestParam String cancelUrl
+            ) throws Exception {
 
-        CheckoutResponseData response = payOSService.createTopUpPaymentLink(userId, amount, description);
+        CheckoutResponseData response = payOSService.createTopUpPaymentLink(userId, amount, description,returnUrl,cancelUrl);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/webhook")
-    public ResponseEntity<String> handleWebhook(@RequestBody String payload) {
+    public ResponseEntity<String>  handleWebhook(@RequestBody String payload) {
         try {
             log.info("Received PayOS webhook");
             payOSService.handleWebhook(payload);
-            return ResponseEntity.ok("Webhook processed successfully");
+            return ResponseEntity.ok("Succeeded");
         } catch (Exception e) {
             log.error("Error processing webhook", e);
-            return ResponseEntity.status(500).body("Webhook processing failed");
+            return ResponseEntity.status(500).body("Failed");
         }
     }
 }
