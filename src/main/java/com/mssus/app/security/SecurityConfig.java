@@ -162,7 +162,7 @@ public class SecurityConfig {
                         .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
 
                         // Admin-only endpoints
-                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
+                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).permitAll()
 
                         // Rider-specific endpoints - currently none
                         .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")

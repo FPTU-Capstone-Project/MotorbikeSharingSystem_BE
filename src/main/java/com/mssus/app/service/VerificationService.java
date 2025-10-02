@@ -31,4 +31,5 @@ public interface VerificationService {
     PageResponse<VerificationResponse> getAllVerifications(Pageable pageable);
     PageResponse<VerificationResponse> getAllPendingVerifications(Pageable pageable);
     VerificationResponse approveVerification(Integer verificationId);
+
 }

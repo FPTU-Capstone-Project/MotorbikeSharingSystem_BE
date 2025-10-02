@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -47,6 +48,27 @@ public class VerificationController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
         PageResponse<StudentVerificationResponse> response = verificationService.getPendingStudentVerifications(pageable);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/students")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Students retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = PageResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<PageResponse<VerificationResponse>> getAllVerifications(
+            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir
+
+    ){
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        PageResponse<VerificationResponse> response = verificationService.getAllVerifications(pageable);
         return ResponseEntity.ok(response);
     }
 
