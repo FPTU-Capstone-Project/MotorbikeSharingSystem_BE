@@ -53,7 +53,7 @@ public class Verification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "verified_by")
-    private AdminProfile verifiedBy;
+    private User verifiedBy;
 
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;

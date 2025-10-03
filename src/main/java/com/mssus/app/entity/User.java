@@ -86,9 +86,6 @@ public class User {
     private DriverProfile driverProfile;
 
     @OneToOne(mappedBy = "user")
-    private AdminProfile adminProfile;
-
-    @OneToOne(mappedBy = "user")
     private Wallet wallet;
 
     // Helper method to check if user has a specific role

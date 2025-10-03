@@ -5,7 +5,6 @@ import com.mssus.app.dto.request.BackgroundCheckRequest;
 import com.mssus.app.dto.request.BulkApprovalRequest;
 import com.mssus.app.dto.request.VerificationDecisionRequest;
 import com.mssus.app.dto.response.*;
-import com.mssus.app.entity.AdminProfile;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Verification;
 import com.mssus.app.entity.User;
@@ -14,7 +13,6 @@ import com.mssus.app.common.enums.VerificationType;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.mapper.VerificationMapper;
-import com.mssus.app.repository.AdminProfileRepository;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.VerificationRepository;
@@ -38,7 +36,6 @@ public class VerificationServiceImpl implements VerificationService {
     private final VerificationRepository verificationRepository;
     private final UserRepository userRepository;
     private final DriverProfileRepository driverProfileRepository;
-    private final AdminProfileRepository adminProfileRepository;
     private final VerificationMapper verificationMapper;
 
     // Student verification methods
@@ -62,15 +59,15 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public MessageResponse approveStudentVerification(Integer userId, VerificationDecisionRequest request) {
+    public MessageResponse approveStudentVerification(String admin, Integer userId, VerificationDecisionRequest request) {
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
 
-        AdminProfile admin = getCurrentAdmin();
-        verification.setStatus(VerificationStatus.APPROVED);
-        verification.setVerifiedBy(admin);
-        verification.setVerifiedAt(LocalDateTime.now());
+        User verifiedBy = userRepository.findByEmail(admin)
+                .orElseThrow(() -> new NotFoundException("Admin user not found"));
 
+        verification.setStatus(VerificationStatus.APPROVED);
+        verification.setVerifiedBy(verifiedBy);
         if (request.getNotes() != null) {
             verification.setMetadata(request.getNotes());
         }
@@ -83,7 +80,7 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public MessageResponse rejectStudentVerification(Integer userId, VerificationDecisionRequest request) {
+    public MessageResponse rejectStudentVerification(String admin, Integer userId, VerificationDecisionRequest request) {
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
             throw new ValidationException("Rejection reason is required");
         }
@@ -91,10 +88,12 @@ public class VerificationServiceImpl implements VerificationService {
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
 
-        AdminProfile admin = getCurrentAdmin();
+        User verifiedBy = userRepository.findByEmail(admin)
+                .orElseThrow(() -> new NotFoundException("Admin user not found"));
+
         verification.setStatus(VerificationStatus.REJECTED);
         verification.setRejectionReason(request.getRejectionReason());
-        verification.setVerifiedBy(admin);
+        verification.setVerifiedBy(verifiedBy);
         verification.setVerifiedAt(LocalDateTime.now());
 
         if (request.getNotes() != null) {
@@ -120,8 +119,7 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public BulkOperationResponse bulkApproveStudentVerifications(BulkApprovalRequest request) {
-        AdminProfile admin = getCurrentAdmin();
+    public BulkOperationResponse bulkApproveStudentVerifications(String admin, BulkApprovalRequest request) {
         List<Integer> successfulIds = new ArrayList<>();
         List<BulkOperationResponse.FailedItem> failedItems = new ArrayList<>();
 
@@ -129,6 +127,9 @@ public class VerificationServiceImpl implements VerificationService {
             try {
                 Verification verification = verificationRepository.findById(verificationId)
                         .orElseThrow(() -> new NotFoundException("Verification not found"));
+
+                User verifiedBy = userRepository.findByEmail(admin)
+                        .orElseThrow(() -> new NotFoundException("Admin user not found"));
 
                 if (!VerificationType.STUDENT_ID.equals(verification.getType()) || !VerificationStatus.PENDING.equals(verification.getStatus())) {
                     failedItems.add(BulkOperationResponse.FailedItem.builder()
@@ -139,7 +140,7 @@ public class VerificationServiceImpl implements VerificationService {
                 }
 
                 verification.setStatus(VerificationStatus.APPROVED);
-                verification.setVerifiedBy(admin);
+                verification.setVerifiedBy(verifiedBy);
                 verification.setVerifiedAt(LocalDateTime.now());
 
                 if (request.getNotes() != null) {
@@ -189,14 +190,14 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public MessageResponse approveDriverDocuments(Integer driverId, VerificationDecisionRequest request) {
-        return approveDriverVerificationType(driverId, VerificationType.DRIVER_DOCUMENTS, request);
+    public MessageResponse approveDriverDocuments(String admin, Integer driverId, VerificationDecisionRequest request) {
+        return approveDriverVerificationType(admin, driverId, VerificationType.DRIVER_DOCUMENTS, request);
     }
 
     @Override
     @Transactional
-    public MessageResponse approveDriverLicense(Integer driverId, VerificationDecisionRequest request) {
-        MessageResponse response = approveDriverVerificationType(driverId, VerificationType.DRIVER_LICENSE, request);
+    public MessageResponse approveDriverLicense(String admin, Integer driverId, VerificationDecisionRequest request) {
+        MessageResponse response = approveDriverVerificationType(admin, driverId, VerificationType.DRIVER_LICENSE, request);
 
         // Update driver profile license verification
         DriverProfile driver = driverProfileRepository.findById(driverId)
@@ -209,30 +210,31 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public MessageResponse approveDriverVehicle(Integer driverId, VerificationDecisionRequest request) {
-        return approveDriverVerificationType(driverId, VerificationType.VEHICLE_REGISTRATION, request);
+    public MessageResponse approveDriverVehicle(String admin, Integer driverId, VerificationDecisionRequest request) {
+        return approveDriverVerificationType(admin, driverId, VerificationType.VEHICLE_REGISTRATION, request);
     }
 
     @Override
     @Transactional
-    public MessageResponse rejectDriverVerification(Integer driverId, VerificationDecisionRequest request) {
+    public MessageResponse rejectDriverVerification(String admin, Integer driverId, VerificationDecisionRequest request) {
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
             throw new ValidationException("Rejection reason is required");
         }
 
         List<Verification> verifications = verificationRepository.findByUserId(driverId);
+        User verifiedBy = userRepository.findByEmail(admin)
+                .orElseThrow(() -> new NotFoundException("Admin user not found"));
+
         if (verifications.isEmpty()) {
             throw new NotFoundException("Driver verifications not found for driver ID: " + driverId);
         }
-
-        AdminProfile admin = getCurrentAdmin();
 
         // Reject all pending verifications for this driver
         for (Verification verification : verifications) {
             if (VerificationStatus.PENDING.equals(verification.getStatus())) {
                 verification.setStatus(VerificationStatus.REJECTED);
                 verification.setRejectionReason(request.getRejectionReason());
-                verification.setVerifiedBy(admin);
+                verification.setVerifiedBy(verifiedBy);
                 verification.setVerifiedAt(LocalDateTime.now());
 
                 if (request.getNotes() != null) {
@@ -256,7 +258,7 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public MessageResponse updateBackgroundCheck(Integer driverId, BackgroundCheckRequest request) {
+    public MessageResponse updateBackgroundCheck(String admin, Integer driverId, BackgroundCheckRequest request) {
         DriverProfile driver = driverProfileRepository.findById(driverId)
                 .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + driverId));
 
@@ -268,16 +270,18 @@ public class VerificationServiceImpl implements VerificationService {
                         .status(VerificationStatus.PENDING)
                         .build());
 
-        AdminProfile admin = getCurrentAdmin();
+        User verifiedBy = userRepository.findByEmail(admin).orElseThrow(
+                () -> new NotFoundException("Admin user not found")
+        );
         if ("failed".equals(request.getResult())) {
             bgCheck.setStatus(VerificationStatus.REJECTED);
         } else if ("passed".equals(request.getResult())) {
             bgCheck.setStatus(VerificationStatus.APPROVED);
         }
 
-        bgCheck.setVerifiedBy(admin);
+        bgCheck.setVerifiedBy(verifiedBy);
         bgCheck.setVerifiedAt(LocalDateTime.now());
-        bgCheck.setMetadata("{\"details\":\"" + request.getDetails() + "\",\"conductedBy\":\"" + request.getConductedBy() + "\"}");
+        bgCheck.setMetadata("Background check details: " + request.getDetails());
 
         if ("failed".equals(request.getResult())) {
             bgCheck.setRejectionReason("Background check failed: " + request.getDetails());
@@ -361,13 +365,15 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public VerificationResponse approveVerification(Integer verificationId) {
+    public VerificationResponse approveVerification(String admin, Integer verificationId) {
         Verification verification = verificationRepository.findById(verificationId)
                 .orElseThrow(() -> new NotFoundException("Verification not found with ID: " + verificationId));
 
-        AdminProfile admin = getCurrentAdmin();
+        User verifiedBy = userRepository.findByEmail(admin).orElseThrow(
+                () -> new NotFoundException("Admin user not found")
+        );
         verification.setStatus(VerificationStatus.APPROVED);
-        verification.setVerifiedBy(admin);
+        verification.setVerifiedBy(verifiedBy);
         verification.setVerifiedAt(LocalDateTime.now());
 
         verificationRepository.save(verification);
@@ -375,13 +381,15 @@ public class VerificationServiceImpl implements VerificationService {
     }
 
     // Helper methods
-    private MessageResponse approveDriverVerificationType(Integer driverId, VerificationType type, VerificationDecisionRequest request) {
+    private MessageResponse approveDriverVerificationType(String admin, Integer driverId, VerificationType type, VerificationDecisionRequest request) {
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(driverId, type, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException(type + " verification not found for driver ID: " + driverId));
 
-        AdminProfile admin = getCurrentAdmin();
+        User verifiedBy = userRepository.findByEmail(admin).orElseThrow(
+                () -> new NotFoundException("Admin user not found")
+        );
         verification.setStatus(VerificationStatus.APPROVED);
-        verification.setVerifiedBy(admin);
+        verification.setVerifiedBy(verifiedBy);
         verification.setVerifiedAt(LocalDateTime.now());
 
         if (request.getNotes() != null) {
@@ -406,16 +414,6 @@ public class VerificationServiceImpl implements VerificationService {
                 .build();
     }
 
-    private AdminProfile getCurrentAdmin() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String email = auth.getName();
-
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("Current user not found"));
-
-        return adminProfileRepository.findById(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Admin profile not found"));
-    }
 
     private DriverKycResponse mapToDriverKycResponse(DriverProfile driver) {
         List<Verification> verifications = verificationRepository.findByUserId(driver.getDriverId());
@@ -428,7 +426,7 @@ public class VerificationServiceImpl implements VerificationService {
                         .documentType(v.getDocumentType().name())
                         .rejectionReason(v.getRejectionReason())
                         .verifiedBy(v.getVerifiedBy() != null ?
-                                v.getVerifiedBy().getUser().getFullName() : null)
+                                v.getVerifiedBy().getUserId().toString() : null)
                         .verifiedAt(v.getVerifiedAt())
                         .createdAt(v.getCreatedAt())
                         .build())

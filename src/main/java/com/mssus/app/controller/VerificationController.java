@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -95,9 +96,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> approveStudentVerification(
+            Authentication authentication,
             @Parameter(description = "User ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveStudentVerification(id, request);
+        MessageResponse response = verificationService.approveStudentVerification(authentication.getName(),id, request);
         return ResponseEntity.ok(response);
     }
 
@@ -112,9 +114,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> rejectStudentVerification(
+            Authentication authentication,
             @Parameter(description = "User ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.rejectStudentVerification(id, request);
+        MessageResponse response = verificationService.rejectStudentVerification(authentication.getName(), id, request);
         return ResponseEntity.ok(response);
     }
 
@@ -146,8 +149,9 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<BulkOperationResponse> bulkApproveStudentVerifications(
+            Authentication authentication,
             @Valid @RequestBody BulkApprovalRequest request) {
-        BulkOperationResponse response = verificationService.bulkApproveStudentVerifications(request);
+        BulkOperationResponse response = verificationService.bulkApproveStudentVerifications(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 
@@ -194,9 +198,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> approveDriverDocuments(
+            Authentication authentication,
             @Parameter(description = "Driver ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverDocuments(id, request);
+        MessageResponse response = verificationService.approveDriverDocuments(authentication.getName(), id, request);
         return ResponseEntity.ok(response);
     }
 
@@ -209,9 +214,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> approveDriverLicense(
+            Authentication authentication,
             @Parameter(description = "Driver ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverLicense(id, request);
+        MessageResponse response = verificationService.approveDriverLicense(authentication.getName(), id, request);
         return ResponseEntity.ok(response);
     }
 
@@ -224,9 +230,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> approveDriverVehicle(
+            Authentication authentication,
             @Parameter(description = "Driver ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverVehicle(id, request);
+        MessageResponse response = verificationService.approveDriverVehicle(authentication.getName(), id, request);
         return ResponseEntity.ok(response);
     }
 
@@ -241,9 +248,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> rejectDriverVerification(
+            Authentication authentication,
             @Parameter(description = "Driver ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.rejectDriverVerification(id, request);
+        MessageResponse response = verificationService.rejectDriverVerification(authentication.getName(), id, request);
         return ResponseEntity.ok(response);
     }
 
@@ -258,9 +266,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> updateBackgroundCheck(
+            Authentication authentication,
             @Parameter(description = "Driver ID") @PathVariable Integer id,
             @Valid @RequestBody BackgroundCheckRequest request) {
-        MessageResponse response = verificationService.updateBackgroundCheck(id, request);
+        MessageResponse response = verificationService.updateBackgroundCheck(authentication.getName(), id, request);
         return ResponseEntity.ok(response);
     }
 
