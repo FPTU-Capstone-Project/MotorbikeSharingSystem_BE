@@ -99,6 +99,7 @@ public class WalletServiceImpl implements WalletService {
                 .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
 
         return WalletResponse.builder()
+                .walletId(wallet.getWalletId())
                 .userId(user.getUserId())
                 .availableBalance(wallet.getShadowBalance())
                 .pendingBalance(wallet.getPendingBalance())
@@ -106,6 +107,8 @@ public class WalletServiceImpl implements WalletService {
                 .totalSpent(wallet.getTotalSpent())
                 .isActive(wallet.getIsActive())
                 .lastSyncedAt(wallet.getLastSyncedAt())
+                .createdAt(wallet.getCreatedAt())
+                .updatedAt(wallet.getUpdatedAt())
                 .build();
     }
 

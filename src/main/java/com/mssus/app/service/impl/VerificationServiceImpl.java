@@ -46,10 +46,10 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional(readOnly = true)
     public PageResponse<StudentVerificationResponse> getPendingStudentVerifications(Pageable pageable) {
         Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus(VerificationType.STUDENT_ID, VerificationStatus.PENDING, pageable);
-       List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
-               .map(verificationMapper :: mapToStudentVerificationResponse)
-               .toList();
-       return buildPageResponse(verificationsPage, students);
+        List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
+                .map(verificationMapper::mapToStudentVerificationResponse)
+                .toList();
+        return buildPageResponse(verificationsPage, students);
     }
 
     @Override
@@ -112,7 +112,7 @@ public class VerificationServiceImpl implements VerificationService {
     public PageResponse<StudentVerificationResponse> getStudentVerificationHistory(Pageable pageable) {
         Page<Verification> verificationsPage = verificationRepository.findByTypeAndStatus(VerificationType.STUDENT_ID, VerificationStatus.APPROVED, pageable);
         List<StudentVerificationResponse> students = verificationsPage.getContent().stream()
-                .map(verificationMapper:: mapToStudentVerificationResponse)
+                .map(verificationMapper::mapToStudentVerificationResponse)
                 .toList();
 
         return buildPageResponse(verificationsPage, students);
@@ -428,7 +428,7 @@ public class VerificationServiceImpl implements VerificationService {
                         .documentType(v.getDocumentType().name())
                         .rejectionReason(v.getRejectionReason())
                         .verifiedBy(v.getVerifiedBy() != null ?
-                                   v.getVerifiedBy().getUser().getFullName() : null)
+                                v.getVerifiedBy().getUser().getFullName() : null)
                         .verifiedAt(v.getVerifiedAt())
                         .createdAt(v.getCreatedAt())
                         .build())
@@ -446,6 +446,7 @@ public class VerificationServiceImpl implements VerificationService {
                 .createdAt(driver.getCreatedAt())
                 .build();
     }
+
     private <T> PageResponse<T> buildPageResponse(Page<?> page, List<T> content) {
         return PageResponse.<T>builder()
                 .data(content)
