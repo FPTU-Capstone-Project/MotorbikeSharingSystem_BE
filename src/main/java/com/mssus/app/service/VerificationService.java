@@ -11,7 +11,7 @@ public interface VerificationService {
     // Student verification methods
     PageResponse<StudentVerificationResponse> getPendingStudentVerifications(Pageable pageable);
     StudentVerificationResponse getStudentVerificationById(Integer userId);
-    MessageResponse approveStudentVerification(Integer userId, VerificationDecisionRequest request);
+    MessageResponse approveStudentVerification(String admin, Integer userId, VerificationDecisionRequest request);
     MessageResponse rejectStudentVerification(Integer userId, VerificationDecisionRequest request);
     PageResponse<StudentVerificationResponse> getStudentVerificationHistory(Pageable pageable);
     BulkOperationResponse bulkApproveStudentVerifications(BulkApprovalRequest request);

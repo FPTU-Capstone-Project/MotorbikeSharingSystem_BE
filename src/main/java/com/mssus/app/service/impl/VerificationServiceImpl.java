@@ -5,7 +5,6 @@ import com.mssus.app.dto.request.BackgroundCheckRequest;
 import com.mssus.app.dto.request.BulkApprovalRequest;
 import com.mssus.app.dto.request.VerificationDecisionRequest;
 import com.mssus.app.dto.response.*;
-import com.mssus.app.entity.AdminProfile;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Verification;
 import com.mssus.app.entity.User;
@@ -14,7 +13,6 @@ import com.mssus.app.common.enums.VerificationType;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.mapper.VerificationMapper;
-import com.mssus.app.repository.AdminProfileRepository;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.VerificationRepository;
@@ -38,7 +36,6 @@ public class VerificationServiceImpl implements VerificationService {
     private final VerificationRepository verificationRepository;
     private final UserRepository userRepository;
     private final DriverProfileRepository driverProfileRepository;
-    private final AdminProfileRepository adminProfileRepository;
     private final VerificationMapper verificationMapper;
 
     // Student verification methods
@@ -62,15 +59,15 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public MessageResponse approveStudentVerification(Integer userId, VerificationDecisionRequest request) {
+    public MessageResponse approveStudentVerification(String admin, Integer userId, VerificationDecisionRequest request) {
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
 
-        AdminProfile admin = getCurrentAdmin();
-        verification.setStatus(VerificationStatus.APPROVED);
-        verification.setVerifiedBy(admin);
-        verification.setVerifiedAt(LocalDateTime.now());
+        User verifiedBy = userRepository.findByEmail(admin)
+                .orElseThrow(() -> new NotFoundException("Admin user not found"));
 
+        verification.setStatus(VerificationStatus.APPROVED);
+        verification.setVerifiedBy(verifiedBy);
         if (request.getNotes() != null) {
             verification.setMetadata(request.getNotes());
         }

@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -95,9 +96,10 @@ public class VerificationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> approveStudentVerification(
+            Authentication authentication,
             @Parameter(description = "User ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveStudentVerification(id, request);
+        MessageResponse response = verificationService.approveStudentVerification(authentication.getName(),id, request);
         return ResponseEntity.ok(response);
     }
 

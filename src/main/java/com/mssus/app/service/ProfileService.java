@@ -5,6 +5,7 @@ import com.mssus.app.dto.response.MessageResponse;
 import com.mssus.app.dto.response.SwitchProfileResponse;
 import com.mssus.app.dto.response.UserProfileResponse;
 import com.mssus.app.dto.response.VerificationResponse;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -16,7 +17,7 @@ public interface ProfileService {
 
     MessageResponse updatePassword(String username, UpdatePasswordRequest request);
 
-    MessageResponse updateAvatar(String username, MultipartFile file);
+    MessageResponse updateAvatar(String username, MultipartFile avatarFile);
 
     SwitchProfileResponse switchProfile(String username, SwitchProfileRequest request);
 
