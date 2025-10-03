@@ -25,9 +25,8 @@ VALUES
     ('truong.van.k@student.hcmut.edu.vn', '0909000111', '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', 'Truong Van K', '2110010', 'USER', NULL, false, false, 1, 'EMAIL_VERIFYING', NOW(), NOW()),
     ('ngo.thi.l@student.hcmut.edu.vn', '0909111333', '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', 'Ngo Thi L', '2110011', 'USER', NULL, false, false, 1, 'PENDING', NOW(), NOW());
 
-
 -- =====================================================
--- 3. RIDER PROFILES
+-- 2. RIDER PROFILES
 -- =====================================================
 INSERT INTO rider_profiles (rider_id, emergency_contact, total_rides, total_spent, status, preferred_payment_method, created_at)
 SELECT user_id, '0988777666', 25, 825000.00, 'ACTIVE', 'WALLET', NOW() FROM users WHERE email = 'nguyen.van.a@student.hcmut.edu.vn'
@@ -45,7 +44,7 @@ UNION ALL
 SELECT user_id, '0922111000', 28, 896000.00, 'ACTIVE', 'WALLET', NOW() FROM users WHERE email = 'dang.thi.g@student.hcmut.edu.vn';
 
 -- =====================================================
--- 4. DRIVER PROFILES
+-- 3. DRIVER PROFILES
 -- =====================================================
 INSERT INTO driver_profiles (driver_id, license_number, license_verified_at, status, rating_avg, total_shared_rides, total_earned, commission_rate, is_available, max_passengers, created_at)
 SELECT user_id, 'B2-987654321', NOW() - INTERVAL '90 days', 'ACTIVE', 4.85, 68, 2244000.00, 0.15, true, 2, NOW() FROM users WHERE email = 'vo.van.f@student.hcmut.edu.vn'
@@ -57,7 +56,7 @@ UNION ALL
 SELECT user_id, 'B2-654321098', NOW() - INTERVAL '100 days', 'ACTIVE', 4.95, 85, 2805000.00, 0.15, true, 1, NOW() FROM users WHERE email = 'bui.thi.i@student.hcmut.edu.vn';
 
 -- =====================================================
--- 5. WALLETS
+-- 4. WALLETS
 -- =====================================================
 INSERT INTO wallets (user_id, shadow_balance, pending_balance, total_topped_up, total_spent, last_synced_at, is_active, created_at, updated_at)
 SELECT user_id, 375000.00, 0.00, 1200000.00, 825000.00, NOW(), true, NOW(), NOW() FROM users WHERE email = 'nguyen.van.a@student.hcmut.edu.vn'
@@ -83,7 +82,7 @@ UNION ALL
 SELECT user_id, 0.00, 0.00, 0.00, 0.00, NOW(), true, NOW(), NOW() FROM users WHERE email = 'ngo.thi.l@student.hcmut.edu.vn';
 
 -- =====================================================
--- 6. LOCATIONS
+-- 5. LOCATIONS
 -- =====================================================
 INSERT INTO locations (name, lat, lng, address, created_at)
 VALUES
@@ -99,7 +98,7 @@ VALUES
     ('Go Vap - Emart', 10.839456, 106.677123, 'Emart Go Vap, Go Vap District, HCMC', NOW());
 
 -- =====================================================
--- 7. VEHICLES
+-- 6. VEHICLES
 -- =====================================================
 INSERT INTO vehicles (driver_id, plate_number, model, color, year, capacity, helmet_count, insurance_expiry, last_maintenance, fuel_type, status, verified_at, created_at)
 SELECT dp.driver_id, '59-X1 98765', 'Honda Future', 'Black', 2021, 2, 2, NOW() + INTERVAL '220 days', NOW() - INTERVAL '12 days', 'GASOLINE', 'ACTIVE', NOW() - INTERVAL '85 days', NOW()
@@ -121,75 +120,92 @@ SELECT dp.driver_id, '59-C6 43210', 'Yamaha NVX', 'Orange', 2024, 1, 2, NOW() + 
 FROM driver_profiles dp JOIN users u ON dp.driver_id = u.user_id WHERE u.email = 'bui.thi.i@student.hcmut.edu.vn';
 
 -- =====================================================
--- 8. VERIFICATIONS
+-- 7. VERIFICATIONS
 -- =====================================================
--- Get user_ids and admin_id for verifications
-DO $$
-DECLARE
-    v_admin_id INTEGER;
-    v_user1_id INTEGER;
-    v_user2_id INTEGER;
-    v_user3_id INTEGER;
-    v_user4_id INTEGER;
-    v_user5_id INTEGER;
-    v_user6_id INTEGER;
-    v_user7_id INTEGER;
-    v_user8_id INTEGER;
-    v_user9_id INTEGER;
-    v_user10_id INTEGER;
-    v_user11_id INTEGER;
-BEGIN
-    SELECT user_id INTO v_admin_id FROM users WHERE email = 'admin@mssus.com';
-    SELECT user_id INTO v_user1_id FROM users WHERE email = 'nguyen.van.a@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user2_id FROM users WHERE email = 'tran.thi.b@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user3_id FROM users WHERE email = 'le.van.c@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user4_id FROM users WHERE email = 'pham.thi.d@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user5_id FROM users WHERE email = 'hoang.van.e@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user6_id FROM users WHERE email = 'vo.van.f@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user7_id FROM users WHERE email = 'dang.thi.g@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user8_id FROM users WHERE email = 'do.van.h@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user9_id FROM users WHERE email = 'bui.thi.i@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user10_id FROM users WHERE email = 'truong.van.k@student.hcmut.edu.vn';
-    SELECT user_id INTO v_user11_id FROM users WHERE email = 'ngo.thi.l@student.hcmut.edu.vn';
+-- Student ID Verifications - Approved
+INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
+SELECT u1.user_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110001.jpg', 'IMAGE',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '85 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110001","faculty":"Computer Science"}', NOW() - INTERVAL '86 days'
+FROM users u1 WHERE u1.email = 'nguyen.van.a@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110002.jpg', 'IMAGE',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '80 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110002","faculty":"Electrical Engineering"}', NOW() - INTERVAL '81 days'
+FROM users u1 WHERE u1.email = 'tran.thi.b@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110003.jpg', 'IMAGE',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '75 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110003","faculty":"Mechanical Engineering"}', NOW() - INTERVAL '76 days'
+FROM users u1 WHERE u1.email = 'le.van.c@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110004.pdf', 'PDF',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '70 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110004","faculty":"Civil Engineering"}', NOW() - INTERVAL '71 days'
+FROM users u1 WHERE u1.email = 'pham.thi.d@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110005.jpg', 'IMAGE',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '65 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110005","faculty":"Chemical Engineering"}', NOW() - INTERVAL '66 days'
+FROM users u1 WHERE u1.email = 'hoang.van.e@student.hcmut.edu.vn';
 
-    -- Student ID Verifications - Approved
-    INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
-    VALUES
-        (v_user1_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110001.jpg', 'IMAGE', v_admin_id, NOW() - INTERVAL '85 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110001","faculty":"Computer Science"}', NOW() - INTERVAL '86 days'),
-        (v_user2_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110002.jpg', 'IMAGE', v_admin_id, NOW() - INTERVAL '80 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110002","faculty":"Electrical Engineering"}', NOW() - INTERVAL '81 days'),
-        (v_user3_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110003.jpg', 'IMAGE', v_admin_id, NOW() - INTERVAL '75 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110003","faculty":"Mechanical Engineering"}', NOW() - INTERVAL '76 days'),
-        (v_user4_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110004.pdf', 'PDF', v_admin_id, NOW() - INTERVAL '70 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110004","faculty":"Civil Engineering"}', NOW() - INTERVAL '71 days'),
-        (v_user5_id, 'STUDENT_ID', 'APPROVED', 'https://cdn.mssus.com/verify/student_2110005.jpg', 'IMAGE', v_admin_id, NOW() - INTERVAL '65 days', NOW() + INTERVAL '1095 days', '{"student_id":"2110005","faculty":"Chemical Engineering"}', NOW() - INTERVAL '66 days');
+-- Driver License Verifications - Approved
+INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
+SELECT u1.user_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2987654321.jpg', 'IMAGE',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '90 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-987654321","issue_date":"2018-05-15"}', NOW() - INTERVAL '92 days'
+FROM users u1 WHERE u1.email = 'vo.van.f@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2876543210.jpg', 'IMAGE',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '75 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-876543210","issue_date":"2019-08-20"}', NOW() - INTERVAL '77 days'
+FROM users u1 WHERE u1.email = 'dang.thi.g@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2765432109.pdf', 'PDF',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '60 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-765432109","issue_date":"2020-03-10"}', NOW() - INTERVAL '62 days'
+FROM users u1 WHERE u1.email = 'do.van.h@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2654321098.jpg', 'IMAGE',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '100 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-654321098","issue_date":"2017-11-25"}', NOW() - INTERVAL '102 days'
+FROM users u1 WHERE u1.email = 'bui.thi.i@student.hcmut.edu.vn';
 
-    -- Driver License Verifications - Approved
-    INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
-    VALUES
-        (v_user6_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2987654321.jpg', 'IMAGE', v_admin_id, NOW() - INTERVAL '90 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-987654321","issue_date":"2018-05-15"}', NOW() - INTERVAL '92 days'),
-        (v_user7_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2876543210.jpg', 'IMAGE', v_admin_id, NOW() - INTERVAL '75 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-876543210","issue_date":"2019-08-20"}', NOW() - INTERVAL '77 days'),
-        (v_user8_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2765432109.pdf', 'PDF', v_admin_id, NOW() - INTERVAL '60 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-765432109","issue_date":"2020-03-10"}', NOW() - INTERVAL '62 days'),
-        (v_user9_id, 'DRIVER_LICENSE', 'APPROVED', 'https://cdn.mssus.com/verify/license_B2654321098.jpg', 'IMAGE', v_admin_id, NOW() - INTERVAL '100 days', NOW() + INTERVAL '1095 days', '{"license_number":"B2-654321098","issue_date":"2017-11-25"}', NOW() - INTERVAL '102 days');
+-- Vehicle Registration Verifications
+INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
+SELECT u1.user_id, 'VEHICLE_REGISTRATION', 'APPROVED', 'https://cdn.mssus.com/verify/vehicle_59X198765.pdf', 'PDF',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '85 days', NOW() + INTERVAL '365 days', '{"plate":"59-X1 98765","model":"Honda Future"}', NOW() - INTERVAL '86 days'
+FROM users u1 WHERE u1.email = 'vo.van.f@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'VEHICLE_REGISTRATION', 'APPROVED', 'https://cdn.mssus.com/verify/vehicle_59Z376543.pdf', 'PDF',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '70 days', NOW() + INTERVAL '365 days', '{"plate":"59-Z3 76543","model":"Honda Vision"}', NOW() - INTERVAL '71 days'
+FROM users u1 WHERE u1.email = 'dang.thi.g@student.hcmut.edu.vn'
+UNION ALL
+SELECT u1.user_id, 'VEHICLE_REGISTRATION', 'APPROVED', 'https://cdn.mssus.com/verify/vehicle_59C643210.pdf', 'PDF',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '95 days', NOW() + INTERVAL '365 days', '{"plate":"59-C6 43210","model":"Yamaha NVX"}', NOW() - INTERVAL '96 days'
+FROM users u1 WHERE u1.email = 'bui.thi.i@student.hcmut.edu.vn';
 
-    -- Vehicle Registration Verifications
-    INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
-    VALUES
-        (v_user6_id, 'VEHICLE_REGISTRATION', 'APPROVED', 'https://cdn.mssus.com/verify/vehicle_59X198765.pdf', 'PDF', v_admin_id, NOW() - INTERVAL '85 days', NOW() + INTERVAL '365 days', '{"plate":"59-X1 98765","model":"Honda Future"}', NOW() - INTERVAL '86 days'),
-        (v_user7_id, 'VEHICLE_REGISTRATION', 'APPROVED', 'https://cdn.mssus.com/verify/vehicle_59Z376543.pdf', 'PDF', v_admin_id, NOW() - INTERVAL '70 days', NOW() + INTERVAL '365 days', '{"plate":"59-Z3 76543","model":"Honda Vision"}', NOW() - INTERVAL '71 days'),
-        (v_user9_id, 'VEHICLE_REGISTRATION', 'APPROVED', 'https://cdn.mssus.com/verify/vehicle_59C643210.pdf', 'PDF', v_admin_id, NOW() - INTERVAL '95 days', NOW() + INTERVAL '365 days', '{"plate":"59-C6 43210","model":"Yamaha NVX"}', NOW() - INTERVAL '96 days');
+-- Pending Verifications
+INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
+SELECT user_id, 'STUDENT_ID', 'PENDING', 'https://cdn.mssus.com/verify/student_2110010_pending.jpg', 'IMAGE', NULL, NULL, NULL, '{"student_id":"2110010","faculty":"Architecture"}', NOW() - INTERVAL '2 days'
+FROM users WHERE email = 'truong.van.k@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'STUDENT_ID', 'PENDING', 'https://cdn.mssus.com/verify/student_2110011_pending.jpg', 'IMAGE', NULL, NULL, NULL, '{"student_id":"2110011","faculty":"Environment"}', NOW() - INTERVAL '1 day'
+FROM users WHERE email = 'ngo.thi.l@student.hcmut.edu.vn';
 
-    -- Pending Verifications
-    INSERT INTO verifications (user_id, type, status, document_url, document_type, verified_by, verified_at, expires_at, metadata, created_at)
-    VALUES
-        (v_user10_id, 'STUDENT_ID', 'PENDING', 'https://cdn.mssus.com/verify/student_2110010_pending.jpg', 'IMAGE', NULL, NULL, NULL, '{"student_id":"2110010","faculty":"Architecture"}', NOW() - INTERVAL '2 days'),
-        (v_user11_id, 'STUDENT_ID', 'PENDING', 'https://cdn.mssus.com/verify/student_2110011_pending.jpg', 'IMAGE', NULL, NULL, NULL, '{"student_id":"2110011","faculty":"Environment"}', NOW() - INTERVAL '1 day');
-
-    -- Rejected Verification (with reason)
-    INSERT INTO verifications (user_id, type, status, document_url, document_type, rejection_reason, verified_by, verified_at, expires_at, metadata, created_at)
-    VALUES
-        (v_user5_id, 'DRIVER_LICENSE', 'REJECTED', 'https://cdn.mssus.com/verify/license_rejected_hoang.jpg', 'IMAGE', 'Photo is unclear, please submit a high-quality scan of your driver license', v_admin_id, NOW() - INTERVAL '10 days', NULL, NULL, NOW() - INTERVAL '11 days');
-END $$;
+-- Rejected Verification (with reason)
+INSERT INTO verifications (user_id, type, status, document_url, document_type, rejection_reason, verified_by, verified_at, expires_at, metadata, created_at)
+SELECT u1.user_id, 'DRIVER_LICENSE', 'REJECTED', 'https://cdn.mssus.com/verify/license_rejected_hoang.jpg', 'IMAGE',
+       'Photo is unclear, please submit a high-quality scan of your driver license',
+       (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
+       NOW() - INTERVAL '10 days', NULL, NULL, NOW() - INTERVAL '11 days'
+FROM users u1 WHERE u1.email = 'hoang.van.e@student.hcmut.edu.vn';
 
 -- =====================================================
--- 9. SHARED RIDES
+-- 8. SHARED RIDES
 -- =====================================================
 INSERT INTO shared_rides (driver_id, vehicle_id, start_location_id, end_location_id, status, max_passengers, current_passengers, base_fare, per_km_rate, estimated_duration, estimated_distance, actual_distance, scheduled_time, started_at, completed_at, created_at)
 SELECT
@@ -264,10 +280,39 @@ JOIN users u ON dp.driver_id = u.user_id
 JOIN vehicles v ON v.driver_id = dp.driver_id
 WHERE u.email = 'do.van.h@student.hcmut.edu.vn' AND v.plate_number = '59-A4 65432';
 
--- Note: shared_ride_requests, transactions, ratings, notifications, promotions, messages, sos_alerts, emergency_contacts, file_uploads, and ai_matching_logs
--- will need to be inserted with proper foreign key references after the above data is committed.
--- This can be done in a separate migration or transaction block.
+-- =====================================================
+-- 9. EMERGENCY CONTACTS
+-- =====================================================
+INSERT INTO emergency_contacts (user_id, name, phone, relationship, is_primary, created_at)
+SELECT user_id, 'Nguyen Thi X', '0988999000', 'Mother', true, NOW() FROM users WHERE email = 'nguyen.van.a@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Tran Van Y', '0977888999', 'Father', true, NOW() FROM users WHERE email = 'tran.thi.b@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Le Thi Z', '0966777888', 'Sister', true, NOW() FROM users WHERE email = 'le.van.c@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Pham Van M', '0955666777', 'Brother', true, NOW() FROM users WHERE email = 'pham.thi.d@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Hoang Thi N', '0944555666', 'Mother', true, NOW() FROM users WHERE email = 'hoang.van.e@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Vo Thi P', '0933444555', 'Wife', true, NOW() FROM users WHERE email = 'vo.van.f@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Dang Van Q', '0922333444', 'Husband', true, NOW() FROM users WHERE email = 'dang.thi.g@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Do Thi R', '0911222333', 'Mother', true, NOW() FROM users WHERE email = 'do.van.h@student.hcmut.edu.vn'
+UNION ALL
+SELECT user_id, 'Bui Van S', '0900111222', 'Father', true, NOW() FROM users WHERE email = 'bui.thi.i@student.hcmut.edu.vn';
 
 -- =====================================================
--- SEED DATA PART 1 COMPLETED
+-- 10. PROMOTIONS
+-- =====================================================
+INSERT INTO promotions (code, title, description, discount_type, discount_value, target_user_type, min_shared_ride_amount, max_discount, usage_limit, usage_limit_per_user, used_count, valid_from, valid_until, is_active, created_at)
+VALUES
+    ('HCMUT2024', 'HCMUT Student Discount', 'Special discount for HCMUT students', 'PERCENTAGE', 25.00, 'RIDER', 30000.00, 60000.00, 1500, 3, 287, NOW() - INTERVAL '60 days', NOW() + INTERVAL '305 days', true, NOW() - INTERVAL '60 days'),
+    ('NEWDRIVER', 'New Driver Bonus', 'Welcome bonus for new drivers', 'FIXED_AMOUNT', 100000.00, 'DRIVER', 0.00, 100000.00, 200, 1, 45, NOW() - INTERVAL '45 days', NOW() + INTERVAL '320 days', true, NOW() - INTERVAL '45 days'),
+    ('WEEKEND50', 'Weekend Special', '50k off for weekend rides', 'FIXED_AMOUNT', 50000.00, 'ALL', 80000.00, 50000.00, 3000, 5, 678, NOW() - INTERVAL '30 days', NOW() + INTERVAL '335 days', true, NOW() - INTERVAL '30 days'),
+    ('MORNING20', 'Morning Commute', '20% off morning rides (6-9 AM)', 'PERCENTAGE', 20.00, 'RIDER', 25000.00, 40000.00, 5000, 10, 1234, NOW() - INTERVAL '90 days', NOW() + INTERVAL '275 days', true, NOW() - INTERVAL '90 days'),
+    ('LONGRIDE', 'Long Distance Reward', '15% off rides over 15km', 'PERCENTAGE', 15.00, 'ALL', 100000.00, 80000.00, 2000, 5, 456, NOW() - INTERVAL '75 days', NOW() + INTERVAL '290 days', true, NOW() - INTERVAL '75 days');
+
+-- =====================================================
+-- SEED DATA COMPLETED
 -- =====================================================

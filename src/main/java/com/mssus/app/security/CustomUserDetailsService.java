@@ -40,17 +40,6 @@ public class CustomUserDetailsService implements UserDetailsService {
         return createUserDetails(user);
     }
 
-    @Transactional(readOnly = true)
-    public UserDetails loadUserById(Integer userId) {
-        User user = userRepository.findByIdWithProfiles(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with id: " + userId));
-
-        if (UserStatus.SUSPENDED.equals(user.getStatus())) {
-            throw new UsernameNotFoundException("User account is suspended");
-        }
-
-        return createUserDetails(user);
-    }
 
     private UserDetails createUserDetails(User user) {
         List<GrantedAuthority> authorities = getAuthorities(user);
