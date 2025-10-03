@@ -77,7 +77,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         }
         if (user.getDriverProfile() != null){
             authorities.add(new SimpleGrantedAuthority("ROLE_DRIVER"));
-        }
+        } //TODO: RIDER and DRIVER are ABAC permissions, not roles, fix this later
         return authorities;
     }
 }

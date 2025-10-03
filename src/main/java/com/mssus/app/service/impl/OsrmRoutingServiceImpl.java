@@ -1,17 +1,21 @@
-package com.mssus.app.service;
+package com.mssus.app.service.impl;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.mssus.app.dto.response.RouteResponse;
+import com.mssus.app.service.RoutingService;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.http.ResponseEntity;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.List;
 
 @Service
-public class OsrmRoutingService {
-
+public class OsrmRoutingServiceImpl implements RoutingService {
     private final RestTemplate restTemplate = new RestTemplate();
 
-    private static final String OSRM_URL = "http://localhost:5000/route/v1/driving/";
+    @Value("${osrm.base-url}")
+    private String OSRM_URL;
 
     public RouteResponse getRoute(double fromLat, double fromLon, double toLat, double toLon) {
         String url = OSRM_URL + fromLon + "," + fromLat + ";" + toLon + "," + toLat
@@ -26,8 +30,8 @@ public class OsrmRoutingService {
         OsrmResponse.Route route = resp.getBody().routes.get(0);
 
         return new RouteResponse(
-            route.distance / 1000.0,   // meters -> km
-            route.duration / 60.0,    // seconds -> minutes
+            route.distance,   // meters
+            route.duration,    // seconds
             route.geometry            // encoded polyline
         );
     }
@@ -35,17 +39,16 @@ public class OsrmRoutingService {
     // Response DTOs
     @JsonIgnoreProperties(ignoreUnknown = true)
     static class OsrmResponse {
-        public List<Route> routes;
+        public List<OsrmResponse.Route> routes;
 
         @JsonIgnoreProperties(ignoreUnknown = true)
         static class Route {
-            public double distance;
-            public double duration;
+            public long distance;
+            public long duration;
             public String geometry;
         }
     }
-
-    // What you’ll return to your controller
-    public record RouteResponse(double distance_km, double time_min, String polyline) {}
+//
+//    // What you’ll return to your controller
+//    public record RouteResponse(double distance_km, double time_min, String polyline) {}
 }
-

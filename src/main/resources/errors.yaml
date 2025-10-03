@@ -350,3 +350,13 @@ errors:
     category: not-found
     owner: platform-team
     remediation: "Check the resource identifier and try again"
+
+  - id: pricing-config.not-found.resource
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "No active pricing configuration found"
+    domain: pricing-config
+    category: not-found
+    owner: pricing-team
+    remediation: "Contact support to set up pricing configuration"

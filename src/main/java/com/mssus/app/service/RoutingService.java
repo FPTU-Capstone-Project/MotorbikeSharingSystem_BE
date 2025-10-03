@@ -1,11 +1,10 @@
-//package com.mssus.app.service;
-//
-//import com.graphhopper.GHResponse;
-//import org.springframework.http.ResponseEntity;
-//
-//import java.util.Map;
-//
-//public interface RoutingService {
-//    public ResponseEntity<Map<String, Object>> calculateRoute(double fromLat, double fromLon, double toLat, double toLon);
-//
-//}
+package com.mssus.app.service;
+
+import com.mssus.app.dto.response.RouteResponse;
+
+
+public interface RoutingService {
+    RouteResponse getRoute(double fromLat, double fromLon, double toLat, double toLon);
+
+}
+
