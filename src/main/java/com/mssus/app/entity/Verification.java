@@ -52,7 +52,7 @@ public class Verification {
     private String rejectionReason;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "verified_by")
+    @JoinColumn(name = "verified_by", referencedColumnName = "user_id")
     private User verifiedBy;
 
     @Column(name = "verified_at")
