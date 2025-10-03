@@ -11,13 +11,13 @@ public interface VerificationService {
     // Student verification methods
     PageResponse<StudentVerificationResponse> getPendingStudentVerifications(Pageable pageable);
     StudentVerificationResponse getStudentVerificationById(Integer userId);
+    PageResponse<DriverKycResponse> getPendingDriverVerifications(Pageable pageable);
+    PageResponse<StudentVerificationResponse> getStudentVerificationHistory(Pageable pageable);
     MessageResponse approveStudentVerification(String admin, Integer userId, VerificationDecisionRequest request);
     MessageResponse rejectStudentVerification(String admin,Integer userId, VerificationDecisionRequest request);
-    PageResponse<StudentVerificationResponse> getStudentVerificationHistory(Pageable pageable);
     BulkOperationResponse bulkApproveStudentVerifications(String admin, BulkApprovalRequest request);
-
     // Driver verification methods
-    PageResponse<DriverKycResponse> getPendingDriverVerifications(Pageable pageable);
+
     DriverKycResponse getDriverKycById(Integer driverId);
     MessageResponse approveDriverDocuments(String admin, Integer driverId, VerificationDecisionRequest request);
     MessageResponse approveDriverLicense(String admin, Integer driverId, VerificationDecisionRequest request);

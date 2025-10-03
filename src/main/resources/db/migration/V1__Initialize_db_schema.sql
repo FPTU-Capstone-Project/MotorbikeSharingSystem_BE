@@ -56,7 +56,7 @@ ALTER TABLE users
 
 INSERT INTO users (email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified)
 VALUES (
-           'admin@mssus.com',
+           'admin2@mssus.com',
            '0900000001',
            '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
            'System Administrator',
@@ -66,15 +66,6 @@ VALUES (
            true
        ) ON CONFLICT (email) DO NOTHING;
 
--- Admin profiles table
-CREATE TABLE admin_profiles
-(
-    admin_id    INTEGER PRIMARY KEY REFERENCES users (user_id) ON DELETE CASCADE,
-    department  VARCHAR(100),
-    permissions TEXT,
-    last_login  TIMESTAMP,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
 
 -- Rider profiles table
 CREATE TABLE rider_profiles
@@ -205,7 +196,7 @@ CREATE TABLE verifications
     document_url     VARCHAR(500),
     document_type    VARCHAR(20),
     rejection_reason TEXT,
-    verified_by      INTEGER REFERENCES admin_profiles (admin_id),
+    verified_by      INTEGER REFERENCES users (user_id),
     verified_at      TIMESTAMP,
     expires_at       TIMESTAMP,
     metadata         TEXT,
