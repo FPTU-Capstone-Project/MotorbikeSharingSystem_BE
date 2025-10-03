@@ -4,8 +4,10 @@ package com.mssus.app.service.impl;
 import com.mssus.app.dto.response.MessageResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.StudentVerificationResponse;
+import com.mssus.app.dto.response.UserProfileResponse;
 import com.mssus.app.entity.User;
 import com.mssus.app.entity.Verification;
+import com.mssus.app.mapper.UserMapper;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.VerificationRepository;
@@ -26,6 +28,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final VerificationRepository verificationRepository;
     private final VerificationMapper verificationMapper;
+    private final UserMapper userMapper;
     private final FileUploadService fileUploadService;
 
     @Override
@@ -66,7 +69,51 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("Failed to upload student card: " + e.getMessage());
         }
     }
-    
+
+    @Override
+    public UserProfileResponse getUsers(Authentication authentication) {
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return UserProfileResponse.builder()
+                .user(userMapper.toUserInfo(user))
+                .riderProfile(user.getRiderProfile() != null ? buildRiderProfile(user.getRiderProfile()) : null)
+                .driverProfile(user.getDriverProfile() != null ? buildDriverProfile(user.getDriverProfile()) : null)
+                .wallet(user.getWallet() != null ? buildWalletInfo(user.getWallet()) : null)
+                .availableProfiles(userMapper.getUserProfiles(user))
+                .build();
+    }
+
+    private UserProfileResponse.RiderProfile buildRiderProfile(com.mssus.app.entity.RiderProfile riderProfile) {
+        return UserProfileResponse.RiderProfile.builder()
+                .emergencyContact(riderProfile.getEmergencyContact())
+                .totalRides(riderProfile.getTotalRides())
+                .totalSpent(riderProfile.getTotalSpent())
+                .preferredPaymentMethod(String.valueOf(riderProfile.getPreferredPaymentMethod()))
+                .build();
+    }
+
+    private UserProfileResponse.DriverProfile buildDriverProfile(com.mssus.app.entity.DriverProfile driverProfile) {
+        return UserProfileResponse.DriverProfile.builder()
+                .licenseNumber(driverProfile.getLicenseNumber())
+                .status(driverProfile.getStatus() != null ? driverProfile.getStatus().name() : null)
+                .ratingAvg(driverProfile.getRatingAvg())
+                .totalSharedRides(driverProfile.getTotalSharedRides())
+                .totalEarned(driverProfile.getTotalEarned())
+                .commissionRate(driverProfile.getCommissionRate())
+                .isAvailable(driverProfile.getIsAvailable())
+                .maxPassengers(driverProfile.getMaxPassengers())
+                .build();
+    }
+
+    private UserProfileResponse.WalletInfo buildWalletInfo(com.mssus.app.entity.Wallet wallet) {
+        return UserProfileResponse.WalletInfo.builder()
+                .walletId(wallet.getWalletId())
+                .shadowBalance(wallet.getShadowBalance())
+                .pendingBalance(wallet.getPendingBalance())
+                .isActive(wallet.getIsActive())
+                .build();
+    }
 
 
     private <T> PageResponse<T> buildPageResponse (Page<?> page, List<T> content){
