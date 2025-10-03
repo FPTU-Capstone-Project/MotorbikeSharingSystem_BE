@@ -3,19 +3,20 @@ package com.mssus.app.controller;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.StudentVerificationResponse;
 import com.mssus.app.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RequestMapping("/api/v1/users")
@@ -24,7 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserController {
     private final UserService userService;
 
-    @PostMapping
+    @GetMapping("/verifications")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved user verification history"),
             @ApiResponse(responseCode = "401", description = "Unauthorized access"),
@@ -44,10 +45,35 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/avatar")
+    @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload user avatar",
+            description = "Upload an avatar image for the authenticated user")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avatar uploaded successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid file or request")
+    })
     public ResponseEntity<?> uploadAvatar(
             Authentication authentication,
-            @Parameter(description = "Avatar image file") @RequestParam("avatarFile") MultipartFile avatarFile) {
+            @Parameter(
+                    description = "Avatar image file",
+                    content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                            schema = @Schema(type = "string", format = "binary"))
+            )
+            @RequestParam("avatarFile") MultipartFile avatarFile) {
+
         return ResponseEntity.ok(userService.uploadAvatar(authentication, avatarFile));
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "Get user profile",
+            description = "Retrieve the profile information of the authenticated user")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved user profile"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized access"),
+            @ApiResponse(responseCode = "403", description = "Forbidden access"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<?> getUsers(Authentication authentication) {
+        return ResponseEntity.ok(userService.getUsers(authentication));
     }
 }

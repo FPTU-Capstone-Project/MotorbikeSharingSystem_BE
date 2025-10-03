@@ -85,9 +85,6 @@ public class UserProfileResponse {
         @JsonProperty("emergency_contact")
         private String emergencyContact;
 
-        @JsonProperty("rating_avg")
-        private Float ratingAvg;
-
         @JsonProperty("total_rides")
         private Integer totalRides;
 
@@ -147,8 +144,8 @@ public class UserProfileResponse {
         @JsonProperty("wallet_id")
         private Integer walletId;
 
-        @JsonProperty("cached_balance")
-        private BigDecimal cachedBalance;
+        @JsonProperty("shadow_balance")
+        private BigDecimal shadowBalance;
 
         @JsonProperty("pending_balance")
         private BigDecimal pendingBalance;
