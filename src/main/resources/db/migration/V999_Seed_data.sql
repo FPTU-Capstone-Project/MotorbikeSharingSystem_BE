@@ -1,7 +1,31 @@
 -- V999_Seed_data.sql
 -- Mock data for Motorbike Sharing System
 -- This data is completely different from V1_Initialize data
+SET session_replication_role = 'replica';
 
+-- Truncate tables in reverse order of dependencies
+TRUNCATE TABLE verifications CASCADE;
+TRUNCATE TABLE emergency_contacts CASCADE;
+TRUNCATE TABLE shared_rides CASCADE;
+TRUNCATE TABLE vehicles CASCADE;
+TRUNCATE TABLE promotions CASCADE;
+TRUNCATE TABLE locations CASCADE;
+TRUNCATE TABLE wallets CASCADE;
+TRUNCATE TABLE driver_profiles CASCADE;
+TRUNCATE TABLE rider_profiles CASCADE;
+TRUNCATE TABLE users CASCADE;
+
+-- Re-enable triggers
+SET session_replication_role = 'origin';
+
+-- Reset sequences to start from 1
+ALTER SEQUENCE users_user_id_seq RESTART WITH 1;
+ALTER SEQUENCE locations_location_id_seq RESTART WITH 1;
+ALTER SEQUENCE vehicles_vehicle_id_seq RESTART WITH 1;
+ALTER SEQUENCE verifications_verification_id_seq RESTART WITH 1;
+ALTER SEQUENCE shared_rides_shared_ride_id_seq RESTART WITH 1;
+ALTER SEQUENCE emergency_contacts_contact_id_seq RESTART WITH 1;
+ALTER SEQUENCE promotions_promotion_id_seq RESTART WITH 1;
 -- =====================================================
 -- 0. ADMIN USER (Must be first!)
 -- =====================================================
