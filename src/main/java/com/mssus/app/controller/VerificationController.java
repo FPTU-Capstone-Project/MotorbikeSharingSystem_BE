@@ -52,7 +52,7 @@ public class VerificationController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/students")
+    @GetMapping("")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Students retrieved successfully",
                     content = @Content(schema = @Schema(implementation = PageResponse.class))
