@@ -1,5 +1,6 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -26,9 +27,16 @@ public class SharedRideRequest {
     @Column(name = "shared_ride_request_id")
     private Integer sharedRideRequestId;
 
+    // UPDATED: Fixed column name from 'share_ride_id' to 'shared_ride_id' for consistency
+    // UPDATED: Made nullable to support AI_BOOKING flow (starts null, assigned on accept)
     @ManyToOne
-    @JoinColumn(name = "share_ride_id", nullable = false)
+    @JoinColumn(name = "shared_ride_id", nullable = true)
     private SharedRide sharedRide;
+    
+    // NEW: Type of request flow (AI_BOOKING or JOIN_RIDE)
+    @Column(name = "request_kind", length = 20, nullable = false)
+    @Enumerated(EnumType.STRING)
+    private RequestKind requestKind;
 
     @ManyToOne
     @JoinColumn(name = "rider_id", nullable = false)

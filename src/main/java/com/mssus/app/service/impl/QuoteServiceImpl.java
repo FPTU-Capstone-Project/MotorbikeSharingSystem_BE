@@ -57,6 +57,8 @@ public class QuoteServiceImpl implements QuoteService {
 
     @Override
     public Quote getQuote(UUID quoteId) {
-        return null;
+        return quoteCache.load(quoteId)
+                .orElseThrow(() -> BaseDomainException.of("ride.validation.invalid-location", 
+                        "Quote not found or expired: " + quoteId));
     }
 }

@@ -19,7 +19,7 @@ public interface TransactionService {
     void handleTopupFailed(String pspRef, String reason);
 
     // RIDE_HOLD flows
-    List<Transaction> createHold(Integer riderId, BigDecimal amount, Long bookingId, String description);
+    List<Transaction> createHold(Integer riderId, BigDecimal amount, Integer bookingId, String description);
 
     // RIDE_CAPTURE flows
     List<Transaction> captureFare(UUID groupId, Integer riderId, Integer driverId, BigDecimal totalFare,

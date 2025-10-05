@@ -55,16 +55,15 @@ ALTER TABLE users
         CHECK (user_type IN ('USER', 'ADMIN'));
 
 INSERT INTO users (email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified)
-VALUES (
-           'admin@mssus.com',
-           '0900000001',
-           '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
-           'System Administrator',
-           'ADMIN',
-              'ACTIVE',
-           true,
-           true
-       ) ON CONFLICT (email) DO NOTHING;
+VALUES ('admin@mssus.com',
+        '0900000001',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
+        'System Administrator',
+        'ADMIN',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
 
 -- Admin profiles table
 CREATE TABLE admin_profiles
@@ -131,18 +130,18 @@ ALTER TABLE rider_profiles
         CHECK (preferred_payment_method IN ('WALLET', 'CREDIT_CARD'));
 
 -- Insert ordinary user
-INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified, phone_verified)
-VALUES (
-           'john.doe@example.com',
-           '0987654321',
-           '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
-           'John Doe',
-           'STU123456',
-           'USER',
-           'ACTIVE',
-           true,
-           true
-       ) ON CONFLICT (email) DO NOTHING;
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified,
+                   phone_verified)
+VALUES ('john.doe@example.com',
+        '0987654321',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+        'John Doe',
+        'STU123456',
+        'USER',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
 
 -- Insert rider profile for the user
 INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
@@ -222,7 +221,8 @@ CREATE INDEX idx_verification_status ON verifications (status);
 -- Add check constraints for verifications
 ALTER TABLE verifications
     ADD CONSTRAINT chk_verification_type
-        CHECK (type IN ('STUDENT_ID', 'DRIVER_LICENSE', 'BACKGROUND_CHECK', 'VEHICLE_REGISTRATION', 'DRIVER_DOCUMENTS'));
+        CHECK (type IN
+               ('STUDENT_ID', 'DRIVER_LICENSE', 'BACKGROUND_CHECK', 'VEHICLE_REGISTRATION', 'DRIVER_DOCUMENTS'));
 ALTER TABLE verifications
     ADD CONSTRAINT chk_verification_status
         CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED'));
@@ -271,6 +271,35 @@ ALTER TABLE vehicles
     ADD CONSTRAINT chk_vehicle_capacity
         CHECK (capacity >= 1 AND capacity <= 2);
 
+INSERT INTO vehicles (driver_id,
+                      plate_number,
+                      model,
+                      color,
+                      year,
+                      capacity,
+                      helmet_count,
+                      insurance_expiry,
+                      last_maintenance,
+                      fuel_type,
+                      status,
+                      verified_at)
+SELECT dp.driver_id,
+       '29A-12345',
+       'Honda Wave Alpha',
+       'Black',
+       2022,
+       1,
+       2,
+       '2025-01-01 00:00:00',
+       '2024-06-01 00:00:00',
+       'GASOLINE',
+       'ACTIVE',
+       '2024-06-10 12:00:00'
+FROM driver_profiles dp
+         JOIN users u ON dp.driver_id = u.user_id
+WHERE u.email = 'john.doe@example.com';
+
+
 -- Create locations table
 CREATE TABLE locations
 (
@@ -293,6 +322,13 @@ ALTER TABLE locations
 ALTER TABLE locations
     ADD CONSTRAINT chk_lng_range
         CHECK (lng >= -180 AND lng <= 180);
+
+INSERT INTO locations (name, lat, lng, address)
+VALUES ('Tòa S2.02 Vinhomes Grand Park', 10.8386317, 106.8318038, NULL),
+       ('FPT University - HCMC Campus', 10.841480, 106.809844, NULL),
+       ('Tòa S6.02 Vinhomes Grand Park', 10.8426113, 106.8374642, NULL),
+       ('Sảnh C6-C5, Ký túc xá Khu B ĐHQG TP.HCM', 10.8833471, 106.7795158, NULL);
+
 
 -- Create shared_rides table
 CREATE TABLE shared_rides
@@ -393,7 +429,7 @@ ALTER TABLE promotions
 CREATE TABLE shared_ride_requests
 (
     shared_ride_request_id SERIAL PRIMARY KEY,
-    share_ride_id          INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
+    shared_ride_id         INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
     rider_id               INTEGER                               NOT NULL REFERENCES rider_profiles (rider_id) ON DELETE CASCADE,
     pickup_location_id     INTEGER REFERENCES locations (location_id),
     dropoff_location_id    INTEGER REFERENCES locations (location_id),
@@ -412,7 +448,7 @@ CREATE TABLE shared_ride_requests
 );
 
 -- Add indexes for shared_ride_requests
-CREATE INDEX idx_shared_ride_requests_share_ride ON shared_ride_requests (share_ride_id);
+CREATE INDEX idx_shared_ride_requests_share_ride ON shared_ride_requests (shared_ride_id);
 CREATE INDEX idx_shared_ride_requests_rider ON shared_ride_requests (rider_id);
 CREATE INDEX idx_shared_ride_requests_status ON shared_ride_requests (status);
 CREATE INDEX idx_shared_ride_requests_pickup_time ON shared_ride_requests (pickup_time);

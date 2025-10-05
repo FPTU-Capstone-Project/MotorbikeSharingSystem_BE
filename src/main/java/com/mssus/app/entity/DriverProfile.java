@@ -66,6 +66,11 @@ public class DriverProfile {
     @Builder.Default
     private Integer maxPassengers = 1; //TODO: Questionable, remove after implementing vehicle entity
 
+    // NEW: Maximum detour time driver accepts for pickups (used by matching algorithm)
+    @Column(name = "max_detour_minutes")
+    @Builder.Default
+    private Integer maxDetourMinutes = 8; // Default 8 minutes per BR-26, BR-27
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

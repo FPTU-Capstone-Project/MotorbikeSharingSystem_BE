@@ -1,0 +1,25 @@
+package com.mssus.app.service;
+
+import com.mssus.app.dto.request.ride.CreateRideRequest;
+import com.mssus.app.dto.response.ride.RideCompletionResponse;
+import com.mssus.app.dto.response.ride.SharedRideResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+
+public interface SharedRideService {
+    SharedRideResponse createRide(CreateRideRequest request, Authentication authentication);
+
+    SharedRideResponse getRideById(Integer rideId);
+
+    Page<SharedRideResponse> getRidesByDriver(Integer driverId, String status, Pageable pageable, Authentication authentication);
+
+    Page<SharedRideResponse> browseAvailableRides(String startTime, String endTime, Pageable pageable);
+
+    SharedRideResponse startRide(Integer rideId, Authentication authentication);
+
+    RideCompletionResponse completeRide(Integer rideId, Float actualDistance, Integer actualDuration, Authentication authentication);
+
+    SharedRideResponse cancelRide(Integer rideId, String reason, Authentication authentication);
+}
+

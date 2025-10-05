@@ -11,7 +11,7 @@ CREATE TABLE pricing_configs
     valid_from         TIMESTAMP          NOT NULL,
     valid_until        TIMESTAMP,                                  -- NULL = open ended
     is_active          BOOLEAN            NOT NULL DEFAULT true,
-    created_by         INTEGER REFERENCES admin_profiles (admin_id),
+    created_by         INTEGER,
     created_at         TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -66,7 +66,7 @@ VALUES ('2025-01-01', -- version (using current date format)
         10000, -- min_fare_vnd
         5000, -- peak_surcharge_vnd
         0.1000, -- default_commission (10%)
-        CURRENT_TIMESTAMP, -- valid_from
+        '2000-01-01 00:00:00', -- valid_from
         NULL, -- valid_until (open-ended)
         true, -- is_active
         NULL -- created_by

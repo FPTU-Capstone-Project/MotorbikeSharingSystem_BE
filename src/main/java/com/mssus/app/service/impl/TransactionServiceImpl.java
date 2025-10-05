@@ -195,7 +195,7 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    public List<Transaction> createHold(Integer riderId, BigDecimal amount, Long bookingId, String description) {
+    public List<Transaction> createHold(Integer riderId, BigDecimal amount, Integer bookingId, String description) {
         validateHoldInput(riderId, amount, bookingId);
 
         Wallet wallet = walletRepository.findByUser_UserId(riderId)
@@ -749,7 +749,7 @@ public class TransactionServiceImpl implements TransactionService {
         }
     }
 
-    private void validateHoldInput(Integer riderId, BigDecimal amount, Long bookingId) {
+    private void validateHoldInput(Integer riderId, BigDecimal amount, Integer bookingId) {
         if (riderId == null) {
             throw new ValidationException("Rider ID cannot be null");
         }
