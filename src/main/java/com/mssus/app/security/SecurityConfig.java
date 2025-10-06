@@ -166,27 +166,27 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
-
-                        // Admin-only endpoints
-                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).permitAll()
-
-                        // Reports endpoints - ADMIN or STAFF role
-                        .requestMatchers(SecurityEndpoints.REPORTS_PATHS).hasAnyRole("ADMIN", "STAFF")
-
-                        // Rider-specific endpoints - currently none
-                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
-
-                        // Driver-specific endpoints
-                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
-
-                        // User profile endpoints - any authenticated user
-                        .requestMatchers(SecurityEndpoints.USER_PATHS).authenticated()
-
-                        // Private endpoints - any authenticated user
-                        .requestMatchers(SecurityEndpoints.PRIVATE_PATHS).authenticated()
-
-                        // All other requests require authentication
+//                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
+//
+//                        // Admin-only endpoints
+//                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
+//
+//                        // Reports endpoints - ADMIN or STAFF role
+//                        .requestMatchers(SecurityEndpoints.REPORTS_PATHS).hasAnyRole("ADMIN", "STAFF")
+//
+//                        // Rider-specific endpoints - currently none
+//                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
+//
+//                        // Driver-specific endpoints
+//                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
+//
+//                        // User profile endpoints - any authenticated user
+//                        .requestMatchers(SecurityEndpoints.USER_PATHS).authenticated()
+//
+//                        // Private endpoints - any authenticated user
+//                        .requestMatchers(SecurityEndpoints.PRIVATE_PATHS).authenticated()
+//
+//                        // All other requests require authentication
                         .anyRequest().permitAll()
                 )
                 .authenticationProvider(authenticationProvider())

@@ -32,29 +32,10 @@ public class VerificationController {
 
     private final VerificationService verificationService;
 
-    // Student Verification Endpoints
-    @GetMapping("/students/pending")
-    @Operation(summary = "Get pending student verifications")
+
+    @GetMapping("/all")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Students retrieved successfully",
-                    content = @Content(schema = @Schema(implementation = PageResponse.class)))
-    })
-    public ResponseEntity<PageResponse<StudentVerificationResponse>> getPendingStudentVerifications(
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir) {
-
-        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
-
-        PageResponse<StudentVerificationResponse> response = verificationService.getPendingStudentVerifications(pageable);
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Students retrieved successfully",
+            @ApiResponse(responseCode = "200", description = "Verifications retrieved successfully",
                     content = @Content(schema = @Schema(implementation = PageResponse.class))
             ),
             @ApiResponse(responseCode = "400", description = "Invalid request parameters",
@@ -87,60 +68,8 @@ public class VerificationController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/students/{id}/approve")
-    @Operation(summary = "Approve student verification")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Student verification approved",
-                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Student verification not found",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<MessageResponse> approveStudentVerification(
-            Authentication authentication,
-            @Parameter(description = "User ID") @PathVariable Integer id,
-            @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveStudentVerification(authentication.getName(),id, request);
-        return ResponseEntity.ok(response);
-    }
 
-    @PostMapping("/students/{id}/reject")
-    @Operation(summary = "Reject student verification")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Student verification rejected",
-                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request - rejection reason required",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Student verification not found",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<MessageResponse> rejectStudentVerification(
-            Authentication authentication,
-            @Parameter(description = "User ID") @PathVariable Integer id,
-            @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.rejectStudentVerification(authentication.getName(), id, request);
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/students/history")
-    @Operation(summary = "Get student verification history")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Student verification history retrieved successfully",
-                    content = @Content(schema = @Schema(implementation = PageResponse.class)))
-    })
-    public ResponseEntity<PageResponse<StudentVerificationResponse>> getStudentVerificationHistory(
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "verifiedAt") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir) {
-
-        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
-
-        PageResponse<StudentVerificationResponse> response = verificationService.getStudentVerificationHistory(pageable);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/students/bulk-approve")
+    @PostMapping("/bulk-approve")
     @Operation(summary = "Bulk approve student verifications")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Bulk approval completed",
@@ -151,27 +80,7 @@ public class VerificationController {
     public ResponseEntity<BulkOperationResponse> bulkApproveStudentVerifications(
             Authentication authentication,
             @Valid @RequestBody BulkApprovalRequest request) {
-        BulkOperationResponse response = verificationService.bulkApproveStudentVerifications(authentication.getName(), request);
-        return ResponseEntity.ok(response);
-    }
-
-    // Driver Verification Endpoints
-    @GetMapping("/drivers/pending")
-    @Operation(summary = "Get pending driver verifications")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Pending drivers retrieved successfully",
-                    content = @Content(schema = @Schema(implementation = PageResponse.class)))
-    })
-    public ResponseEntity<PageResponse<DriverKycResponse>> getPendingDriverVerifications(
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir) {
-
-        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
-
-        PageResponse<DriverKycResponse> response = verificationService.getPendingDriverVerifications(pageable);
+        BulkOperationResponse response = verificationService.bulkApproveVerifications(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 
@@ -189,39 +98,8 @@ public class VerificationController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/drivers/{id}/approve-docs")
-    @Operation(summary = "Approve driver documents")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Driver documents approved",
-                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Driver verification not found",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<MessageResponse> approveDriverDocuments(
-            Authentication authentication,
-            @Parameter(description = "Driver ID") @PathVariable Integer id,
-            @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverDocuments(authentication.getName(), id, request);
-        return ResponseEntity.ok(response);
-    }
 
-    @PostMapping("/drivers/{id}/approve-license")
-    @Operation(summary = "Approve driver license")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Driver license approved",
-                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Driver license verification not found",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<MessageResponse> approveDriverLicense(
-            Authentication authentication,
-            @Parameter(description = "Driver ID") @PathVariable Integer id,
-            @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverLicense(authentication.getName(), id, request);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/drivers/{id}/approve-vehicle")
+    @PostMapping("/approve-vehicle")
     @Operation(summary = "Approve driver vehicle")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Driver vehicle approved",
@@ -231,27 +109,25 @@ public class VerificationController {
     })
     public ResponseEntity<MessageResponse> approveDriverVehicle(
             Authentication authentication,
-            @Parameter(description = "Driver ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverVehicle(authentication.getName(), id, request);
+        MessageResponse response = verificationService.approveDriverVehicle(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/drivers/{id}/reject")
-    @Operation(summary = "Reject driver verification")
+    @PostMapping("/reject")
+    @Operation(summary = "Reject verification")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Driver verification rejected",
+            @ApiResponse(responseCode = "200", description = "Verification rejected",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid request - rejection reason required",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Driver verifications not found",
+            @ApiResponse(responseCode = "404", description = "Verifications not found",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<MessageResponse> rejectDriverVerification(
             Authentication authentication,
-            @Parameter(description = "Driver ID") @PathVariable Integer id,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.rejectDriverVerification(authentication.getName(), id, request);
+        MessageResponse response = verificationService.rejectVerification(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác minh tài xế bị từ chối</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px 40px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .rejection-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 25px 0;
+            border-left: 4px solid #e74c3c;
+            text-align: center;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .verification-details {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 25px 0;
+            border-left: 4px solid #e74c3c;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            color: #6c757d;
+            font-weight: 500;
+        }
+        .detail-value {
+            color: #333;
+            font-weight: 600;
+        }
+        .reason-box {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #ffeaa7;
+        }
+        .reason-box strong {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .info-box {
+            background-color: #e3f2fd;
+            color: #0d47a1;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #bbdefb;
+        }
+        .info-box h4 {
+            margin-top: 0;
+            color: #1565c0;
+        }
+        .info-box ul {
+            margin-bottom: 0;
+            padding-left: 20px;
+        }
+        .action-buttons {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .action-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 35px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            margin: 10px;
+            text-align: center;
+            transition: transform 0.2s;
+            font-size: 16px;
+        }
+        .action-button:hover {
+            transform: translateY(-2px);
+        }
+        .retry-button {
+            background: linear-gradient(135deg, #20bf6b 0%, #26a69a 100%);
+        }
+        .contact-info {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+            border-top: 1px solid #e9ecef;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            .content {
+                padding: 20px;
+            }
+            .detail-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .detail-value {
+                margin-top: 5px;
+            }
+            .action-button {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="icon">❌</div>
+            <h1>Xác minh tài xế bị từ chối</h1>
+        </div>
+
+        <div class="content">
+            <div class="greeting">
+                Xin chào <strong th:text="${fullName}">Tài xế</strong>,
+            </div>
+
+            <p>Cảm ơn bạn đã quan tâm đến việc trở thành tài xế của Motorbike Sharing. Chúng tôi rất tiếc phải thông báo rằng hồ sơ xác minh của bạn không được phê duyệt trong lần này.</p>
+
+            <div class="rejection-message">
+                ⚠️ Hồ sơ xác minh của bạn chưa được chấp thuận
+            </div>
+
+            <div class="verification-details">
+                <h3 style="margin-top: 0; color: #333; margin-bottom: 20px;">Thông tin xác minh</h3>
+
+                <div class="detail-row">
+                    <span class="detail-label">Họ và tên:</span>
+                    <span class="detail-value" th:text="${fullName}">Nguyễn Văn A</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Email:</span>
+                    <span class="detail-value" th:text="${email}">driver@example.com</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Ngày xử lý:</span>
+                    <span class="detail-value" th:text="${rejectionDate}">05/10/2025</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Trạng thái:</span>
+                    <span class="detail-value" style="color: #e74c3c;">❌ Bị từ chối</span>
+                </div>
+            </div>
+
+            <div class="reason-box">
+                <strong>📋 Lý do từ chối:</strong>
+                <p th:text="${reason}" style="margin: 5px 0 0 0;">Thông tin giấy tờ không rõ ràng hoặc không hợp lệ</p>
+            </div>
+
+            <div class="info-box">
+                <h4>🔄 Bạn có thể làm gì tiếp theo?</h4>
+                <ul>
+                    <li>Xem lại và cập nhật thông tin cá nhân</li>
+                    <li>Đảm bảo giấy tờ tải lên rõ ràng, đầy đủ và còn hiệu lực</li>
+                    <li>Kiểm tra lại giấy phép lái xe (còn hạn, hạng phù hợp)</li>
+                    <li>Đảm bảo ảnh chụp CMND/CCCD đủ sáng và rõ nét</li>
+                    <li>Gửi lại hồ sơ sau khi đã hoàn thiện</li>
+                </ul>
+            </div>
+
+            <div class="info-box" style="background-color: #fff3cd; border-color: #ffeaa7;">
+                <h4 style="color: #856404;">📌 Yêu cầu hồ sơ tài xế:</h4>
+                <ul style="color: #856404;">
+                    <li>CMND/CCCD còn hiệu lực (2 mặt rõ nét)</li>
+                    <li>Giấy phép lái xe hạng A1 trở lên (còn hạn)</li>
+                    <li>Thông tin cá nhân chính xác và trùng khớp</li>
+                    <li>Ảnh chụp rõ ràng, không mờ, không bị che</li>
+                </ul>
+            </div>
+
+            <div class="action-buttons">
+                <a th:href="${frontendUrl + '/driver/verification'}" class="action-button retry-button">
+                    Gửi lại hồ sơ
+                </a>
+                <a th:href="${frontendUrl + '/contact'}" class="action-button">
+                    Liên hệ hỗ trợ
+                </a>
+            </div>
+
+            <div class="contact-info">
+                <strong>📞 Cần hỗ trợ?</strong><br>
+                Liên hệ với chúng tôi qua email:
+                <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}">support@motorbike.com</a><br>
+                Hotline: 1900-xxxx (24/7)
+            </div>
+
+            <p>Chúng tôi khuyến khích bạn hoàn thiện hồ sơ và gửi lại để có cơ hội trở thành tài xế của Motorbike Sharing. Nếu có bất kỳ thắc mắc nào, đừng ngần ngại liên hệ với chúng tôi.</p>
+
+            <p>Trân trọng,<br>
+               <strong>Đội ngũ Motorbike Sharing</strong>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>Email này được gửi tự động, vui lòng không trả lời.</p>
+            <p>© 2024 Motorbike Sharing System. All rights reserved.</p>
+            <p>
+                <a th:href="${frontendUrl}">Trang chủ</a> |
+                <a th:href="${frontendUrl + '/driver'}">Trang tài xế</a> |
+                <a th:href="${frontendUrl + '/contact'}">Liên hệ</a> |
+                <a th:href="${frontendUrl + '/help'}">Trợ giúp</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

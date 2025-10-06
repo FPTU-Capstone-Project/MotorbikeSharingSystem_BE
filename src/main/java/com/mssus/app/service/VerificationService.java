@@ -8,28 +8,15 @@ import org.springframework.data.domain.Pageable;
 
 public interface VerificationService {
 
-    // Student verification methods
-    PageResponse<StudentVerificationResponse> getPendingStudentVerifications(Pageable pageable);
     StudentVerificationResponse getStudentVerificationById(Integer userId);
-    PageResponse<DriverKycResponse> getPendingDriverVerifications(Pageable pageable);
-    PageResponse<StudentVerificationResponse> getStudentVerificationHistory(Pageable pageable);
-    MessageResponse approveStudentVerification(String admin, Integer userId, VerificationDecisionRequest request);
-    MessageResponse rejectStudentVerification(String admin,Integer userId, VerificationDecisionRequest request);
-    BulkOperationResponse bulkApproveStudentVerifications(String admin, BulkApprovalRequest request);
-    // Driver verification methods
+    BulkOperationResponse bulkApproveVerifications(String admin, BulkApprovalRequest request);
 
+    MessageResponse approveVerification(String admin, VerificationDecisionRequest request);
     DriverKycResponse getDriverKycById(Integer driverId);
-    MessageResponse approveDriverDocuments(String admin, Integer driverId, VerificationDecisionRequest request);
-    MessageResponse approveDriverLicense(String admin, Integer driverId, VerificationDecisionRequest request);
-    MessageResponse approveDriverVehicle(String admin, Integer driverId, VerificationDecisionRequest request);
-    MessageResponse rejectDriverVerification(String admin, Integer driverId, VerificationDecisionRequest request);
+    MessageResponse approveDriverVehicle(String admin, VerificationDecisionRequest request);
+    MessageResponse rejectVerification(String admin, VerificationDecisionRequest request);
     MessageResponse updateBackgroundCheck(String admin, Integer driverId, BackgroundCheckRequest request);
     DriverStatsResponse getDriverVerificationStats();
-
-    // Common verification methods
-    VerificationResponse getVerificationById(Integer verificationId);
     PageResponse<VerificationResponse> getAllVerifications(Pageable pageable);
-    PageResponse<VerificationResponse> getAllPendingVerifications(Pageable pageable);
-    VerificationResponse approveVerification(String admin, Integer verificationId);
 
 }
