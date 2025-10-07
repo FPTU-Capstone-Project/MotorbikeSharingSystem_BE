@@ -17,7 +17,10 @@ import java.util.Optional;
 public interface VerificationRepository extends JpaRepository<Verification, Integer> {
 
     @Query("SELECT v FROM Verification v WHERE v.user.userId = :userId")
-    List<Verification> findByUserId(@Param("userId") Integer userId);
+    Optional<Verification> findByUserId(@Param("userId") Integer userId);
+
+    @Query("SELECT v FROM Verification v WHERE v.user.userId = :userId")
+    List<Verification> findByListUserId(@Param("userId") Integer userId);
     @Query("SELECT v FROM Verification v WHERE v.user.userId = :userId")
     Page<Verification> findByUser(@Param("userId") Integer userId, Pageable pageable);
     @Query("SELECT v FROM Verification v WHERE v.user.userId = :userId AND v.type = :type")

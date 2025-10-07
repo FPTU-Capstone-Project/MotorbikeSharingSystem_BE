@@ -3,6 +3,7 @@ package com.mssus.app.controller;
 import com.mssus.app.common.enums.OtpFor;
 import com.mssus.app.dto.request.*;
 import com.mssus.app.dto.response.*;
+import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -30,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserRepository userRepository;
 
     @Operation(summary = "Register", description = "Create a new user account")
     @ApiResponses(value = {
