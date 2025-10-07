@@ -70,7 +70,7 @@ public class VerificationController {
 
 
     @PostMapping("/bulk-approve")
-    @Operation(summary = "Bulk approve student verifications")
+    @Operation(summary = "Bulk approve verifications")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Bulk approval completed",
                     content = @Content(schema = @Schema(implementation = BulkOperationResponse.class))),
@@ -95,22 +95,6 @@ public class VerificationController {
     public ResponseEntity<DriverKycResponse> getDriverKycById(
             @Parameter(description = "Driver ID") @PathVariable Integer id) {
         DriverKycResponse response = verificationService.getDriverKycById(id);
-        return ResponseEntity.ok(response);
-    }
-
-
-    @PostMapping("/approve-vehicle")
-    @Operation(summary = "Approve driver vehicle")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Driver vehicle approved",
-                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Vehicle verification not found",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<MessageResponse> approveDriverVehicle(
-            Authentication authentication,
-            @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverVehicle(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 

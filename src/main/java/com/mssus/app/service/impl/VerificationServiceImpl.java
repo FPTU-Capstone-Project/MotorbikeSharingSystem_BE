@@ -1,21 +1,16 @@
 package com.mssus.app.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mssus.app.common.enums.*;
 import com.mssus.app.dto.request.BackgroundCheckRequest;
 import com.mssus.app.dto.request.BulkApprovalRequest;
 import com.mssus.app.dto.request.VerificationDecisionRequest;
 import com.mssus.app.dto.response.*;
-import com.mssus.app.entity.DriverProfile;
-import com.mssus.app.entity.RiderProfile;
-import com.mssus.app.entity.Verification;
-import com.mssus.app.entity.User;
+import com.mssus.app.entity.*;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.mapper.VerificationMapper;
-import com.mssus.app.repository.DriverProfileRepository;
-import com.mssus.app.repository.RiderProfileRepository;
-import com.mssus.app.repository.UserRepository;
-import com.mssus.app.repository.VerificationRepository;
+import com.mssus.app.repository.*;
 import com.mssus.app.service.EmailService;
 import com.mssus.app.service.VerificationService;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +39,8 @@ public class VerificationServiceImpl implements VerificationService {
     private final VerificationMapper verificationMapper;
     private final RiderProfileRepository riderProfileRepository;
     private final EmailService emailService;
+    private final VehicleRepository vehicleRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -105,11 +102,6 @@ public class VerificationServiceImpl implements VerificationService {
         DriverProfile driver = driverProfileRepository.findById(driverId)
                 .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + driverId));
         return mapToDriverKycResponse(driver);
-    }
-
-    @Override
-    public MessageResponse approveDriverVehicle(String admin, VerificationDecisionRequest request) {
-        return null;
     }
 
     //done
@@ -278,6 +270,9 @@ public class VerificationServiceImpl implements VerificationService {
             riderProfileRepository.save(rider);
         } else if ((isDriverVerification(typeStr))
                 && user.getDriverProfile() != null) {
+            if (typeStr == VerificationType.VEHICLE_REGISTRATION) {
+                createVehicleFromVerification(verification);
+            }
             checkAndActivateDriverProfile(user);
         }
 
@@ -350,6 +345,56 @@ public class VerificationServiceImpl implements VerificationService {
                 type == VerificationType.DRIVER_LICENSE ||
                 type == VerificationType.VEHICLE_REGISTRATION ||
                 type == VerificationType.BACKGROUND_CHECK;
+    }
+    private void createVehicleFromVerification(Verification verification) {
+        User user = verification.getUser();
+        DriverProfile driver = user.getDriverProfile();
+
+        if (driver == null) {
+            log.error("Driver profile not found for user {}", user.getUserId());
+            return;
+        }
+
+        Optional<Vehicle> existingVehicle = vehicleRepository
+                .findByDriver_DriverId(driver.getDriverId());
+
+        if (existingVehicle.isPresent()) {
+            log.info("Vehicle already exists for driver {}", driver.getDriverId());
+            return;
+        }
+
+
+        VehicleInfo vehicleInfo = parseVehicleInfoFromMetadata(verification.getMetadata());
+
+
+        Vehicle vehicle = Vehicle.builder()
+                .driver(driver)
+                .plateNumber(vehicleInfo.getPlateNumber())
+                .model(vehicleInfo.getModel())
+                .color(vehicleInfo.getColor())
+                .year(vehicleInfo.getYear())
+                .capacity(vehicleInfo.getCapacity())
+                .fuelType(vehicleInfo.getFuelType())
+                .insuranceExpiry(vehicleInfo.getInsuranceExpiry())
+                .status(VehicleStatus.ACTIVE)
+                .verifiedAt(LocalDateTime.now())
+                .build();
+
+        vehicleRepository.save(vehicle);
+
+        log.info("Vehicle {} created and verified for driver {}",
+                vehicle.getPlateNumber(), driver.getDriverId());
+
+//        emailService.notifyVehicleCreated(user, vehicle);
+    }
+
+    private VehicleInfo parseVehicleInfoFromMetadata(String metadata) {
+        try {
+            return objectMapper.readValue(metadata, VehicleInfo.class);
+        } catch (Exception e) {
+            log.error("Failed to parse vehicle info from metadata: {}", e.getMessage());
+            throw new ValidationException("Invalid vehicle information in verification metadata");
+        }
     }
 
     private void checkAndActivateDriverProfile(User user) {
