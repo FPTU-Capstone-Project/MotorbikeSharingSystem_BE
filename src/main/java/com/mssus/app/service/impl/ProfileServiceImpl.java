@@ -12,6 +12,7 @@ import com.mssus.app.dto.response.UserProfileResponse;
 import com.mssus.app.dto.response.VerificationResponse;
 import com.mssus.app.entity.*;
 import com.mssus.app.mapper.UserMapper;
+import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
 import com.mssus.app.service.AuthService;
@@ -42,6 +43,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final VerificationRepository verificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
+    private final VerificationMapper verificationMapper;
     private final AuthServiceImpl authService;
     private final JwtService jwtService;
     private final FileUploadService fileUploadService;
@@ -183,12 +185,7 @@ public class ProfileServiceImpl implements ProfileService {
 
             verification = verificationRepository.save(verification);
 
-            return VerificationResponse.builder()
-                    .verificationId(verification.getVerificationId())
-                    .status(verification.getStatus().name())
-                    .type(verification.getType().name())
-                    .documentUrl(verification.getDocumentUrl())
-                    .build();
+            return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
             throw new RuntimeException("Failed to upload document: " + e.getMessage());
         }
@@ -215,17 +212,17 @@ public class ProfileServiceImpl implements ProfileService {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
         try {
-            // Check if driver profile already exists
             if (user.getDriverProfile() != null) {
                 throw ConflictException.profileAlreadyExists("Driver");
             }
+            if (user.getRiderProfile() == null){
+                throw ValidationException.of("Rider profile must be created before applying for Driver profile");
+            }
 
-            // Check license number uniqueness
             if (driverProfileRepository.existsByLicenseNumber(request.getLicenseNumber())) {
                 throw ConflictException.licenseNumberAlreadyExists(request.getLicenseNumber());
             }
 
-            // Create driver profile with pending status
             DriverProfile driverProfile = DriverProfile.builder()
                     .user(user)
                     .licenseNumber(request.getLicenseNumber())
@@ -240,19 +237,17 @@ public class ProfileServiceImpl implements ProfileService {
 
             driverProfileRepository.save(driverProfile);
 
+            String documentUrl = fileUploadService.uploadFile(request.getDocumentProof()).get();
+
             Verification verification = Verification.builder()
                     .user(user)
                     .type(VerificationType.DRIVER_LICENSE)
                     .status(VerificationStatus.PENDING)
-//                    .documentUrl()
-//                    .documentType()
+                    .documentUrl(documentUrl)
+                    .documentType(DocumentType.IMAGE)
                     .build();
-
-            return VerificationResponse.builder()
-                    .verificationId(1)
-                    .status(VerificationStatus.PENDING.name())
-                    .type(VerificationType.DRIVER_LICENSE.name())
-                    .build();
+            verificationRepository.save(verification);
+            return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
             throw new RuntimeException("Failed to submit driver verification: " + e.getMessage());
         }

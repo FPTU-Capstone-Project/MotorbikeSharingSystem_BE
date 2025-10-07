@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -28,12 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/me")
 public class ProfileController {
     private final ProfileService profileService;
-
-//    @GetMapping
-//    public ResponseEntity<List<UserProfileResponse>> getAllUsers() {
-//        List<UserProfileResponse> users = profileService.getAllUserProfiles();
-//        return ResponseEntity.ok(users);
-//    }
 
     @PutMapping
     public ResponseEntity<UserProfileResponse> updateProfile(
@@ -117,6 +112,7 @@ public class ProfileController {
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize("hasRole('RIDER')")
     @Operation(summary = "Submit Driver Verification",
         description = "Submit documents required to become a driver",
         security = @SecurityRequirement(name = "bearerAuth"))
@@ -139,6 +135,7 @@ public class ProfileController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Submit Student Verification",
         description = "Upload documentation to verify student status",
         security = @SecurityRequirement(name = "bearerAuth"))

@@ -125,7 +125,7 @@ public class VerificationServiceImpl implements VerificationService {
             throw new ValidationException("Rejection reason is required");
         }
         Integer userId = request.getUserId();
-        VerificationType typeStr = VerificationType.valueOf(request.getVerificationType());
+        VerificationType typeStr = VerificationType.valueOf(request.getVerificationType().toUpperCase());
         Verification verification = verificationRepository.findByUserId(userId).orElseThrow(
                 () -> new NotFoundException("Verification not found for user ID: " + userId)
         );
@@ -262,7 +262,7 @@ public class VerificationServiceImpl implements VerificationService {
         User user = userRepository.findById(request.getUserId()).orElseThrow(
                 () -> new NotFoundException("User not found")
         );
-        VerificationType typeStr = VerificationType.valueOf(request.getVerificationType());
+        VerificationType typeStr = VerificationType.valueOf(request.getVerificationType().toUpperCase());
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(), typeStr, VerificationStatus.PENDING)
                 .orElseThrow(() -> new NotFoundException(typeStr + " verification not found for user ID: " + user.getUserId()));
 

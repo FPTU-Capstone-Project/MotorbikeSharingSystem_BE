@@ -45,4 +45,8 @@ public class DriverVerificationRequest {
     @NotBlank(message = "License number is required")
     @Schema(description = "Driver license number", example = "B12345678")
     private String licenseNumber;
+
+    @NotBlank(message = "Document Proof is required")
+    @Schema(description = "Document proof image", example = "exmaple.png")
+    private MultipartFile documentProof;
 }
