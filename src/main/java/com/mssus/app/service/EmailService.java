@@ -16,6 +16,6 @@ public interface EmailService {
                                              Long userId, String emailType);
     CompletableFuture<EmailResult> sendTopUpSuccessEmail(String email, String fullName, BigDecimal amount, String transactionId, BigDecimal newBalance);
     CompletableFuture<EmailResult> sendPaymentFailedEmail(String email, String fullName, BigDecimal amount, String transactionId, String reason);
-    CompletableFuture<EmailResult> notifyDriverActivated(User user);
+    CompletableFuture<EmailResult> notifyUserActivated(User user);
     CompletableFuture<EmailResult> notifyUserRejected(User user, VerificationType type, String reason);
 }

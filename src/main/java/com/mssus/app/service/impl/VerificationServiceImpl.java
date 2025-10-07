@@ -335,15 +335,15 @@ public class VerificationServiceImpl implements VerificationService {
             return;
         log.info("Sending bulk approval notifications to {} users", usersToNotify.size());
 
-        CompletableFuture.runAsync(() -> {
-            usersToNotify.values().forEach(user -> {
-                try{
-                    emailService.notifyDriverActivated(user);
-                }catch (Exception e){
-                    log.error("Failed to send notification to user {}: {}", user.getUserId(), e.getMessage());
-                }
-            });
-        });
+       CompletableFuture.runAsync(()-> {
+           usersToNotify.values().forEach(user -> {
+               try{
+                   emailService.notifyUserActivated(user);
+               }catch (Exception e){
+                   log.error("Failed to send notification to user {}: {}", user.getUserId(), e.getMessage());
+               }
+           });
+       });
     }
     private boolean isDriverVerification(VerificationType type) {
         return type == VerificationType.DRIVER_DOCUMENTS ||
@@ -387,7 +387,7 @@ public class VerificationServiceImpl implements VerificationService {
             driverProfileRepository.save(driver);
 
             log.info("Driver profile activated for user: {}", user.getUserId());
-            emailService.notifyDriverActivated(user);
+            emailService.notifyUserActivated(user);
         } else {
             log.info("Driver profile waiting for verification completion for user: {}", user.getUserId());
         }

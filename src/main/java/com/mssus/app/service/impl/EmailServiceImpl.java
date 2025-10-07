@@ -121,7 +121,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public CompletableFuture<EmailResult> notifyDriverActivated(User user) {
+    public CompletableFuture<EmailResult> notifyUserActivated(User user) {
         try{
             Context context = new Context();
             context.setVariable("fullName", user.getFullName());
