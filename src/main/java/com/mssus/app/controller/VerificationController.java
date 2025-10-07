@@ -114,6 +114,21 @@ public class VerificationController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/approve")
+    @Operation(summary = "Approve verification")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = " approved",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "404", description = " not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<MessageResponse> approveVerifications(
+            Authentication authentication,
+            @Valid @RequestBody VerificationDecisionRequest request) {
+        MessageResponse response = verificationService.approveVerification(authentication.getName(), request);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/reject")
     @Operation(summary = "Reject verification")
     @ApiResponses(value = {
