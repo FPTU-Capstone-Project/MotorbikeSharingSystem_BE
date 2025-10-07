@@ -77,7 +77,7 @@ public class VerificationController {
             @ApiResponse(responseCode = "400", description = "Invalid request",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<BulkOperationResponse> bulkApproveStudentVerifications(
+    public ResponseEntity<BulkOperationResponse> bulkApproveVerifications(
             Authentication authentication,
             @Valid @RequestBody BulkApprovalRequest request) {
         BulkOperationResponse response = verificationService.bulkApproveVerifications(authentication.getName(), request);
