@@ -3,10 +3,7 @@ package com.mssus.app.entity;
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -20,6 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
+@Builder
 public class SharedRideRequest {
 
     @Id
@@ -47,6 +45,18 @@ public class SharedRideRequest {
 
     @Column(name = "dropoff_location_id")
     private Integer dropoffLocationId;
+
+    @Column(name = "pickup_lat", nullable = false)
+    private Double pickupLat;
+
+    @Column(name = "pickup_lng", nullable = false)
+    private Double pickupLng;
+
+    @Column(name = "dropoff_lat", nullable = false)
+    private Double dropoffLat;
+
+    @Column(name = "dropoff_lng", nullable = false)
+    private Double dropoffLng;
 
     @Column(name = "status")
     @Enumerated(EnumType.STRING)

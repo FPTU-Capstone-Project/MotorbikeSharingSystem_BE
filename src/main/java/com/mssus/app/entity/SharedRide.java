@@ -33,6 +33,18 @@ public class SharedRide {
     @Column(name = "end_location_id", nullable = false)
     private Integer endLocationId;
 
+    @Column(name = "start_lat", nullable = false)
+    private double startLat;
+
+    @Column(name = "start_lng", nullable = false)
+    private double startLng;
+
+    @Column(name = "end_lat", nullable = false)
+    private double endLat;
+
+    @Column(name = "end_lng", nullable = false)
+    private double endLng;
+
     @Column(name = "status", length = 50)
     @Enumerated(EnumType.STRING)
     private SharedRideStatus status;

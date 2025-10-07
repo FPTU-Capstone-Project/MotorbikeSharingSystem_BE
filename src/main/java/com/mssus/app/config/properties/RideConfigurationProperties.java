@@ -70,6 +70,13 @@ public class RideConfigurationProperties {
          * Default: 10
          */
         private Integer maxProposals = 10;
+
+        /**
+         * Time step (seconds) for increasing coverage radius during matching.
+         * Each step increases search radius to find more candidates.
+         * Default: 30
+         */
+        private Integer coverageTimeStep = 30;
         
         /**
          * Scoring weights for matching algorithm.

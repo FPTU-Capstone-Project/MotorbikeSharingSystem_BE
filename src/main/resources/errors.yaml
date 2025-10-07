@@ -407,6 +407,16 @@ errors:
     owner: ride-team
     remediation: "Only the request owner can perform this action"
 
+  - id: ride.unauthorized.invalid-profile
+    httpStatus: 403
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Your profile is not authorized to perform this action"
+    domain: ride
+    category: unauthorized
+    owner: ride-team
+    remediation: "Ensure your profile meets the requirements for this action"
+
   # Ride Validation Errors
   - id: ride.validation.no-seats-available
     httpStatus: 409
