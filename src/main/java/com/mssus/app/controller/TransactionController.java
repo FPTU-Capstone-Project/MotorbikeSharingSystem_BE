@@ -32,7 +32,7 @@ public class TransactionController {
             @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir
     ) {
         Sort.Direction sort = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sort, sortBy));
         PageResponse<TransactionResponse> response = transactionService.getAllTransactions(pageable);
         return ResponseEntity.ok(response);
     }
