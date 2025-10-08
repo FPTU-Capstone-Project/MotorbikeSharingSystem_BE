@@ -21,7 +21,7 @@ public enum RequestKind {
      * AI-powered matching flow.
      * Request starts without a ride, system proposes matches, driver accepts.
      */
-    AI_BOOKING,
+    BOOKING,
     
     /**
      * Direct join flow.

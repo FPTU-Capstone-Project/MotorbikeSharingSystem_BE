@@ -58,13 +58,14 @@ public class SharedRideRequestController {
             @ApiResponse(responseCode = "404", description = "Quote expired or location not found",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<SharedRideRequestResponse> createAIBookingRequest(
+    public ResponseEntity<List<RideMatchProposalResponse>> bookRide(
             @Valid @RequestBody CreateRideRequestDto request,
             Authentication authentication) {
         log.info("Rider {} creating AI booking request with quote {}", 
                 authentication.getName(), request.quoteId());
-        SharedRideRequestResponse response = requestService.createAIBookingRequest(request, authentication);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        SharedRideRequestResponse bookingRequest = requestService.createAIBookingRequest(request, authentication);
+        List<RideMatchProposalResponse> proposals = requestService.getMatchProposals(bookingRequest.getSharedRideRequestId(), authentication);
+        return ResponseEntity.status(HttpStatus.CREATED).body(proposals);
     }
 
     @PostMapping("/rides/{rideId}")
@@ -98,30 +99,30 @@ public class SharedRideRequestController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("/{requestId}/matches")
-    @PreAuthorize("hasRole('RIDER')")
-    @Operation(
-            summary = "Get AI match proposals (Rider)",
-            description = "Get matching ride proposals for a pending AI_BOOKING request. " +
-                    "Proposals are scored and ranked."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Match proposals retrieved (may be empty)",
-                    content = @Content(schema = @Schema(implementation = RideMatchProposalResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Not the request owner",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Request not found",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Request is not in PENDING state or not AI_BOOKING",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<List<RideMatchProposalResponse>> getMatchProposals(
-            @Parameter(description = "Request ID") @PathVariable Integer requestId,
-            Authentication authentication) {
-        log.info("Rider {} fetching match proposals for request {}", authentication.getName(), requestId);
-        List<RideMatchProposalResponse> response = requestService.getMatchProposals(requestId, authentication);
-        return ResponseEntity.ok(response);
-    }
+//    @GetMapping("/{requestId}/matches")
+//    @PreAuthorize("hasRole('RIDER')")
+//    @Operation(
+//            summary = "Get AI match proposals (Rider)",
+//            description = "Get matching ride proposals for a pending AI_BOOKING request. " +
+//                    "Proposals are scored and ranked."
+//    )
+//    @ApiResponses(value = {
+//            @ApiResponse(responseCode = "200", description = "Match proposals retrieved (may be empty)",
+//                    content = @Content(schema = @Schema(implementation = RideMatchProposalResponse.class))),
+//            @ApiResponse(responseCode = "403", description = "Not the request owner",
+//                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+//            @ApiResponse(responseCode = "404", description = "Request not found",
+//                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+//            @ApiResponse(responseCode = "409", description = "Request is not in PENDING state or not AI_BOOKING",
+//                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+//    })
+//    public ResponseEntity<List<RideMatchProposalResponse>> getMatchProposals(
+//            @Parameter(description = "Request ID") @PathVariable Integer requestId,
+//            Authentication authentication) {
+//        log.info("Rider {} fetching match proposals for request {}", authentication.getName(), requestId);
+//        List<RideMatchProposalResponse> response = requestService.getMatchProposals(requestId, authentication);
+//        return ResponseEntity.ok(response);
+//    }
 
     @GetMapping("/rider/{riderId}")
     @PreAuthorize("hasAnyRole('RIDER', 'ADMIN')")

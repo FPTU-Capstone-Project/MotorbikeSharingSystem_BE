@@ -105,7 +105,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
         // Create request entity
         SharedRideRequest rideRequest = SharedRideRequest.builder()
-            .requestKind(RequestKind.AI_BOOKING)
+            .requestKind(RequestKind.BOOKING)
             .sharedRide(null) // NULL for AI_BOOKING until driver accepts
             .rider(rider)
             .pickupLocationId(request.pickupLocationId())
@@ -273,7 +273,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         }
 
         // Validate request kind and status
-        if (request.getRequestKind() != RequestKind.AI_BOOKING) {
+        if (request.getRequestKind() != RequestKind.BOOKING) {
             throw BaseDomainException.of("ride.validation.request-invalid-state",
                 "Match proposals only available for AI_BOOKING requests");
         }
@@ -390,7 +390,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         }
 
         // Handle based on request kind
-        if (request.getRequestKind() == RequestKind.AI_BOOKING) {
+        if (request.getRequestKind() == RequestKind.BOOKING) {
             // For AI_BOOKING: assign ride and place wallet hold
             request.setSharedRide(ride);
 

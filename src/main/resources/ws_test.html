@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</head>
+<body>
+<div>
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+    <button onclick="sendMessage()">Send Test Message</button>
+</div>
+<div id="messages"></div>
+
+<script>
+    let stompClient = null;
+
+    function connect() {
+        const socket = new SockJS('http://localhost:8080/ws');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function(frame) {
+            console.log('Connected: ' + frame);
+            document.getElementById('messages').innerHTML += '<p>Connected to WebSocket</p>';
+
+            stompClient.subscribe('/topic/test', function(message) {
+                const response = JSON.parse(message.body);
+                document.getElementById('messages').innerHTML +=
+                    '<p>Received: ' + JSON.stringify(response) + '</p>';
+            });
+        });
+    }
+
+    function disconnect() {
+        if (stompClient !== null) {
+            stompClient.disconnect();
+            document.getElementById('messages').innerHTML += '<p>Disconnected</p>';
+        }
+    }
+
+    function sendMessage() {
+        if (stompClient !== null) {
+            const message = { content: 'Hello WebSocket!', timestamp: Date.now() };
+            stompClient.send('/app/test', {}, JSON.stringify(message));
+        }
+    }
+</script>
+</body>
+</html>
