@@ -38,7 +38,7 @@ public interface TransactionService {
                                 BigDecimal refundAmount, String description);
 
     // PROMO_CREDIT flows
-    Transaction creditPromo(Integer userId, BigDecimal amount, String promoCode, String description);
+//    Transaction creditPromo(Integer userId, BigDecimal amount, String promoCode, String description);
 
     // ADMIN_ADJUSTMENT flows
     Transaction adjustment(Integer userId, BigDecimal amount, Integer adminUserId, String reason);

@@ -545,7 +545,7 @@ CREATE TABLE transactions
     CONSTRAINT txn_amount_positive CHECK (amount > 0),
     CONSTRAINT txn_type_allowed CHECK (
         type IN ('TOPUP', 'HOLD_CREATE', 'HOLD_RELEASE', 'CAPTURE_FARE',
-                 'PAYOUT_SUCCESS', 'PAYOUT_FAILED', 'PROMO_CREDIT', 'ADJUSTMENT')
+                 'PAYOUT', 'PROMO_CREDIT')
         ),
     CONSTRAINT txn_direction_allowed CHECK (
         direction IN ('IN', 'OUT', 'INTERNAL')
