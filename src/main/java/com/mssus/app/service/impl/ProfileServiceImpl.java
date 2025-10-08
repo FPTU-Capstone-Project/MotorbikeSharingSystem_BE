@@ -6,10 +6,9 @@ import com.mssus.app.dto.request.DriverVerificationRequest;
 import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
-import com.mssus.app.dto.response.MessageResponse;
-import com.mssus.app.dto.response.SwitchProfileResponse;
-import com.mssus.app.dto.response.UserProfileResponse;
-import com.mssus.app.dto.response.VerificationResponse;
+import com.mssus.app.dto.response.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import com.mssus.app.entity.*;
 import com.mssus.app.mapper.UserMapper;
 import com.mssus.app.mapper.VerificationMapper;
@@ -21,6 +20,8 @@ import com.mssus.app.service.ProfileService;
 import com.mssus.app.util.Constants;
 import com.mssus.app.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tomcat.util.http.fileupload.FileUploadException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.retry.annotation.Retryable;
@@ -34,9 +35,12 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProfileServiceImpl implements ProfileService {
     private final UserRepository userRepository;
     private final DriverProfileRepository driverProfileRepository;
@@ -164,22 +168,41 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    public VerificationResponse submitStudentVerification(String username, MultipartFile document) {
+    public VerificationResponse submitStudentVerification(String username, List<MultipartFile> documents) {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if(documents == null || documents.isEmpty()){
+            throw new ValidationException("At least one documents to upload");
+        }
         try {
-            // Check if already verified
             if (verificationRepository.isUserVerifiedForType(user.getUserId(), VerificationType.STUDENT_ID)) {
                 throw ConflictException.of("Student verification already approved");
             }
 
-            String documentUrl = fileUploadService.uploadFile(document).get();
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture:: join)
+                    .collect(Collectors.toList());
+
+            String documentUrlsCombined = String.join(",", documentUrls);
 
             Verification verification = Verification.builder()
                     .user(user)
                     .type(VerificationType.STUDENT_ID)
                     .status(VerificationStatus.PENDING)
-                    .documentUrl(documentUrl)
+                    .documentUrl(documentUrlsCombined)
                     .documentType(DocumentType.IMAGE)
                     .build();
 
@@ -253,18 +276,23 @@ public class ProfileServiceImpl implements ProfileService {
         }
     }
 
-    // --- Helper Methods ---
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<UserResponse> getAllUsers(Pageable pageable) {
+        Page<User> userPage = userRepository.findAll(pageable);
 
-    private void validateEmailUniqueness(String email) {
-        if (userRepository.existsByEmail(email)) {
-            throw ConflictException.emailAlreadyExists(email);
-        }
-    }
+        List<UserResponse> userResponses = userPage.getContent().stream()
+                .map(userMapper::toUserResponse)
+                .collect(Collectors.toList());
 
-    private void validatePhoneUniqueness(String phone) {
-        if (userRepository.existsByPhone(phone)) {
-            throw ConflictException.phoneAlreadyExists(phone);
-        }
+        return PageResponse.<UserResponse>builder()
+                .data(userResponses)
+                .pagination(PageResponse.PaginationInfo.builder()
+                        .page(userPage.getNumber() + 1)
+                        .pageSize(userPage.getSize())
+                        .totalPages(userPage.getTotalPages())
+                        .totalRecords(userPage.getTotalElements())
+                        .build())
+                .build();
     }
-    // --- Helper Methods ---
 }

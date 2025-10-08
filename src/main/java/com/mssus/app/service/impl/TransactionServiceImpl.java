@@ -3,9 +3,12 @@ package com.mssus.app.service.impl;
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
+import com.mssus.app.dto.response.PageResponse;
+import com.mssus.app.dto.response.wallet.TransactionResponse;
 import com.mssus.app.entity.Transaction;
 import com.mssus.app.entity.User;
 import com.mssus.app.entity.Wallet;
+import com.mssus.app.mapper.TransactionMapper;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
@@ -14,6 +17,8 @@ import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +39,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final EmailService emailService;
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
+    private final TransactionMapper transactionMapper;
 
     public UUID generateGroupId() {
         return UUID.randomUUID();
@@ -446,7 +453,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         // Create payout transaction (pending until PSP confirms)
         Transaction payoutTransaction = Transaction.builder()
-                .type(TransactionType.PAYOUT_SUCCESS)
+                .type(TransactionType.PAYOUT)
                 .groupId(groupId)
                 .direction(TransactionDirection.OUT)
                 .actorKind(ActorKind.PSP)
@@ -563,7 +570,6 @@ public class TransactionServiceImpl implements TransactionService {
         User rider = userRepository.findById(riderId).orElseThrow(() -> new NotFoundException("Rider not found"));
         User driver = userRepository.findById(driverId).orElseThrow(() -> new NotFoundException("Driver not found"));
 
-        // Check if driver has sufficient balance
         if (driverWallet.getShadowBalance().compareTo(refundAmount) < 0) {
             throw new ValidationException("Driver has insufficient balance for refund. Available: " + driverWallet.getShadowBalance());
         }
@@ -571,9 +577,8 @@ public class TransactionServiceImpl implements TransactionService {
         UUID groupId = generateGroupId();
         List<Transaction> transactions = new ArrayList<>();
 
-        // 1. Credit rider
         Transaction riderCredit = Transaction.builder()
-                .type(TransactionType.ADJUSTMENT) // Using ADJUSTMENT for refunds
+                .type(TransactionType.REFUND)
                 .groupId(groupId)
                 .direction(TransactionDirection.IN)
                 .actorKind(ActorKind.SYSTEM)
@@ -590,7 +595,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         // 2. Debit driver
         Transaction driverDebit = Transaction.builder()
-                .type(TransactionType.ADJUSTMENT)
+                .type(TransactionType.REFUND)
                 .groupId(groupId)
                 .direction(TransactionDirection.OUT)
                 .actorKind(ActorKind.SYSTEM)
@@ -661,58 +666,6 @@ public class TransactionServiceImpl implements TransactionService {
         return savedTransaction;
     }
 
-    // ========== ADMIN_ADJUSTMENT FLOWS ==========
-
-    @Override
-    @Transactional
-    public Transaction adjustment(Integer userId, BigDecimal amount, Integer adminUserId, String reason) {
-        validateAdjustmentInput(userId, amount, adminUserId, reason);
-
-        Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found"));
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-        User admin = userRepository.findById(adminUserId)
-                .orElseThrow(() -> new NotFoundException("Admin user not found"));
-
-        UUID groupId = generateGroupId();
-        TransactionDirection direction = amount.compareTo(BigDecimal.ZERO) >= 0 ?
-                TransactionDirection.IN : TransactionDirection.OUT;
-
-        // For negative adjustments, check sufficient balance
-        if (amount.compareTo(BigDecimal.ZERO) < 0) {
-            BigDecimal absAmount = amount.abs();
-            if (wallet.getShadowBalance().compareTo(absAmount) < 0) {
-                throw new ValidationException("Insufficient balance for adjustment. Available: " + wallet.getShadowBalance());
-            }
-        }
-
-        Transaction adjustmentTransaction = Transaction.builder()
-                .type(TransactionType.ADJUSTMENT)
-                .groupId(groupId)
-                .direction(direction)
-                .actorKind(ActorKind.SYSTEM)
-                .actorUser(admin) // Admin who made the adjustment
-                .riderUser(user)  // User being adjusted
-                .amount(amount.abs())
-                .currency("VND")
-                .status(TransactionStatus.SUCCESS)
-                .beforeAvail(wallet.getShadowBalance())
-                .afterAvail(wallet.getShadowBalance().add(amount))
-                .beforePending(wallet.getPendingBalance())
-                .afterPending(wallet.getPendingBalance())
-                .note("Admin adjustment by user " + adminUserId + ": " + reason)
-                .build();
-
-        Transaction savedTransaction = transactionRepository.save(adjustmentTransaction);
-
-        // Update wallet balance
-        wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
-        walletRepository.save(wallet);
-
-        log.info("Admin {} made adjustment for user {} with amount {}: {}", adminUserId, userId, amount, reason);
-        return savedTransaction;
-    }
 
     // ========== UTILITY METHODS ==========
 
@@ -733,6 +686,16 @@ public class TransactionServiceImpl implements TransactionService {
             throw new ValidationException("Commission rate must be between 0 and 1");
         }
         return amount.multiply(commissionRate).setScale(2, BigDecimal.ROUND_HALF_UP);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<TransactionResponse> getAllTransactions(Pageable pageable) {
+        Page<Transaction> transactionsPage = transactionRepository.findAll(pageable);
+        List<TransactionResponse> transactions = transactionsPage.getContent().stream()
+                .map(transactionMapper::mapToTransactionResponse)
+                .collect(Collectors.toList());
+        return buildPageResponse(transactionsPage, transactions);
     }
 
     // ========== PRIVATE HELPER METHODS ==========
@@ -872,5 +835,17 @@ public class TransactionServiceImpl implements TransactionService {
         } catch (Exception e) {
             log.error("Failed to send top-up failed email to user {}: {}", userId, e.getMessage());
         }
+    }
+
+    private <T> PageResponse<T> buildPageResponse(Page<?> page, List<T> content) {
+        return PageResponse.<T>builder()
+                .data(content)
+                .pagination(PageResponse.PaginationInfo.builder()
+                        .page(page.getNumber() + 1)
+                        .pageSize(page.getSize())
+                        .totalPages(page.getTotalPages())
+                        .totalRecords(page.getTotalElements())
+                        .build())
+                .build();
     }
 }

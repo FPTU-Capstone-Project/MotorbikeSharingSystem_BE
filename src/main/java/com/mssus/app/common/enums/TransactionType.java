@@ -5,8 +5,7 @@ public enum TransactionType {
     HOLD_CREATE,
     HOLD_RELEASE,
     CAPTURE_FARE,
-    PAYOUT_SUCCESS,
-    PAYOUT_FAILED,
+    PAYOUT,
     PROMO_CREDIT,
-    ADJUSTMENT
+    REFUND
 }
