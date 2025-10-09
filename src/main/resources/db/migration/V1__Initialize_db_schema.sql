@@ -177,7 +177,7 @@ CREATE TABLE wallets
     wallet_id       SERIAL PRIMARY KEY,
     user_id         INTEGER                                  NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
     psp_account_id  VARCHAR(255),
-    cached_balance  DECIMAL(10, 2) DEFAULT 0,
+    shadow_balance  DECIMAL(10, 2) DEFAULT 0,
     pending_balance DECIMAL(10, 2) DEFAULT 0,
     total_topped_up DECIMAL(10, 2) DEFAULT 0,
     total_spent     DECIMAL(10, 2) DEFAULT 0,
