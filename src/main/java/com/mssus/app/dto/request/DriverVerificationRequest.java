@@ -11,6 +11,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,10 +21,10 @@ import org.springframework.web.multipart.MultipartFile;
 public class DriverVerificationRequest {
 
     @Schema(description = "Driver license document", required = true)
-    private MultipartFile driverLicense;
+    private List<MultipartFile> driverLicense;
 
     @Schema(description = "Vehicle registration document", required = true)
-    private MultipartFile vehicleRegistration;
+    private List<MultipartFile> vehicleRegistration;
 
     @NotBlank(message = "Vehicle model is required")
     @Schema(description = "Motorbike model", example = "Honda Wave")
@@ -48,5 +50,5 @@ public class DriverVerificationRequest {
 
     @NotBlank(message = "Document Proof is required")
     @Schema(description = "Document proof image", example = "exmaple.png")
-    private MultipartFile documentProof;
+    private List<MultipartFile> documentProof;
 }

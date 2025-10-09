@@ -5,7 +5,6 @@ import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
 import com.mssus.app.dto.response.*;
-import com.mssus.app.dto.response.wallet.TransactionResponse;
 import com.mssus.app.service.ProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,7 +23,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -138,6 +136,72 @@ public class ProfileController {
         @ModelAttribute @Valid DriverVerificationRequest request) {
         String username = authentication.getName();
         VerificationResponse response = profileService.submitDriverVerification(username, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PreAuthorize("hasRole('RIDER')")
+    @Operation(summary = "Submit Driver License",
+        description = "Submit driver license images for verification",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Driver license submitted successfully",
+            content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid documents or information",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping(value = "/driver-verifications/license", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<VerificationResponse> submitDriverLicense(
+        Authentication authentication,
+        @Parameter(description = "Driver license images", required = true)
+        @RequestParam("documents") List<MultipartFile> documents) {
+        String username = authentication.getName();
+        VerificationResponse response = profileService.submitDriverLicense(username, documents);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PreAuthorize("hasRole('RIDER')")
+    @Operation(summary = "Submit Driver Documents",
+        description = "Submit additional driver documents for verification",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Driver documents submitted successfully",
+            content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid documents or information",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping(value = "/driver-verifications/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<VerificationResponse> submitDriverDocuments(
+        Authentication authentication,
+        @Parameter(description = "Driver supporting documents", required = true)
+        @RequestParam("documents") List<MultipartFile> documents) {
+        String username = authentication.getName();
+        VerificationResponse response = profileService.submitDriverDocuments(username, documents);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PreAuthorize("hasRole('RIDER')")
+    @Operation(summary = "Submit Vehicle Registration",
+        description = "Submit vehicle registration documents for verification",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Vehicle registration submitted successfully",
+            content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid documents or information",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping(value = "/driver-verifications/vehicle-registration", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<VerificationResponse> submitVehicleRegistration(
+        Authentication authentication,
+        @Parameter(description = "Vehicle registration documents", required = true)
+        @RequestParam("documents") List<MultipartFile> documents) {
+        String username = authentication.getName();
+        VerificationResponse response = profileService.submitVehicleRegistration(username, documents);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

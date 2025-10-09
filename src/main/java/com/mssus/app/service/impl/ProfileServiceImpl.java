@@ -14,18 +14,14 @@ import com.mssus.app.mapper.UserMapper;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
-import com.mssus.app.service.AuthService;
 import com.mssus.app.service.FileUploadService;
 import com.mssus.app.service.ProfileService;
 import com.mssus.app.util.Constants;
-import com.mssus.app.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tomcat.util.http.fileupload.FileUploadException;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.retry.annotation.Retryable;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -232,50 +228,142 @@ public class ProfileServiceImpl implements ProfileService {
         }
     }
 
+
     @Override
     @Transactional
-    public VerificationResponse submitDriverVerification(String username, DriverVerificationRequest request) {
+    public VerificationResponse submitDriverLicense(String username, List<MultipartFile> documents) {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if (documents == null || documents.isEmpty()) {
+            throw ValidationException.of("At least one document to upload");
+        }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_LICENSE,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Driver verification already exists");
+        }
         try {
-            if (user.getDriverProfile() != null) {
-                throw ConflictException.profileAlreadyExists("Driver");
-            }
-            if (user.getRiderProfile() == null){
-                throw ValidationException.of("Rider profile must be created before applying for Driver profile");
-            }
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
 
-            if (driverProfileRepository.existsByLicenseNumber(request.getLicenseNumber())) {
-                throw ConflictException.licenseNumberAlreadyExists(request.getLicenseNumber());
-            }
-
-            DriverProfile driverProfile = DriverProfile.builder()
-                    .user(user)
-                    .licenseNumber(request.getLicenseNumber())
-                    .status(DriverProfileStatus.PENDING)
-                    .ratingAvg(Constants.DEFAULT_RATING)
-                    .totalSharedRides(0)
-                    .totalEarned(BigDecimal.ZERO)
-                    .commissionRate(new BigDecimal(Constants.DEFAULT_COMMISSION_RATE))
-                    .isAvailable(false)
-                    .maxPassengers(Constants.DEFAULT_MAX_PASSENGERS)
-                    .build();
-
-            driverProfileRepository.save(driverProfile);
-
-            String documentUrl = fileUploadService.uploadFile(request.getDocumentProof()).get();
+            String documentUrlsCombined = String.join(",", documentUrls);
 
             Verification verification = Verification.builder()
                     .user(user)
                     .type(VerificationType.DRIVER_LICENSE)
                     .status(VerificationStatus.PENDING)
-                    .documentUrl(documentUrl)
+                    .documentUrl(documentUrlsCombined)
                     .documentType(DocumentType.IMAGE)
                     .build();
-            verificationRepository.save(verification);
+
+            verification = verificationRepository.save(verification);
             return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to submit driver verification: " + e.getMessage());
+            throw new RuntimeException("Failed to upload driver license: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public VerificationResponse submitDriverDocuments(String username, List<MultipartFile> documents) {
+        User user = userRepository.findByEmail(username)
+                .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if (documents == null || documents.isEmpty()) {
+            throw ValidationException.of("At least one document to upload");
+        }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_DOCUMENTS,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Driver verification already exists");
+        }
+        try {
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
+
+            String documentUrlsCombined = String.join(",", documentUrls);
+
+            Verification verification = Verification.builder()
+                    .user(user)
+                    .type(VerificationType.DRIVER_DOCUMENTS)
+                    .status(VerificationStatus.PENDING)
+                    .documentUrl(documentUrlsCombined)
+                    .documentType(DocumentType.IMAGE)
+                    .build();
+
+            verification = verificationRepository.save(verification);
+            return verificationMapper.mapToVerificationResponse(verification);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload driver documents: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public VerificationResponse submitVehicleRegistration(String username, List<MultipartFile> documents) {
+        User user = userRepository.findByEmail(username)
+                .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if (documents == null || documents.isEmpty()) {
+            throw ValidationException.of("At least one document to upload");
+        }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.VEHICLE_REGISTRATION,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Driver verification already exists: ");
+        }
+        try {
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
+
+            String documentUrlsCombined = String.join(",", documentUrls);
+
+            Verification verification = Verification.builder()
+                    .user(user)
+                    .type(VerificationType.VEHICLE_REGISTRATION)
+                    .status(VerificationStatus.PENDING)
+                    .documentUrl(documentUrlsCombined)
+                    .documentType(DocumentType.IMAGE)
+                    .build();
+
+            verification = verificationRepository.save(verification);
+            return verificationMapper.mapToVerificationResponse(verification);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload vehicle registration: " + e.getMessage());
         }
     }
 
