@@ -5,6 +5,7 @@ import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.dto.response.notification.EmailRequest;
 import com.mssus.app.dto.response.notification.EmailResult;
 import com.mssus.app.dto.response.notification.EmailProviderType;
+import com.mssus.app.entity.User;
 import com.mssus.app.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,62 +49,7 @@ public class EmailServiceImpl implements EmailService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
     private static final NumberFormat CURRENCY_FORMATTER = NumberFormat.getCurrencyInstance(new Locale("vi", "VN"));
 
-    @Override
-    public CompletableFuture<EmailResult> sendVerificationEmail(String email, Long userId) {
-        // Existing implementation
-        return CompletableFuture.completedFuture(EmailResult.success("Not implemented yet"));
-    }
 
-    @Override
-    public CompletableFuture<EmailResult> sendWelcomeEmail(String email, String fullName) {
-        // Existing implementation
-        return CompletableFuture.completedFuture(EmailResult.success("Not implemented yet"));
-    }
-
-    @Override
-    public CompletableFuture<EmailResult> sendPasswordResetEmail(String email, String resetToken) {
-        // Existing implementation
-        return CompletableFuture.completedFuture(EmailResult.success("Not implemented yet"));
-    }
-
-    @Override
-    public EmailResult sendEmailSync(EmailRequest request) {
-        // Existing implementation
-        return EmailResult.success("Not implemented yet");
-    }
-
-    @Override
-    @Async
-    public CompletableFuture<EmailResult> sendPaymentSuccessEmail(String email, String fullName, BigDecimal amount, String transactionId) {
-        try {
-            Context context = new Context();
-            context.setVariable("fullName", fullName);
-            context.setVariable("amount", formatCurrency(amount));
-            context.setVariable("transactionId", transactionId);
-            context.setVariable("transactionTime", LocalDateTime.now().format(DATE_FORMATTER));
-            context.setVariable("supportEmail", fromAddress);
-            context.setVariable("frontendUrl", frontendBaseUrl);
-
-            String htmlContent = templateEngine.process("emails/payment-success", context);
-
-            MimeMessage message = javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(fromAddress, fromName);
-            helper.setTo(email);
-            helper.setSubject("[Motorbike Sharing] Thanh toán thành công - " + transactionId);
-            helper.setText(htmlContent, true);
-
-            javaMailSender.send(message);
-
-            log.info("Payment success email sent to: {} for transaction: {}", email, transactionId);
-            return CompletableFuture.completedFuture(EmailResult.success("Payment success email sent successfully"));
-
-        } catch (Exception e) {
-            log.error("Failed to send payment success email to: {} for transaction: {}", email, transactionId, e);
-            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send payment success email: " + e.getMessage()));
-        }
-    }
 
     @Override
     @Async
@@ -170,6 +116,60 @@ public class EmailServiceImpl implements EmailService {
         } catch (Exception e) {
             log.error("Failed to send payment failed email to: {} for transaction: {}", email, transactionId, e);
             return CompletableFuture.completedFuture(EmailResult.failure("Failed to send payment failed email: " + e.getMessage()));
+        }
+    }
+
+    @Override
+    public CompletableFuture<EmailResult> notifyDriverActivated(User user) {
+        try{
+            Context context = new Context();
+            context.setVariable("fullName", user.getFullName());
+            context.setVariable("supportEmail", fromAddress);
+            context.setVariable("email",user.getEmail());
+            context.setVariable("approvalDate", LocalDateTime.now().format(DATE_FORMATTER));
+
+            String htmlContent = templateEngine.process("emails/driver-verification-approved", context);
+
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(user.getEmail());
+            helper.setSubject("[Motorbike Sharing] Tài khoản tài xế của bạn đã được kích hoạt");
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(message);
+
+            return CompletableFuture.completedFuture(EmailResult.success("Driver activated email sent successfully"));
+        }catch (Exception e){
+            log.error("Failed to send driver activated email to: {}", user.getEmail(), e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send driver activated email: " + e.getMessage()));
+        }
+    }
+
+    @Override
+    public CompletableFuture<EmailResult> notifyDriverSuspended(User user) {
+        try{
+            Context context = new Context();
+            context.setVariable("fullName", user.getFullName());
+            context.setVariable("supportEmail", fromAddress);
+            context.setVariable("email",user.getEmail());
+            context.setVariable("rejectionDate", LocalDateTime.now().format(DATE_FORMATTER));
+
+            String htmlContent = templateEngine.process("emails/driver-verification-rejected", context);
+
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(user.getEmail());
+            helper.setSubject("[Motorbike Sharing] Tài khoản tài xế của bạn đã bị khóa");
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(message);
+
+            return CompletableFuture.completedFuture(EmailResult.success("Driver suspended email sent successfully"));
+        }catch (Exception e){
+            log.error("Failed to send driver activated email to: {}", user.getEmail(), e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send driver activated email: " + e.getMessage()));
         }
     }
 

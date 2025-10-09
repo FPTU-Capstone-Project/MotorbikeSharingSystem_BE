@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -65,7 +64,9 @@ public class SecurityConfig {
                 "/debug/throw-test",
                 "/debug/catalog-test",
                 "/api/v1/otp",
-                "/api/v1/auth/refresh"
+                "/api/v1/auth/refresh",
+                // TODO: Remove in production - Development only
+                "/api/v1/reports/**"  // Temporarily public for frontend development
         };
 
         // Endpoints requiring any authentication (general authenticated users)
@@ -76,6 +77,7 @@ public class SecurityConfig {
         // Endpoints requiring ADMIN role
         public static final String[] ADMIN_PATHS = {
                 "/api/v1/accounts/**",
+                "/api/v1/admin/wallet/**",
                 "/api/v1/verification/students/pending",
                 "/api/v1/verification/students/{id}",
                 "/api/v1/verification/students/{id}/approve",
@@ -90,6 +92,11 @@ public class SecurityConfig {
                 "/api/v1/verification/drivers/{id}/reject",
                 "/api/v1/verification/drivers/{id}/background-check",
                 "/api/v1/verification/drivers/stats"
+        };
+
+        // Reports endpoints - ADMIN or ANALYST role
+        public static final String[] REPORTS_PATHS = {
+                "/api/v1/reports/**"
         };
 
         // Endpoints for authenticated users (profile management)
@@ -159,24 +166,27 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
-
-                        // Admin-only endpoints
-                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
-
-                        // Rider-specific endpoints - currently none
-                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
-
-                        // Driver-specific endpoints
-                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
-
-                        // User profile endpoints - any authenticated user
-                        .requestMatchers(SecurityEndpoints.USER_PATHS).authenticated()
-
-                        // Private endpoints - any authenticated user
-                        .requestMatchers(SecurityEndpoints.PRIVATE_PATHS).authenticated()
-
-                        // All other requests require authentication
+//                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
+//
+//                        // Admin-only endpoints
+//                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
+//
+//                        // Reports endpoints - ADMIN or STAFF role
+//                        .requestMatchers(SecurityEndpoints.REPORTS_PATHS).hasAnyRole("ADMIN", "STAFF")
+//
+//                        // Rider-specific endpoints - currently none
+//                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
+//
+//                        // Driver-specific endpoints
+//                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
+//
+//                        // User profile endpoints - any authenticated user
+//                        .requestMatchers(SecurityEndpoints.USER_PATHS).authenticated()
+//
+//                        // Private endpoints - any authenticated user
+//                        .requestMatchers(SecurityEndpoints.PRIVATE_PATHS).authenticated()
+//
+//                        // All other requests require authentication
                         .anyRequest().permitAll()
                 )
                 .authenticationProvider(authenticationProvider())

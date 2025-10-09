@@ -21,4 +21,8 @@ public class VerificationDecisionRequest {
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     @Schema(description = "Additional notes from admin", example = "Approved after manual review")
     private String notes;
+
+    private Integer userId;
+
+    private String verificationType;
 }

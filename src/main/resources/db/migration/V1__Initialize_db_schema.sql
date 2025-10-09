@@ -55,25 +55,16 @@ ALTER TABLE users
         CHECK (user_type IN ('USER', 'ADMIN'));
 
 INSERT INTO users (email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified)
-VALUES ('admin@mssus.com',
-        '0900000001',
-        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
-        'System Administrator',
-        'ADMIN',
-        'ACTIVE',
-        true,
-        true)
-ON CONFLICT (email) DO NOTHING;
-
--- Admin profiles table
-CREATE TABLE admin_profiles
-(
-    admin_id    INTEGER PRIMARY KEY REFERENCES users (user_id) ON DELETE CASCADE,
-    department  VARCHAR(100),
-    permissions TEXT,
-    last_login  TIMESTAMP,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
+VALUES (
+           'admin@mssus.com',
+           '0900000001',
+           '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
+           'System Administrator',
+           'ADMIN',
+              'ACTIVE',
+           true,
+           true
+       ) ON CONFLICT (email) DO NOTHING;
 
 -- Rider profiles table
 CREATE TABLE rider_profiles
@@ -130,18 +121,18 @@ ALTER TABLE rider_profiles
         CHECK (preferred_payment_method IN ('WALLET', 'CREDIT_CARD'));
 
 -- Insert ordinary user
-INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified,
-                   phone_verified)
-VALUES ('john.doe@example.com',
-        '0987654321',
-        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
-        'John Doe',
-        'STU123456',
-        'USER',
-        'ACTIVE',
-        true,
-        true)
-ON CONFLICT (email) DO NOTHING;
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified, phone_verified)
+VALUES (
+           'john.doe@example.com',
+           '0987654321',
+           '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+           'John Doe',
+           'STU123456',
+           'USER',
+           'ACTIVE',
+           true,
+           true
+       ) ON CONFLICT (email) DO NOTHING;
 
 -- Insert rider profile for the user
 INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
@@ -186,7 +177,7 @@ CREATE TABLE wallets
     wallet_id       SERIAL PRIMARY KEY,
     user_id         INTEGER                                  NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
     psp_account_id  VARCHAR(255),
-    shadow_balance  DECIMAL(10, 2) DEFAULT 0,
+    cached_balance  DECIMAL(10, 2) DEFAULT 0,
     pending_balance DECIMAL(10, 2) DEFAULT 0,
     total_topped_up DECIMAL(10, 2) DEFAULT 0,
     total_spent     DECIMAL(10, 2) DEFAULT 0,
@@ -229,7 +220,7 @@ CREATE TABLE verifications
     document_url     VARCHAR(500),
     document_type    VARCHAR(20),
     rejection_reason TEXT,
-    verified_by      INTEGER REFERENCES admin_profiles (admin_id),
+    verified_by      INTEGER REFERENCES users (user_id),
     verified_at      TIMESTAMP,
     expires_at       TIMESTAMP,
     metadata         TEXT,
@@ -246,8 +237,7 @@ CREATE INDEX idx_verification_status ON verifications (status);
 -- Add check constraints for verifications
 ALTER TABLE verifications
     ADD CONSTRAINT chk_verification_type
-        CHECK (type IN
-               ('STUDENT_ID', 'DRIVER_LICENSE', 'BACKGROUND_CHECK', 'VEHICLE_REGISTRATION', 'DRIVER_DOCUMENTS'));
+        CHECK (type IN ('STUDENT_ID', 'DRIVER_LICENSE', 'BACKGROUND_CHECK', 'VEHICLE_REGISTRATION', 'DRIVER_DOCUMENTS'));
 ALTER TABLE verifications
     ADD CONSTRAINT chk_verification_status
         CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED'));
@@ -485,7 +475,7 @@ ALTER TABLE promotions
 CREATE TABLE shared_ride_requests
 (
     shared_ride_request_id SERIAL PRIMARY KEY,
-    shared_ride_id         INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
+    shared_ride_id          INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
     rider_id               INTEGER                               NOT NULL REFERENCES rider_profiles (rider_id) ON DELETE CASCADE,
     pickup_location_id     INTEGER REFERENCES locations (location_id),
     dropoff_location_id    INTEGER REFERENCES locations (location_id),
@@ -497,7 +487,7 @@ CREATE TABLE shared_ride_requests
     fare_amount            DECIMAL(19, 2)                        NOT NULL,
     original_fare          DECIMAL(19, 2),
     discount_amount        DECIMAL(19, 2),
-    pickup_time            TIMESTAMP,
+    pickup_time            TIMESTAMP                             NOT NULL,
     max_wait_time          INTEGER,
     special_requests       TEXT,
     estimated_pickup_time  TIMESTAMP,
@@ -597,7 +587,7 @@ CREATE TABLE transactions
     CONSTRAINT txn_amount_positive CHECK (amount > 0),
     CONSTRAINT txn_type_allowed CHECK (
         type IN ('TOPUP', 'HOLD_CREATE', 'HOLD_RELEASE', 'CAPTURE_FARE',
-                 'PAYOUT', 'PROMO_CREDIT')
+                 'PAYOUT', 'PROMO_CREDIT', 'ADJUSTMENT')
         ),
     CONSTRAINT txn_direction_allowed CHECK (
         direction IN ('IN', 'OUT', 'INTERNAL')

@@ -14,7 +14,7 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 public interface VerificationMapper {
 
     @Mapping(source = "user.userId", target = "userId")
-    @Mapping(source = "verifiedBy.user.fullName", target = "verifiedBy")
+    @Mapping(source = "verifiedBy.userId", target = "verifiedBy")
     VerificationResponse mapToVerificationResponse(Verification verification);
 
     @Mapping(source = "user.userId", target = "userId")
@@ -22,6 +22,6 @@ public interface VerificationMapper {
     @Mapping(source = "user.email", target = "email")
     @Mapping(source = "user.phone", target = "phone")
     @Mapping(source = "user.studentId", target = "studentId")
-    @Mapping(source = "verifiedBy.user.fullName", target = "verifiedBy")
+    @Mapping(source = "verifiedBy.userId", target = "verifiedBy")
     StudentVerificationResponse mapToStudentVerificationResponse(Verification verification);
 }
