@@ -159,7 +159,8 @@ public class ProfileController {
     public ResponseEntity<VerificationResponse> submitStudentVerification(
         Authentication authentication,
         @Parameter(description = "Student ID document", required = true)
-        @RequestParam("document") List<MultipartFile> document) {
+        @RequestParam("document") List<MultipartFile> document
+    ) {
         String username = authentication.getName();
         VerificationResponse response = profileService.submitStudentVerification(username, document);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

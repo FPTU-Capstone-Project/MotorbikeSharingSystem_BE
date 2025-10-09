@@ -174,6 +174,9 @@ public class ProfileServiceImpl implements ProfileService {
         if(documents == null || documents.isEmpty()){
             throw new ValidationException("At least one documents to upload");
         }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.STUDENT_ID,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Student verification already exists");
+        }
         try {
             if (verificationRepository.isUserVerifiedForType(user.getUserId(), VerificationType.STUDENT_ID)) {
                 throw ConflictException.of("Student verification already approved");
