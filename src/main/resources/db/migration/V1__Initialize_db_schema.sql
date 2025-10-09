@@ -56,7 +56,7 @@ ALTER TABLE users
 
 INSERT INTO users (email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified)
 VALUES (
-           'admin2@mssus.com',
+           'admin@mssus.com',
            '0900000001',
            '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
            'System Administrator',
@@ -65,7 +65,6 @@ VALUES (
            true,
            true
        ) ON CONFLICT (email) DO NOTHING;
-
 
 -- Rider profiles table
 CREATE TABLE rider_profiles
@@ -147,13 +146,38 @@ SELECT user_id, 'DL123456789', 'ACTIVE', true
 FROM users
 WHERE email = 'john.doe@example.com';
 
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified,
+                   phone_verified)
+VALUES ('driver1@example.com',
+        '0987652321',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+        'Driver One',
+        'SE111111',
+        'USER',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
+
+-- Insert rider profile for the user
+INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
+SELECT user_id, '0901234567', 'WALLET'
+FROM users
+WHERE email = 'driver1@example.com';
+
+-- Insert driver profile for the user
+INSERT INTO driver_profiles (driver_id, license_number, status, is_available)
+SELECT user_id, 'DL123236789', 'ACTIVE', true
+FROM users
+WHERE email = 'driver1@example.com';
+
 -- Create wallets table
 CREATE TABLE wallets
 (
     wallet_id       SERIAL PRIMARY KEY,
     user_id         INTEGER                                  NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
     psp_account_id  VARCHAR(255),
-    cached_balance  DECIMAL(10, 2) DEFAULT 0,
+    shadow_balance  DECIMAL(10, 2) DEFAULT 0,
     pending_balance DECIMAL(10, 2) DEFAULT 0,
     total_topped_up DECIMAL(10, 2) DEFAULT 0,
     total_spent     DECIMAL(10, 2) DEFAULT 0,
@@ -174,7 +198,7 @@ CREATE INDEX idx_wallet_active ON wallets (is_active);
 -- Add check constraints for wallets
 ALTER TABLE wallets
     ADD CONSTRAINT chk_balance_positive
-        CHECK (cached_balance >= 0);
+        CHECK (shadow_balance >= 0);
 ALTER TABLE wallets
     ADD CONSTRAINT chk_pending_positive
         CHECK (pending_balance >= 0);
@@ -262,6 +286,62 @@ ALTER TABLE vehicles
     ADD CONSTRAINT chk_vehicle_capacity
         CHECK (capacity >= 1 AND capacity <= 2);
 
+INSERT INTO vehicles (driver_id,
+                      plate_number,
+                      model,
+                      color,
+                      year,
+                      capacity,
+                      helmet_count,
+                      insurance_expiry,
+                      last_maintenance,
+                      fuel_type,
+                      status,
+                      verified_at)
+SELECT dp.driver_id,
+       '29A-12345',
+       'Honda Wave Alpha',
+       'Black',
+       2022,
+       1,
+       2,
+       '2025-01-01 00:00:00',
+       '2024-06-01 00:00:00',
+       'GASOLINE',
+       'ACTIVE',
+       '2024-06-10 12:00:00'
+FROM driver_profiles dp
+         JOIN users u ON dp.driver_id = u.user_id
+WHERE u.email = 'john.doe@example.com';
+
+INSERT INTO vehicles (driver_id,
+                      plate_number,
+                      model,
+                      color,
+                      year,
+                      capacity,
+                      helmet_count,
+                      insurance_expiry,
+                      last_maintenance,
+                      fuel_type,
+                      status,
+                      verified_at)
+SELECT dp.driver_id,
+       '29A-12344',
+       'Honda Wave Alpha',
+       'Black',
+       2022,
+       1,
+       2,
+       '2025-01-01 00:00:00',
+       '2024-06-01 00:00:00',
+       'GASOLINE',
+       'ACTIVE',
+       '2024-06-10 12:00:00'
+FROM driver_profiles dp
+         JOIN users u ON dp.driver_id = u.user_id
+WHERE u.email = 'driver1@example.com';
+
 -- Create locations table
 CREATE TABLE locations
 (
@@ -285,14 +365,25 @@ ALTER TABLE locations
     ADD CONSTRAINT chk_lng_range
         CHECK (lng >= -180 AND lng <= 180);
 
+INSERT INTO locations (name, lat, lng, address)
+VALUES ('Tòa S2.02 Vinhomes Grand Park', 10.8386317, 106.8318038, NULL),
+       ('FPT University - HCMC Campus', 10.841480, 106.809844, NULL),
+       ('Tòa S6.02 Vinhomes Grand Park', 10.8426113, 106.8374642, NULL),
+       ('Sảnh C6-C5, Ký túc xá Khu B ĐHQG TP.HCM', 10.8833471, 106.7795158, NULL);
+
+
 -- Create shared_rides table
 CREATE TABLE shared_rides
 (
     shared_ride_id     SERIAL PRIMARY KEY,
     driver_id          INTEGER                               NOT NULL REFERENCES driver_profiles (driver_id) ON DELETE CASCADE,
     vehicle_id         INTEGER                               NOT NULL REFERENCES vehicles (vehicle_id) ON DELETE CASCADE,
-    start_location_id  INTEGER                               NOT NULL REFERENCES locations (location_id),
-    end_location_id    INTEGER                               NOT NULL REFERENCES locations (location_id),
+    start_location_id  INTEGER                               REFERENCES locations (location_id),
+    end_location_id    INTEGER                               REFERENCES locations (location_id),
+    start_lat          DOUBLE PRECISION                      NOT NULL,
+    start_lng          DOUBLE PRECISION                      NOT NULL,
+    end_lat            DOUBLE PRECISION                      NOT NULL,
+    end_lng            DOUBLE PRECISION                      NOT NULL,
     status             VARCHAR(50) DEFAULT 'PENDING',
     max_passengers     INTEGER     DEFAULT 1,
     current_passengers INTEGER     DEFAULT 0,
@@ -384,10 +475,14 @@ ALTER TABLE promotions
 CREATE TABLE shared_ride_requests
 (
     shared_ride_request_id SERIAL PRIMARY KEY,
-    share_ride_id          INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
+    shared_ride_id          INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
     rider_id               INTEGER                               NOT NULL REFERENCES rider_profiles (rider_id) ON DELETE CASCADE,
     pickup_location_id     INTEGER REFERENCES locations (location_id),
     dropoff_location_id    INTEGER REFERENCES locations (location_id),
+    pickup_lat             DOUBLE PRECISION                      NOT NULL,
+    pickup_lng             DOUBLE PRECISION                      NOT NULL,
+    dropoff_lat            DOUBLE PRECISION                      NOT NULL,
+    dropoff_lng            DOUBLE PRECISION                      NOT NULL,
     status                 VARCHAR(50) DEFAULT 'PENDING',
     fare_amount            DECIMAL(19, 2)                        NOT NULL,
     original_fare          DECIMAL(19, 2),
@@ -403,7 +498,7 @@ CREATE TABLE shared_ride_requests
 );
 
 -- Add indexes for shared_ride_requests
-CREATE INDEX idx_shared_ride_requests_share_ride ON shared_ride_requests (share_ride_id);
+CREATE INDEX idx_shared_ride_requests_share_ride ON shared_ride_requests (shared_ride_id);
 CREATE INDEX idx_shared_ride_requests_rider ON shared_ride_requests (rider_id);
 CREATE INDEX idx_shared_ride_requests_status ON shared_ride_requests (status);
 CREATE INDEX idx_shared_ride_requests_pickup_time ON shared_ride_requests (pickup_time);
@@ -492,7 +587,7 @@ CREATE TABLE transactions
     CONSTRAINT txn_amount_positive CHECK (amount > 0),
     CONSTRAINT txn_type_allowed CHECK (
         type IN ('TOPUP', 'HOLD_CREATE', 'HOLD_RELEASE', 'CAPTURE_FARE',
-                 'PAYOUT_SUCCESS', 'PAYOUT_FAILED', 'PROMO_CREDIT', 'ADJUSTMENT')
+                 'PAYOUT', 'PROMO_CREDIT', 'ADJUSTMENT')
         ),
     CONSTRAINT txn_direction_allowed CHECK (
         direction IN ('IN', 'OUT', 'INTERNAL')

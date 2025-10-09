@@ -233,7 +233,6 @@ public class ProfileServiceImpl implements ProfileService {
                     .ratingAvg(Constants.DEFAULT_RATING)
                     .totalSharedRides(0)
                     .totalEarned(BigDecimal.ZERO)
-                    .commissionRate(new BigDecimal(Constants.DEFAULT_COMMISSION_RATE))
                     .isAvailable(false)
                     .maxPassengers(Constants.DEFAULT_MAX_PASSENGERS)
                     .build();

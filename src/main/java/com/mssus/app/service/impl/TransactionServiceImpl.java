@@ -63,7 +63,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .type(TransactionType.TOPUP)
                 .groupId(groupId)
                 .direction(TransactionDirection.IN)
-                .actorKind(ActorKind.PSP)
+                .actorKind(ActorKind.SYSTEM)
                 .systemWallet(SystemWallet.MASTER)
                 .amount(amount)
                 .currency("VND")
@@ -195,7 +195,7 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    public List<Transaction> createHold(Integer riderId, BigDecimal amount, Long bookingId, String description) {
+    public List<Transaction> createHold(Integer riderId, BigDecimal amount, Integer bookingId, String description) {
         validateHoldInput(riderId, amount, bookingId);
 
         Wallet wallet = walletRepository.findByUser_UserId(riderId)
@@ -215,7 +215,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .type(TransactionType.HOLD_CREATE)
                 .groupId(groupId)
                 .direction(TransactionDirection.INTERNAL)
-                .actorKind(ActorKind.SYSTEM)
+                .actorKind(ActorKind.USER)
                 .riderUser(rider)
                 .amount(amount)
                 .currency("VND")
@@ -278,7 +278,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .type(TransactionType.CAPTURE_FARE)
                 .groupId(groupId)
                 .direction(TransactionDirection.OUT)
-                .actorKind(ActorKind.SYSTEM)
+                .actorKind(ActorKind.USER)
                 .riderUser(rider)
                 .amount(totalFare)
                 .currency("VND")
@@ -296,7 +296,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .type(TransactionType.CAPTURE_FARE)
                 .groupId(groupId)
                 .direction(TransactionDirection.IN)
-                .actorKind(ActorKind.SYSTEM)
+                .actorKind(ActorKind.USER)
                 .driverUser(driver)
                 .amount(driverAmount)
                 .currency("VND")
@@ -401,7 +401,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .type(TransactionType.HOLD_RELEASE)
                 .groupId(groupId)
                 .direction(TransactionDirection.INTERNAL)
-                .actorKind(ActorKind.SYSTEM)
+                .actorKind(ActorKind.USER)
                 .riderUser(holdTransaction.getRiderUser())
                 .amount(heldAmount)
                 .currency("VND")
@@ -446,10 +446,10 @@ public class TransactionServiceImpl implements TransactionService {
 
         // Create payout transaction (pending until PSP confirms)
         Transaction payoutTransaction = Transaction.builder()
-                .type(TransactionType.PAYOUT_SUCCESS)
+                .type(TransactionType.PAYOUT)
                 .groupId(groupId)
                 .direction(TransactionDirection.OUT)
-                .actorKind(ActorKind.PSP)
+                .actorKind(ActorKind.SYSTEM)
                 .driverUser(driver)
                 .amount(amount)
                 .currency("VND")
@@ -512,6 +512,9 @@ public class TransactionServiceImpl implements TransactionService {
     public void handlePayoutFailed(String pspRef, String reason) {
         if (pspRef == null || pspRef.trim().isEmpty()) {
             throw new ValidationException("PSP reference cannot be null or empty");
+        }
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new ValidationException("Failure reason cannot be null or empty");
         }
 
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
@@ -576,7 +579,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .type(TransactionType.ADJUSTMENT) // Using ADJUSTMENT for refunds
                 .groupId(groupId)
                 .direction(TransactionDirection.IN)
-                .actorKind(ActorKind.SYSTEM)
+                .actorKind(ActorKind.USER)
                 .riderUser(rider)
                 .amount(refundAmount)
                 .currency("VND")
@@ -593,7 +596,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .type(TransactionType.ADJUSTMENT)
                 .groupId(groupId)
                 .direction(TransactionDirection.OUT)
-                .actorKind(ActorKind.SYSTEM)
+                .actorKind(ActorKind.USER)
                 .driverUser(driver)
                 .amount(refundAmount)
                 .currency("VND")
@@ -621,45 +624,45 @@ public class TransactionServiceImpl implements TransactionService {
 
     // ========== PROMO_CREDIT FLOWS ==========
 
-    @Override
-    @Transactional
-    public Transaction creditPromo(Integer userId, BigDecimal amount, String promoCode, String description) {
-        validatePromoInput(userId, amount, promoCode);
-
-        Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found"));
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
-        UUID groupId = generateGroupId();
-
-        // Create promo credit transaction
-        Transaction promoTransaction = Transaction.builder()
-                .type(TransactionType.PROMO_CREDIT)
-                .groupId(groupId)
-                .direction(TransactionDirection.IN)
-                .actorKind(ActorKind.SYSTEM)
-                .systemWallet(SystemWallet.PROMO)
-                .actorUser(user)
-                .amount(amount)
-                .currency("VND")
-                .status(TransactionStatus.SUCCESS)
-                .beforeAvail(wallet.getShadowBalance())
-                .afterAvail(wallet.getShadowBalance().add(amount))
-                .beforePending(wallet.getPendingBalance())
-                .afterPending(wallet.getPendingBalance())
-                .note("Promo credit: " + promoCode + " - " + description)
-                .build();
-
-        Transaction savedTransaction = transactionRepository.save(promoTransaction);
-
-        // Update wallet balance
-        wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
-        walletRepository.save(wallet);
-
-        log.info("Credited promo {} to user {} with amount {}", promoCode, userId, amount);
-        return savedTransaction;
-    }
+//    @Override
+//    @Transactional
+//    public Transaction creditPromo(Integer userId, BigDecimal amount, String promoCode, String description) {
+//        validatePromoInput(userId, amount, promoCode);
+//
+//        Wallet wallet = walletRepository.findByUser_UserId(userId)
+//                .orElseThrow(() -> new NotFoundException("Wallet not found"));
+//        User user = userRepository.findById(userId)
+//                .orElseThrow(() -> new NotFoundException("User not found"));
+//
+//        UUID groupId = generateGroupId();
+//
+//        // Create promo credit transaction
+//        Transaction promoTransaction = Transaction.builder()
+//                .type(TransactionType.PROMO_CREDIT)
+//                .groupId(groupId)
+//                .direction(TransactionDirection.IN)
+//                .actorKind(ActorKind.SYSTEM)
+//                .systemWallet(SystemWallet.PROMO)
+//                .actorUser(user)
+//                .amount(amount)
+//                .currency("VND")
+//                .status(TransactionStatus.SUCCESS)
+//                .beforeAvail(wallet.getShadowBalance())
+//                .afterAvail(wallet.getShadowBalance().add(amount))
+//                .beforePending(wallet.getPendingBalance())
+//                .afterPending(wallet.getPendingBalance())
+//                .note("Promo credit: " + promoCode + " - " + description)
+//                .build();
+//
+//        Transaction savedTransaction = transactionRepository.save(promoTransaction);
+//
+//        // Update wallet balance
+//        wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
+//        walletRepository.save(wallet);
+//
+//        log.info("Credited promo {} to user {} with amount {}", promoCode, userId, amount);
+//        return savedTransaction;
+//    }
 
     // ========== ADMIN_ADJUSTMENT FLOWS ==========
 
@@ -749,7 +752,7 @@ public class TransactionServiceImpl implements TransactionService {
         }
     }
 
-    private void validateHoldInput(Integer riderId, BigDecimal amount, Long bookingId) {
+    private void validateHoldInput(Integer riderId, BigDecimal amount, Integer bookingId) {
         if (riderId == null) {
             throw new ValidationException("Rider ID cannot be null");
         }

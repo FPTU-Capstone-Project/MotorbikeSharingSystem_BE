@@ -350,3 +350,181 @@ errors:
     category: not-found
     owner: platform-team
     remediation: "Check the resource identifier and try again"
+
+  - id: pricing-config.not-found.resource
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "No active pricing configuration found"
+    domain: pricing-config
+    category: not-found
+    owner: pricing-team
+    remediation: "Contact support to set up pricing configuration"
+
+  # =========================================================================
+  # Ride Module Errors (Ride Booking & Sharing)
+  # =========================================================================
+  
+  # Ride Not Found Errors
+  - id: ride.not-found.resource
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "Shared ride not found with ID: {rideId}"
+    domain: ride
+    category: not-found
+    owner: ride-team
+    remediation: "Verify the ride ID and try again"
+
+  - id: ride.not-found.request
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "Ride request not found with ID: {requestId}"
+    domain: ride
+    category: not-found
+    owner: ride-team
+    remediation: "Verify the request ID and try again"
+
+  # Ride Ownership & Authorization Errors
+  - id: ride.unauthorized.not-owner
+    httpStatus: 403
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "You are not the owner of this ride"
+    domain: ride
+    category: unauthorized
+    owner: ride-team
+    remediation: "Only the ride owner can perform this action"
+
+  - id: ride.unauthorized.request-not-owner
+    httpStatus: 403
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "You are not the owner of this ride request"
+    domain: ride
+    category: unauthorized
+    owner: ride-team
+    remediation: "Only the request owner can perform this action"
+
+  - id: ride.unauthorized.invalid-profile
+    httpStatus: 403
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Your profile is not authorized to perform this action"
+    domain: ride
+    category: unauthorized
+    owner: ride-team
+    remediation: "Ensure your profile meets the requirements for this action"
+
+  # Ride Validation Errors
+  - id: ride.validation.no-seats-available
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "No seats available on this ride"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Choose a different ride or wait for another ride"
+
+  - id: ride.validation.invalid-state
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Ride is in invalid state for this operation: {currentState}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "This operation can only be performed on rides in specific states"
+
+  - id: ride.validation.request-invalid-state
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Request is in invalid state for this operation: {currentState}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "This operation can only be performed on requests in specific states"
+
+  - id: ride.validation.invalid-location
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Invalid location configuration: {reason}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Check pickup and dropoff locations are valid and on route"
+
+  - id: ride.validation.route-validation-failed
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Route validation failed: {reason}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Ensure the route is valid and reachable"
+
+  - id: ride.validation.time-conflict
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Time conflict: {reason}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Adjust pickup or scheduled time to avoid conflicts"
+
+  # Ride Operation Errors
+  - id: ride.operation.wallet-hold-failed
+    httpStatus: 402
+    severity: WARN
+    isRetryable: true
+    messageTemplate: "Failed to place wallet hold: {reason}"
+    domain: ride
+    category: operation
+    owner: ride-team
+    remediation: "Ensure sufficient balance in wallet and retry"
+
+  - id: ride.operation.matching-failed
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: "AI matching algorithm failed: {reason}"
+    domain: ride
+    category: operation
+    owner: ride-team
+    remediation: "Retry the matching request or contact support"
+
+  - id: ride.operation.no-matches-found
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "No matching rides found for your request"
+    domain: ride
+    category: operation
+    owner: ride-team
+    remediation: "Try adjusting your pickup time or location"
+
+  - id: ride.operation.request-expired
+    httpStatus: 410
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "Ride request has expired (no driver accepted within timeout window)"
+    domain: ride
+    category: operation
+    owner: ride-team
+    remediation: "Create a new ride request"
+
+  - id: ride.operation.cancellation-fee-required
+    httpStatus: 402
+    severity: WARN
+    isRetryable: true
+    messageTemplate: "Cancellation fee required: {feeAmount}"
+    domain: ride
+    category: operation
+    owner: ride-team
+    remediation: "Ensure sufficient balance to cover cancellation fee"

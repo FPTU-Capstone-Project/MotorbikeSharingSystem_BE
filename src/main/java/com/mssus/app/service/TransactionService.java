@@ -19,7 +19,7 @@ public interface TransactionService {
     void handleTopupFailed(String pspRef, String reason);
 
     // RIDE_HOLD flows
-    List<Transaction> createHold(Integer riderId, BigDecimal amount, Long bookingId, String description);
+    List<Transaction> createHold(Integer riderId, BigDecimal amount, Integer bookingId, String description);
 
     // RIDE_CAPTURE flows
     List<Transaction> captureFare(UUID groupId, Integer riderId, Integer driverId, BigDecimal totalFare,
@@ -38,7 +38,7 @@ public interface TransactionService {
                                 BigDecimal refundAmount, String description);
 
     // PROMO_CREDIT flows
-    Transaction creditPromo(Integer userId, BigDecimal amount, String promoCode, String description);
+//    Transaction creditPromo(Integer userId, BigDecimal amount, String promoCode, String description);
 
     // ADMIN_ADJUSTMENT flows
     Transaction adjustment(Integer userId, BigDecimal amount, Integer adminUserId, String reason);
