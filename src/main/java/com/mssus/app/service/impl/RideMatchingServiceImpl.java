@@ -39,13 +39,37 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                 request.getDropoffLocationId(),
                 request.getPickupTime());
 
+        Location pickupLoc = null;
+        Location dropoffLoc = null;
+
         // Step 1: Get request locations
-        Location pickupLoc = locationRepository.findById(request.getPickupLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location", 
-                        "Pickup location not found: " + request.getPickupLocationId()));
-        Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location", 
-                        "Dropoff location not found: " + request.getDropoffLocationId()));
+        if (request.getPickupLocationId() != null) {
+            pickupLoc = locationRepository.findById(request.getPickupLocationId())
+                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+                    "Pickup location not found: " + request.getPickupLocationId()));
+        } else if (request.getPickupLat() != null && request.getPickupLng() != null) {
+            pickupLoc = new Location();
+            pickupLoc.setLat(request.getPickupLat());
+            pickupLoc.setLng(request.getPickupLng());
+            pickupLoc.setName("Pickup Location");
+        } else {
+            throw BaseDomainException.formatted("ride.validation.invalid-location",
+                "Neither pickup location ID nor coordinates provided");
+        }
+
+        if (request.getDropoffLocationId() != null) {
+            dropoffLoc = locationRepository.findById(request.getDropoffLocationId())
+                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+                    "Dropoff location not found: " + request.getDropoffLocationId()));
+        } else if (request.getDropoffLat() != null && request.getDropoffLng() != null) {
+            dropoffLoc = new Location();
+            dropoffLoc.setLat(request.getDropoffLat());
+            dropoffLoc.setLng(request.getDropoffLng());
+            dropoffLoc.setName("Dropoff Location");
+        } else {
+            throw BaseDomainException.formatted("ride.validation.invalid-location",
+                "Neither dropoff location ID nor coordinates provided");
+        }
 
         // Step 2: Calculate time window
         LocalDateTime requestTime = request.getPickupTime();
@@ -71,15 +95,40 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         for (SharedRide ride : candidateRides) {
             try {
                 // Get ride locations
-                Location rideStart = locationRepository.findById(ride.getStartLocationId())
-                        .orElse(null);
-                Location rideEnd = locationRepository.findById(ride.getEndLocationId())
-                        .orElse(null);
-
-                if (rideStart == null || rideEnd == null) {
-                    log.warn("Skipping ride {} - missing location data", ride.getSharedRideId());
-                    continue;
+                Location rideStart;
+                if (ride.getStartLocationId() != null) {
+                    rideStart = locationRepository.findById(ride.getStartLocationId())
+                        .orElseGet(() -> {
+                            Location loc = new Location();
+                            loc.setLat(ride.getStartLat());
+                            loc.setLng(ride.getStartLng());
+                            loc.setName("Ride Start Location");
+                            return loc;
+                        });
+                } else {
+                    rideStart = new Location();
+                    rideStart.setLat(ride.getStartLat());
+                    rideStart.setLng(ride.getStartLng());
+                    rideStart.setName("Ride Start Location");
                 }
+
+                Location rideEnd;
+                if (ride.getEndLocationId() != null) {
+                    rideEnd = locationRepository.findById(ride.getEndLocationId())
+                        .orElseGet(() -> {
+                            Location loc = new Location();
+                            loc.setLat(ride.getEndLat());
+                            loc.setLng(ride.getEndLng());
+                            loc.setName("Ride End Location");
+                            return loc;
+                        });
+                } else {
+                    rideEnd = new Location();
+                    rideEnd.setLat(ride.getEndLat());
+                    rideEnd.setLng(ride.getEndLng());
+                    rideEnd.setName("Ride End Location");
+                }
+
 
                 // Calculate proximity scores
                 double pickupToStartDistance = calculateDistance(

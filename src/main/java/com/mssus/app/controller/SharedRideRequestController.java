@@ -45,8 +45,8 @@ public class SharedRideRequestController {
     @PreAuthorize("hasRole('RIDER')")
     @Operation(
             summary = "Create AI-matched ride request (Rider)",
-            description = "Create an AI_BOOKING request. Rider must first obtain a quote. " +
-                    "System will match with available rides. NO wallet hold until driver accepts."
+            description = "Create a BOOKING request. Rider must first obtain a quote. " +
+                    "System will match with available rides. Wallet hold placed immediately."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Request created successfully",
@@ -61,7 +61,7 @@ public class SharedRideRequestController {
     public ResponseEntity<List<RideMatchProposalResponse>> bookRide(
             @Valid @RequestBody CreateRideRequestDto request,
             Authentication authentication) {
-        log.info("Rider {} creating AI booking request with quote {}", 
+        log.info("Rider {} creating booking request with quote {}",
                 authentication.getName(), request.quoteId());
         SharedRideRequestResponse bookingRequest = requestService.createAIBookingRequest(request, authentication);
         List<RideMatchProposalResponse> proposals = requestService.getMatchProposals(bookingRequest.getSharedRideRequestId(), authentication);

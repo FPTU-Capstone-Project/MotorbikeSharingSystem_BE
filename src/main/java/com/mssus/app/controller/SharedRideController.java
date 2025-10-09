@@ -81,7 +81,7 @@ public class SharedRideController {
             @RequestParam(required = false) String status,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "scheduledTime") String sortBy,
+            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "scheduledDepartureTime") String sortBy,
             @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir,
             Authentication authentication) {
         
@@ -200,7 +200,7 @@ public class SharedRideController {
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
         
         log.info("Browsing available rides - startTime: {}, endTime: {}", startTime, endTime);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "scheduledTime"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "scheduledDepartureTime"));
         
         var pageData = sharedRideService.browseAvailableRides(startTime, endTime, pageable);
         PageResponse<SharedRideResponse> response = PageResponse.<SharedRideResponse>builder()

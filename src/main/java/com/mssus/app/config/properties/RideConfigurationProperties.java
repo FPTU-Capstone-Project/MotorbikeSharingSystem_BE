@@ -77,6 +77,12 @@ public class RideConfigurationProperties {
          * Default: 30
          */
         private Integer coverageTimeStep = 30;
+
+        /**
+         * Maximum time (seconds) a driver has to respond to a ride offer.
+         * Default: 90 seconds.
+         */
+        private Integer driverResponseSeconds = 90;
         
         /**
          * Scoring weights for matching algorithm.

@@ -25,8 +25,6 @@ public class SharedRideRequest {
     @Column(name = "shared_ride_request_id")
     private Integer sharedRideRequestId;
 
-    // UPDATED: Fixed column name from 'share_ride_id' to 'shared_ride_id' for consistency
-    // UPDATED: Made nullable to support AI_BOOKING flow (starts null, assigned on accept)
     @ManyToOne
     @JoinColumn(name = "shared_ride_id", nullable = true)
     private SharedRide sharedRide;

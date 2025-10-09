@@ -54,10 +54,6 @@ public class DriverProfile {
     @Builder.Default
     private BigDecimal totalEarned = BigDecimal.ZERO;
 
-    @Column(name = "commission_rate", precision = 3, scale = 2)
-    @Builder.Default
-    private BigDecimal commissionRate = new BigDecimal("0.15"); //TODO: Remove the field after implementing dynamic commission rates
-
     @Column(name = "is_available")
     @Builder.Default
     private Boolean isAvailable = false;

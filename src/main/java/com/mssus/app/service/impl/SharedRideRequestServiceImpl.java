@@ -17,8 +17,10 @@ import com.mssus.app.mapper.SharedRideRequestMapper;
 import com.mssus.app.pricing.model.Quote;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
+import com.mssus.app.service.matching.RideMatchingCoordinator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -28,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +39,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class SharedRideRequestServiceImpl implements SharedRideRequestService {
+    @Value("${app.timezone:Asia/Ho_Chi_Minh}")
+    private String appTimezone;
 
     private final SharedRideRequestRepository requestRepository;
     private final SharedRideRepository rideRepository;
@@ -48,6 +53,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final BookingWalletService bookingWalletService;
     private final RideMatchingService matchingService;
     private final RideConfigurationProperties rideConfig;
+    private final RideMatchingCoordinator matchingCoordinator;
 
     @Override
     @Transactional
@@ -103,7 +109,10 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
         log.info("Creating AI booking - fare from quote: {} VND", fareAmount);
 
-        // Create request entity
+        LocalDateTime desiredPickupTime = request.desiredPickupTime() == null ?
+            LocalDateTime.now(ZoneId.of(appTimezone)) :
+            request.desiredPickupTime();
+
         SharedRideRequest rideRequest = SharedRideRequest.builder()
             .requestKind(RequestKind.BOOKING)
             .sharedRide(null) // NULL for AI_BOOKING until driver accepts
@@ -119,7 +128,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .originalFare(fareAmount)
             .discountAmount(BigDecimal.ZERO)
             .coverageTimeStep(rideConfig.getMatching().getCoverageTimeStep())
-            .pickupTime(request.desiredPickupTime())
+            .pickupTime(desiredPickupTime)
             .estimatedPickupTime(LocalDateTime.now())
             .estimatedDropoffTime(LocalDateTime.now().plusMinutes(quote.durationS() / 60 + 5)) // +5 min buffer
             .actualPickupTime(null)
@@ -137,6 +146,8 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
         // TODO: Trigger notification service for potential drivers (placeholder for MVP)
         // notificationService.notifyDriversOfNewRequest(savedRequest);
+
+        matchingCoordinator.initiateMatching(savedRequest.getSharedRideRequestId());
 
         return buildRequestResponse(savedRequest, pickupLoc, dropoffLoc);
     }
@@ -389,51 +400,71 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             throw BaseDomainException.of("ride.validation.no-seats-available");
         }
 
-        // Handle based on request kind
+        boolean trackingAcceptance = false;
         if (request.getRequestKind() == RequestKind.BOOKING) {
-            // For AI_BOOKING: assign ride and place wallet hold
-            request.setSharedRide(ride);
+            boolean accepted = matchingCoordinator.beginDriverAcceptance(
+                requestId,
+                acceptDto.rideId(),
+                driver.getDriverId());
 
-            // Place wallet hold
-            try {
+            if (!accepted) {
+                throw BaseDomainException.of("ride.validation.request-invalid-state",
+                    "Ride offer is no longer available or already processed");
+            }
+            trackingAcceptance = true;
+        }
+
+        try {
+            // Handle based on request kind
+            if (request.getRequestKind() == RequestKind.BOOKING) {
+                // For AI_BOOKING: assign ride and place wallet hold
+                request.setSharedRide(ride);
+
+                // Place wallet hold
                 WalletHoldRequest holdRequest = new WalletHoldRequest();
                 holdRequest.setUserId(request.getRider().getRiderId());
                 holdRequest.setBookingId(requestId);
                 holdRequest.setAmount(request.getFareAmount());
                 holdRequest.setNote("Hold for AI booking acceptance #" + requestId);
 
-                bookingWalletService.holdFunds(holdRequest);
+                try {
+                    bookingWalletService.holdFunds(holdRequest);
+                    log.info("Wallet hold placed for AI booking {} - amount: {}", requestId, request.getFareAmount());
+                } catch (Exception e) {
+                    log.error("Failed to place wallet hold for AI booking {}: {}", requestId, e.getMessage(), e);
+                    throw BaseDomainException.of("ride.operation.wallet-hold-failed",
+                        "Failed to reserve funds: " + e.getMessage());
+                }
 
-                log.info("Wallet hold placed for AI booking {} - amount: {}", requestId, request.getFareAmount());
-
-            } catch (Exception e) {
-                log.error("Failed to place wallet hold for AI booking {}: {}", requestId, e.getMessage(), e);
-                throw BaseDomainException.of("ride.operation.wallet-hold-failed",
-                    "Failed to reserve funds: " + e.getMessage());
+            } else if (request.getRequestKind() == RequestKind.JOIN_RIDE) {
+                // For JOIN_RIDE: validate ride ID matches
+                if (request.getSharedRide() == null ||
+                    !request.getSharedRide().getSharedRideId().equals(acceptDto.rideId())) {
+                    throw BaseDomainException.of("ride.validation.invalid-state",
+                        "Request is for a different ride");
+                }
             }
 
-        } else if (request.getRequestKind() == RequestKind.JOIN_RIDE) {
-            // For JOIN_RIDE: validate ride ID matches
-            if (request.getSharedRide() == null ||
-                !request.getSharedRide().getSharedRideId().equals(acceptDto.rideId())) {
-                throw BaseDomainException.of("ride.validation.invalid-state",
-                    "Request is for a different ride");
+            // Update request status
+            request.setStatus(SharedRideRequestStatus.CONFIRMED);
+
+            requestRepository.save(request);
+
+            // Increment ride passenger count
+            rideRepository.incrementPassengerCount(ride.getSharedRideId());
+
+            log.info("Request {} accepted successfully for ride {}", requestId, acceptDto.rideId());
+
+            if (trackingAcceptance) {
+                matchingCoordinator.completeDriverAcceptance(requestId);
             }
-            // Hold already placed during request creation
+
+        } catch (RuntimeException e) {
+            if (trackingAcceptance) {
+                matchingCoordinator.failDriverAcceptance(requestId, e.getMessage());
+            }
+            throw e;
         }
-
-        // Update request status
-        request.setStatus(SharedRideRequestStatus.CONFIRMED);
-        request.setEstimatedPickupTime(acceptDto.estimatedPickupTime());
-        requestRepository.save(request);
-
-        // Increment ride passenger count
-        rideRepository.incrementPassengerCount(ride.getSharedRideId());
-
-        log.info("Request {} accepted successfully for ride {}", requestId, acceptDto.rideId());
-
-        // TODO: Notify rider of acceptance (placeholder for MVP)
-        // notificationService.notifyRiderOfAcceptance(request.getRider(), request);
 
         Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
         Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
@@ -539,6 +570,11 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             request.getStatus() != SharedRideRequestStatus.CONFIRMED) {
             throw BaseDomainException.of("ride.validation.request-invalid-state",
                 Map.of("currentState", request.getStatus()));
+        }
+
+        if (request.getRequestKind() == RequestKind.BOOKING &&
+            request.getStatus() == SharedRideRequestStatus.PENDING) {
+            matchingCoordinator.cancelMatching(requestId);
         }
 
         // Calculate cancellation fee if CONFIRMED

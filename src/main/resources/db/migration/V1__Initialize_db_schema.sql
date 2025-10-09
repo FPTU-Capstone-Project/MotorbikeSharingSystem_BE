@@ -155,13 +155,38 @@ SELECT user_id, 'DL123456789', 'ACTIVE', true
 FROM users
 WHERE email = 'john.doe@example.com';
 
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified,
+                   phone_verified)
+VALUES ('driver1@example.com',
+        '0987652321',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+        'Driver One',
+        'SE111111',
+        'USER',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
+
+-- Insert rider profile for the user
+INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
+SELECT user_id, '0901234567', 'WALLET'
+FROM users
+WHERE email = 'driver1@example.com';
+
+-- Insert driver profile for the user
+INSERT INTO driver_profiles (driver_id, license_number, status, is_available)
+SELECT user_id, 'DL123236789', 'ACTIVE', true
+FROM users
+WHERE email = 'driver1@example.com';
+
 -- Create wallets table
 CREATE TABLE wallets
 (
     wallet_id       SERIAL PRIMARY KEY,
     user_id         INTEGER                                  NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
     psp_account_id  VARCHAR(255),
-    cached_balance  DECIMAL(10, 2) DEFAULT 0,
+    shadow_balance  DECIMAL(10, 2) DEFAULT 0,
     pending_balance DECIMAL(10, 2) DEFAULT 0,
     total_topped_up DECIMAL(10, 2) DEFAULT 0,
     total_spent     DECIMAL(10, 2) DEFAULT 0,
@@ -182,7 +207,7 @@ CREATE INDEX idx_wallet_active ON wallets (is_active);
 -- Add check constraints for wallets
 ALTER TABLE wallets
     ADD CONSTRAINT chk_balance_positive
-        CHECK (cached_balance >= 0);
+        CHECK (shadow_balance >= 0);
 ALTER TABLE wallets
     ADD CONSTRAINT chk_pending_positive
         CHECK (pending_balance >= 0);
@@ -299,6 +324,33 @@ FROM driver_profiles dp
          JOIN users u ON dp.driver_id = u.user_id
 WHERE u.email = 'john.doe@example.com';
 
+INSERT INTO vehicles (driver_id,
+                      plate_number,
+                      model,
+                      color,
+                      year,
+                      capacity,
+                      helmet_count,
+                      insurance_expiry,
+                      last_maintenance,
+                      fuel_type,
+                      status,
+                      verified_at)
+SELECT dp.driver_id,
+       '29A-12344',
+       'Honda Wave Alpha',
+       'Black',
+       2022,
+       1,
+       2,
+       '2025-01-01 00:00:00',
+       '2024-06-01 00:00:00',
+       'GASOLINE',
+       'ACTIVE',
+       '2024-06-10 12:00:00'
+FROM driver_profiles dp
+         JOIN users u ON dp.driver_id = u.user_id
+WHERE u.email = 'driver1@example.com';
 
 -- Create locations table
 CREATE TABLE locations
@@ -336,8 +388,8 @@ CREATE TABLE shared_rides
     shared_ride_id     SERIAL PRIMARY KEY,
     driver_id          INTEGER                               NOT NULL REFERENCES driver_profiles (driver_id) ON DELETE CASCADE,
     vehicle_id         INTEGER                               NOT NULL REFERENCES vehicles (vehicle_id) ON DELETE CASCADE,
-    start_location_id  INTEGER                               NOT NULL REFERENCES locations (location_id),
-    end_location_id    INTEGER                               NOT NULL REFERENCES locations (location_id),
+    start_location_id  INTEGER                               REFERENCES locations (location_id),
+    end_location_id    INTEGER                               REFERENCES locations (location_id),
     start_lat          DOUBLE PRECISION                      NOT NULL,
     start_lng          DOUBLE PRECISION                      NOT NULL,
     end_lat            DOUBLE PRECISION                      NOT NULL,

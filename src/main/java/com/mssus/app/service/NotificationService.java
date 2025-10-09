@@ -7,5 +7,5 @@ import com.mssus.app.entity.User;
 
 public interface NotificationService {
     void sendNotification(User user, NotificationType type, String title, String message, String payload,
-                          Priority priority, DeliveryMethod method);
+                          Priority priority, DeliveryMethod method, String queue);
 }

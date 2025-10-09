@@ -38,7 +38,8 @@ public class QuoteController {
     public ResponseEntity<Quote> getQuote(@Valid @RequestBody QuoteRequest request, Authentication authentication) {
         var userId = userRepository.findByEmail(authentication.getName())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email"))
-            .getUserId();
+            .getRiderProfile()
+            .getRiderId();
 
         var quote = quoteService.generateQuote(request, userId);
 

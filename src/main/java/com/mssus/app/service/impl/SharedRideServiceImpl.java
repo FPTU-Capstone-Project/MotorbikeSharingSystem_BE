@@ -6,6 +6,7 @@ import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.wallet.WalletCaptureRequest;
 import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
+import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
 import com.mssus.app.entity.*;
@@ -69,20 +70,32 @@ public class SharedRideServiceImpl implements SharedRideService {
                     "You don't own this vehicle");
         }
 
-        // Validate locations
-        Location startLoc = locationRepository.findById(request.startLocationId())
+        Location startLoc = null;
+        Location endLoc = null;
+
+        if (request.startLocationId() != null && request.endLocationId() != null) {
+            startLoc = locationRepository.findById(request.startLocationId())
                 .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                        "Start location not found"));
-        Location endLoc = locationRepository.findById(request.endLocationId())
+                    "Start location not found"));
+            endLoc = locationRepository.findById(request.endLocationId())
                 .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                        "End location not found"));
+                    "End location not found"));
+        }
 
         // Validate route via RoutingService
         // TODO: For MVP, log validation only. In production, reject invalid routes.
         try {
-            var routeResponse = routingService.getRoute(
+            RouteResponse routeResponse = null;
+
+            if (request.startLocationId() != null && request.endLocationId() != null) {
+                routeResponse = routingService.getRoute(
                     startLoc.getLat(), startLoc.getLng(),
                     endLoc.getLat(), endLoc.getLng());
+            } else {
+                routeResponse = routingService.getRoute(
+                    request.startLatLng().latitude(), request.startLatLng().longitude(),
+                    request.endLatLng().latitude(), request.endLatLng().longitude());
+            }
 
             log.info("Route validated - distance: {} m, duration: {} s",
                     routeResponse.distance(), routeResponse.time());
@@ -99,7 +112,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             ride.setCurrentPassengers(0);
             ride.setBaseFare(new BigDecimal(activePricingConfig.getBaseFlagVnd()));
             ride.setPerKmRate(new BigDecimal(activePricingConfig.getPerKmVnd()));
-            ride.setScheduledTime(request.scheduledTime());
+            ride.setScheduledTime(request.scheduledDepartureTime());
             ride.setEstimatedDuration((int) Math.ceil(routeResponse.time() / 60.0)); // in minutes
             ride.setEstimatedDistance((float) routeResponse.distance() / 1000); // in km
             ride.setCreatedAt(LocalDateTime.now());
