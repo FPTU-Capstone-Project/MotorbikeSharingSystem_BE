@@ -200,7 +200,7 @@ public class SharedRideController {
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
         
         log.info("Browsing available rides - startTime: {}, endTime: {}", startTime, endTime);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "scheduledDepartureTime"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "scheduledTime"));
         
         var pageData = sharedRideService.browseAvailableRides(startTime, endTime, pageable);
         PageResponse<SharedRideResponse> response = PageResponse.<SharedRideResponse>builder()
