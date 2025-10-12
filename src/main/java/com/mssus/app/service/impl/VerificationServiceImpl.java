@@ -45,9 +45,19 @@ public class VerificationServiceImpl implements VerificationService {
     @Override
     @Transactional(readOnly = true)
     public StudentVerificationResponse getStudentVerificationById(Integer userId) {
-        Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, VerificationType.STUDENT_ID, VerificationStatus.PENDING)
-                .orElseThrow(() -> new NotFoundException("Student verification not found for user ID: " + userId));
-        return verificationMapper.mapToStudentVerificationResponse(verification);
+        // Lấy tất cả student verifications của user
+        List<Verification> verifications = verificationRepository.findByUserIdAndType(userId, VerificationType.STUDENT_ID);
+        
+        if (verifications.isEmpty()) {
+            throw new NotFoundException("Student verification not found for user ID: " + userId);
+        }
+        
+        // Lấy verification mới nhất (theo created_at)
+        Verification latestVerification = verifications.stream()
+            .max(Comparator.comparing(Verification::getCreatedAt))
+            .orElseThrow(() -> new NotFoundException("Student verification not found"));
+        
+        return verificationMapper.mapToStudentVerificationResponse(latestVerification);
     }
 
     @Override

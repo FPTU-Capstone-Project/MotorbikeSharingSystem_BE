@@ -1,6 +1,5 @@
 package com.mssus.app.controller;
 
-import com.mssus.app.dto.request.DriverVerificationRequest;
 import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
@@ -116,28 +115,6 @@ public class ProfileController {
         return ResponseEntity.ok(response);
     }
 
-    @PreAuthorize("hasRole('RIDER')")
-    @Operation(summary = "Submit Driver Verification",
-        description = "Submit documents required to become a driver",
-        security = @SecurityRequirement(name = "bearerAuth"))
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "201", description = "Driver verification submitted successfully",
-            content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Invalid documents or information",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "401", description = "Unauthorized",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Driver profile already exists",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    @PostMapping(value = "/driver-verifications", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<VerificationResponse> submitDriverVerification(
-        Authentication authentication,
-        @ModelAttribute @Valid DriverVerificationRequest request) {
-        String username = authentication.getName();
-        VerificationResponse response = profileService.submitDriverVerification(username, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
 
     @PreAuthorize("hasRole('RIDER')")
     @Operation(summary = "Submit Driver License",
