@@ -73,116 +73,97 @@ public class FPTAIServiceImpl implements FPTAIService {
 
 
     @Override
-    public boolean verifyDriverLicense(User user, List<MultipartFile> documents) {
-        if (documents == null || documents.isEmpty()) {
-            throw ValidationException.of("At least one document to verify");
+    public boolean verifyDriverLicense(User user, MultipartFile document) {
+        if (document == null || document.isEmpty()) {
+            throw ValidationException.of("Driver license image is required for verification");
         }
 
-        StringBuilder combinedText = new StringBuilder();
-        String extractedName = "";
-        String extractedId = "";
-        String extractedDob = "";
-        String extractedDoe = "";
-        String extractedType = "";
+        log.info("👤 Bắt đầu xác thực GPLX cho người dùng: {}", user.getEmail());
 
-        for (MultipartFile doc : documents) {
-            String ocrJson = analyzeDocument(doc, VerificationType.DRIVER_LICENSE);
-            JSONObject json = new JSONObject(ocrJson);
-            log.debug("FPT.AI OCR raw JSON: {}", json.toString(2));
+        String ocrJson = analyzeDocument(document, VerificationType.DRIVER_LICENSE);
+        JSONObject json = new JSONObject(ocrJson);
+        log.debug("📄 FPT.AI OCR raw JSON:\n{}", json.toString(2));
 
-            if (json.has("data") && json.get("data") instanceof JSONArray) {
-                JSONArray arr = json.getJSONArray("data");
-                if (!arr.isEmpty()) {
-                    JSONObject data = arr.getJSONObject(0);
+        // Extract structured fields từ JSON
+        String name = "";
+        String id = "";
+        String dob = "";
+        String doe = "";
+        String type = "";
 
-                    extractedName = data.optString("name", extractedName);
-                    extractedId = data.optString("id", extractedId);
-                    extractedDob = data.optString("dob", extractedDob);
-                    extractedDoe = data.optString("doe", extractedDoe);
-                    extractedType = data.optString("type", extractedType);
+        if (json.has("data") && json.get("data") instanceof JSONArray) {
+            JSONArray arr = json.getJSONArray("data");
+            if (!arr.isEmpty()) {
+                JSONObject data = arr.getJSONObject(0);
 
-                    log.info("""
-                        === FPT.AI Driver License OCR ===
-                        🔸 Name: {}
-                        🔸 ID: {}
-                        🔸 DOB: {}
-                        🔸 DOE (expiry): {}
-                        🔸 Type: {}
-                        """,
-                            extractedName, extractedId, extractedDob, extractedDoe, extractedType
-                    );
+                name = data.optString("name", "");
+                id = data.optString("id", "");
+                dob = data.optString("dob", "");
+                doe = data.optString("doe", "");
+                type = data.optString("type", "");
 
-                    // gộp text để regex fallback
-                    combinedText.append(extractedName).append("\n")
-                            .append(extractedDob).append("\n")
-                            .append(extractedId).append("\n")
-                            .append(extractedDoe).append("\n");
-                    continue;
-                }
-            }
-
-            // fallback nếu không có structured data
-            combinedText.append(extractOcrText(json)).append("\n");
-        }
-
-        String text = combinedText.toString().trim();
-        log.info("📜 OCR Combined Text (Driver License):\n{}", text);
-
-        // Nếu structured JSON không có name, dùng regex fallback
-        if (extractedName.isEmpty()) {
-            // Thường tên nằm dòng đầu tiên của text OCR
-            String[] lines = text.split("\\r?\\n");
-            if (lines.length > 0 && lines[0].matches("^[A-ZÀ-Ỹ\\s]+$")) {
-                extractedName = lines[0].trim();
-                log.info("🔁 Fallback lấy tên từ dòng đầu OCR: {}", extractedName);
-            } else {
-                extractedName = extractValue(text, "(?i)(Họ và tên|Full name|Họ tên)[:\\s]+([A-ZÀ-Ỹ\\s]+)");
+                log.info("""
+                === FPT.AI Driver License OCR (Front Side) ===
+                🪪 Name: {}
+                🔢 ID: {}
+                🎂 DOB: {}
+                📅 DOE (expiry): {}
+                🚗 Type: {}
+                """,
+                        name, id, dob, doe, type
+                );
             }
         }
 
-        // Nếu ID, DOB, DOE vẫn rỗng → thử regex
-        if (extractedId.isEmpty()) {
-            extractedId = extractValue(text, "(?i)(Số|No)[:\\s]*([A-Z0-9]+)");
+        // Nếu structured data thiếu, fallback OCR text
+        String text = extractOcrText(json).trim();
+        log.info("📜 OCR Raw Text (Driver License):\n{}", text);
+
+        if (name.isEmpty()) {
+            name = extractValue(text, "(?i)(Họ và tên|Full name|Họ tên)[:\\s]+([A-ZÀ-Ỹ\\s]+)");
         }
-        if (extractedDob.isEmpty()) {
-            extractedDob = extractValue(text, "(?i)\\b(\\d{2}/\\d{2}/\\d{4})\\b");
+        if (id.isEmpty()) {
+            id = extractValue(text, "(?i)(Số|No)[:\\s]*([A-Z0-9]+)");
         }
-        if (extractedDoe.isEmpty()) {
-            extractedDoe = extractValue(text, "(?i)(Có giá trị đến|Ngày hết hạn)[:\\s]*(\\d{2}/\\d{2}/\\d{4}|KHÔNG THỜI HẠN)");
+        if (dob.isEmpty()) {
+            dob = extractValue(text, "(?i)\\b(\\d{2}/\\d{2}/\\d{4})\\b");
+        }
+        if (doe.isEmpty()) {
+            doe = extractValue(text, "(?i)(Có giá trị đến|Ngày hết hạn)[:\\s]*(\\d{2}/\\d{2}/\\d{4}|KHÔNG THỜI HẠN)");
         }
 
         // === VALIDATION ===
-        if (extractedName.isEmpty() || !user.getFullName().equalsIgnoreCase(extractedName)) {
-            log.warn("❌ Tên trên GPLX không khớp: expected={}, found={}", user.getFullName(), extractedName);
+        if (name.isEmpty() || !user.getFullName().equalsIgnoreCase(name)) {
+            log.warn("❌ Tên trên GPLX không khớp: expected={}, found={}", user.getFullName(), name);
             return false;
         }
 
-        if (extractedId.isEmpty()) {
+        if (id.isEmpty()) {
             log.warn("❌ Không tìm thấy số GPLX");
             return false;
         }
 
-        if (extractedDoe.equalsIgnoreCase("KHÔNG THỜI HẠN")) {
-            log.info("✅ GPLX không thời hạn — hợp lệ cho người dùng {}", user.getEmail());
+        if (doe.equalsIgnoreCase("KHÔNG THỜI HẠN")) {
+            log.info("✅ GPLX hợp lệ (Không thời hạn) cho người dùng {}", user.getEmail());
             return true;
         }
 
-        if (extractedDoe.isEmpty()) {
+        if (doe.isEmpty()) {
             log.warn("❌ Không tìm thấy ngày hết hạn GPLX");
             return false;
         }
 
         try {
-            LocalDate expiry = LocalDate.parse(extractedDoe, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+            LocalDate expiry = LocalDate.parse(doe, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
             if (expiry.isBefore(LocalDate.now())) {
-                log.warn("❌ GPLX đã hết hạn: {}", extractedDoe);
+                log.warn("❌ GPLX đã hết hạn: {}", doe);
                 return false;
             }
         } catch (Exception e) {
-            log.warn("⚠️ Không thể parse ngày hết hạn: {}", extractedDoe);
+            log.warn("⚠️ Không thể parse ngày hết hạn: {}", doe);
         }
 
-        log.info("✅ GPLX hợp lệ cho người dùng {}", user.getEmail());
+        log.info("✅ GPLX mặt trước hợp lệ cho người dùng {}", user.getEmail());
         return true;
     }
 

@@ -247,7 +247,7 @@ public class ProfileServiceImpl implements ProfileService {
         if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_LICENSE,VerificationStatus.PENDING).isPresent()){
             throw new IllegalStateException("Driver verification already exists");
         }
-        boolean isValid = fptaiService.verifyDriverLicense(user, documents);
+        boolean isValid = fptaiService.verifyDriverLicense(user, documents.get(0));
         if (!isValid) {
             throw ValidationException.of("Driver license does not match user info");
         }

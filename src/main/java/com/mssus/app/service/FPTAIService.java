@@ -10,5 +10,5 @@ import java.util.List;
 public interface FPTAIService {
     String analyzeDocument(MultipartFile file, VerificationType type);
 
-    boolean verifyDriverLicense(User user, List<MultipartFile> documents);
+    boolean verifyDriverLicense(User user, MultipartFile document);
 }
