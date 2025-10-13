@@ -37,3 +37,19 @@ env
 .env
 .env.local
 .env.*.local
+
+# Ignore all OSRM artifacts
+*.osrm*
+*.hsgr
+*.nodes
+*.edges
+*.core
+*.timestamp
+*.properties
+*.mldgr
+*.partition
+*.fileIndex
+*.geometry
+
+# Keep all osm.pbf extracts
+!*.osm.pbf

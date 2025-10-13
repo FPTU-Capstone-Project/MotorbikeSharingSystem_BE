@@ -17,7 +17,7 @@ public class WalletRefundRequest {
 
     @NotNull(message = "Booking ID is required")
     @Schema(description = "Booking ID", example = "456", required = true)
-    private Long bookingId;
+    private Integer bookingId;
 
     @NotNull(message = "Amount is required")
     @Positive(message = "Amount must be positive")

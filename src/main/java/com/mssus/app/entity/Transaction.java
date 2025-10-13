@@ -55,7 +55,7 @@ public class Transaction {
     private String currency = "VND";
 
     @Column(name = "booking_id")
-    private Long bookingId;
+    private Integer bookingId;
 
     @ManyToOne
     @JoinColumn(name = "rider_user_id")

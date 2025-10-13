@@ -21,10 +21,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Implementation of BookingWalletService.
- * This service acts as a wrapper around TransactionService for booking-related operations.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -265,8 +261,6 @@ public class BookingWalletServiceImpl implements BookingWalletService {
         }
     }
 
-    // ========== PRIVATE HELPER METHODS ==========
-
     private void validateHoldRequest(WalletHoldRequest request) {
         if (request.getUserId() == null) {
             throw new ValidationException("User ID cannot be null");
@@ -318,10 +312,7 @@ public class BookingWalletServiceImpl implements BookingWalletService {
         }
     }
 
-    /**
-     * Find the group ID of a hold transaction by booking ID and user ID
-     */
-    private UUID findGroupIdByBookingId(Long bookingId, Integer userId) {
+    private UUID findGroupIdByBookingId(Integer bookingId, Integer userId) {
         // Query transactions by booking ID
         List<Transaction> transactions = transactionRepository.findByGroupId(null);
 
@@ -339,9 +330,6 @@ public class BookingWalletServiceImpl implements BookingWalletService {
         return transaction.getGroupId();
     }
 
-    /**
-     * Find driver ID from a group of transactions
-     */
     private Integer findDriverIdFromGroupId(UUID groupId) {
         List<Transaction> transactions = transactionService.getTransactionsByGroupId(groupId);
 

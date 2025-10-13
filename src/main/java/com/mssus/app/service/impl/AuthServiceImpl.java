@@ -41,7 +41,7 @@ public class AuthServiceImpl implements AuthService {
     @Value("${app.file.upload-dir:uploads}")
     private String uploadDir;
 
-    static Map<String, Object> userContext = new ConcurrentHashMap<>(); //TODO: improve context persistence later
+    public static Map<String, Object> userContext = new ConcurrentHashMap<>(); //TODO: improve context persistence later
 
     @Override
     @Transactional
