@@ -42,7 +42,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final VerificationRepository verificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
-    private final AuthServiceImpl authService;
+    private final AuthService authService;
     private final JwtService jwtService;
     private final FileUploadService fileUploadService;
 
@@ -56,15 +56,13 @@ public class ProfileServiceImpl implements ProfileService {
             return userMapper.toAdminProfileResponse(user);
         }
 
-        String activeProfile = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+        String activeProfile = Optional.ofNullable(authService.getUserContext(user.getUserId()))
                 .filter(Map.class::isInstance)
-                .map(obj -> (Map<String, Object>) obj)
                 .map(claims -> (String) claims.get("active_profile"))
                 .orElse(null);
 
-        List<String> availableProfiles = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+        List<String> availableProfiles = Optional.ofNullable(authService.getUserContext(user.getUserId()))
                 .filter(Map.class::isInstance)
-                .map(obj -> (Map<String, Object>) obj)
                 .map(claims -> (List<String>) claims.get("profiles"))
                 .map(profiles -> profiles.stream()
                         .filter(profile -> user.isProfileActive(profile))
@@ -150,7 +148,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         Map<String, Object> claims = authService.buildTokenClaims(user, request.getTargetProfile());
 
-        AuthServiceImpl.userContext.put(user.getUserId().toString(), claims);
+        authService.setUserContext(user.getUserId(), claims);
 
         String accessToken = jwtService.generateToken(user.getEmail(), claims);
 

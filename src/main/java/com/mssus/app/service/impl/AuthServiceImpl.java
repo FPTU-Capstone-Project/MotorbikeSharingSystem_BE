@@ -83,10 +83,7 @@ public class AuthServiceImpl implements AuthService {
             // Driver profile will be created after verification
         }
 
-        // Create wallet
         createWallet(user);
-
-        // Generate JWT token
         Map<String, Object> claims = buildTokenClaims(user, null);
         String token = jwtService.generateToken(user.getEmail(), claims);
 
@@ -183,6 +180,7 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
+    @Override
     public void validateUserBeforeGrantingToken(User user) {
         if (UserStatus.SUSPENDED.equals(user.getStatus())) {
             throw BaseDomainException.of("auth.unauthorized.account-suspended");
@@ -245,6 +243,21 @@ public class AuthServiceImpl implements AuthService {
         walletRepository.save(wallet);
     }
 
+    @Override
+    public Map<String, Object> getUserContext(Integer userId) {
+        Object context = userContext.get(userId.toString());
+        if (context instanceof Map) {
+            return (Map<String, Object>) context;
+        }
+        return null;
+    }
+    
+    @Override
+    public void setUserContext(Integer userId, Map<String, Object> context) {
+        userContext.put(userId.toString(), context);
+    }
+    
+    @Override
     public Map<String, Object> buildTokenClaims(User user, String activeProfile) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("iss", "mssus.api");

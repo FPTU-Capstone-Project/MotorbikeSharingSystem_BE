@@ -29,12 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 public class ProfileController {
     private final ProfileService profileService;
 
-//    @GetMapping
-//    public ResponseEntity<List<UserProfileResponse>> getAllUsers() {
-//        List<UserProfileResponse> users = profileService.getAllUserProfiles();
-//        return ResponseEntity.ok(users);
-//    }
-
     @PutMapping
     public ResponseEntity<UserProfileResponse> updateProfile(
         Authentication authentication,
