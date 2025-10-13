@@ -6,6 +6,7 @@ import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
 import com.mssus.app.dto.response.*;
+import com.mssus.app.service.AuthService;
 import com.mssus.app.service.FPTAIService;
 import org.json.JSONArray;
 import org.springframework.data.domain.Page;
@@ -44,10 +45,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProfileServiceImpl implements ProfileService {
     private final UserRepository userRepository;
-    private final DriverProfileRepository driverProfileRepository;
     private final VerificationRepository verificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
+    private final VerificationMapper verificationMapper;
     private final AuthService authService;
     private final JwtService jwtService;
     private final FileUploadService fileUploadService;
@@ -171,6 +172,14 @@ public class ProfileServiceImpl implements ProfileService {
     public VerificationResponse submitStudentVerification(String username, List<MultipartFile> documents) {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
+
+        // Enforce email and phone verification before allowing student_id submission
+        if (Boolean.FALSE.equals(user.getEmailVerified())) {
+            throw ValidationException.of("Email must be verified before submitting student ID");
+        }
+        if (Boolean.FALSE.equals(user.getPhoneVerified())) {
+            throw ValidationException.of("Phone must be verified before submitting student ID");
+        }
         if(documents == null || documents.isEmpty()){
             throw new ValidationException("At least one documents to upload");
         }

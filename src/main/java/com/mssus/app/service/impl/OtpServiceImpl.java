@@ -36,33 +36,35 @@ public class OtpServiceImpl implements OtpService {
         User user = switch (otpFor) {
             case VERIFY_EMAIL -> userRepository.findByEmailAndStatus(email, UserStatus.EMAIL_VERIFYING)
                 .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not in verifying state: " + email));
-            case FORGOT_PASSWORD -> userRepository.findByEmailAndStatusNot(email, UserStatus.EMAIL_VERIFYING)
+            case VERIFY_PHONE, FORGOT_PASSWORD -> userRepository.findByEmailAndStatusNot(email, UserStatus.EMAIL_VERIFYING)
                 .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-email", "User with email not found: %s", email));
         };
 
-        // Generate OTP
         String otp = OtpUtil.generateOtp();
         String otpKey = user.getEmail() + ":" + otpFor;
         OtpUtil.storeOtp(otpKey, otp, otpFor);
 
         String subject = switch (otpFor) {
             case VERIFY_EMAIL -> "Verify your email";
+            case VERIFY_PHONE -> "Verify your phone";
             case FORGOT_PASSWORD -> "Reset your password";
         };
 
         String templateName = switch (otpFor) {
-            case VERIFY_EMAIL -> "email/otp-email-verification";
-            case FORGOT_PASSWORD -> "email/otp-password-reset";
+            case VERIFY_EMAIL -> "emails/otp-email-verification";
+            case VERIFY_PHONE -> "emails/otp-phone-verification";
+            case FORGOT_PASSWORD -> "emails/otp-password-reset";
         };
 
         Map<String, Object> templateVars = switch (otpFor) {
-            case VERIFY_EMAIL, FORGOT_PASSWORD -> Map.of("fullName", user.getFullName(), "otpCode", otp);
+            case VERIFY_EMAIL, FORGOT_PASSWORD, VERIFY_PHONE -> Map.of("fullName", user.getFullName(), "otpCode", otp );
         };
 
         EmailPriority priority = EmailPriority.HIGH;
 
         String emailType = switch (otpFor) {
             case VERIFY_EMAIL -> "email-verification";
+            case VERIFY_PHONE -> "phone-verification";
             case FORGOT_PASSWORD -> "password-reset";
         };
 
@@ -97,12 +99,9 @@ public class OtpServiceImpl implements OtpService {
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not found: " + request.getEmail()));
 
         switch (OtpFor.valueOf(request.getOtpFor())) {
-            case VERIFY_EMAIL -> {
-                processEmailVerification(user);
-            }
-            case FORGOT_PASSWORD -> {
-                processPasswordReset(user);
-            }
+            case VERIFY_EMAIL -> processEmailVerification(user);
+            case VERIFY_PHONE -> processPhoneVerification(user);
+            case FORGOT_PASSWORD -> processPasswordReset(user);
         }
 
         // For email/phone verification
@@ -111,6 +110,11 @@ public class OtpServiceImpl implements OtpService {
                 .message("Email verified successfully")
                 .otpFor(request.getOtpFor())
                 .verifiedField("email")
+                .build();
+            case VERIFY_PHONE -> OtpResponse.builder()
+                .message("Phone verified successfully")
+                .otpFor(request.getOtpFor())
+                .verifiedField("phone")
                 .build();
             case FORGOT_PASSWORD -> OtpResponse.builder()
                 .message("OTP verified successfully")
@@ -129,6 +133,12 @@ public class OtpServiceImpl implements OtpService {
         } else {
             log.warn("User email verification attempted but user not in EMAIL_VERIFYING state: {}", user.getEmail());
         }
+    }
+
+    private void processPhoneVerification(User user) {
+        user.setPhoneVerified(true);
+        userRepository.save(user);
+        log.info("User phone verified: {}", user.getPhone());
     }
 
     private void processPasswordReset(User user) {

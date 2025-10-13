@@ -9,6 +9,7 @@ import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
 import com.mssus.app.service.AuthService;
 import com.mssus.app.service.RefreshTokenService;
+
 import com.mssus.app.util.Constants;
 import com.mssus.app.util.OtpUtil;
 import com.mssus.app.util.ValidationUtil;
@@ -63,39 +64,32 @@ public class AuthServiceImpl implements AuthService {
 
 
         User user = User.builder()
-            .email(request.getEmail())
-            .phone(normalizedPhone)
-            .passwordHash(passwordEncoder.encode(request.getPassword()))
-            .fullName(request.getFullName())
-            .userType(UserType.USER)
-            .status(UserStatus.EMAIL_VERIFYING)
-            .emailVerified(false)
-            .phoneVerified(false)
-            .build();
+                .email(request.getEmail())
+                .phone(normalizedPhone)
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName())
+                .userType(UserType.USER)
+                .status(UserStatus.EMAIL_VERIFYING)
+                .emailVerified(false)
+                .phoneVerified(false)
+                .build();
 
         user = userRepository.save(user);
-
-        // Create role-specific profile
-        if ("rider".equalsIgnoreCase(request.getRole()) || request.getRole() == null) {
-            createRiderProfile(user);
-        } else if ("driver".equalsIgnoreCase(request.getRole())) {
-            createRiderProfile(user); // Drivers also have rider profile
-            // Driver profile will be created after verification
-        }
+        createRiderProfile(user);
 
         createWallet(user);
         Map<String, Object> claims = buildTokenClaims(user, null);
         String token = jwtService.generateToken(user.getEmail(), claims);
 
         return RegisterResponse.builder()
-            .userId(user.getUserId())
-            .userType("rider")
-            .email(user.getEmail())
-            .phone(user.getPhone())
-            .fullName(user.getFullName())
-            .token(token)
-            .createdAt(user.getCreatedAt())
-            .build();
+                .userId(user.getUserId())
+                .userType("rider")
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .fullName(user.getFullName())
+                .token(token)
+                .createdAt(user.getCreatedAt())
+                .build();
     }
 
     @Override
@@ -104,21 +98,21 @@ public class AuthServiceImpl implements AuthService {
 
         String identifier = request.getEmail();
         User user = userRepository.findByEmail(identifier)
-            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email"));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email"));
 
         if (!ValidationUtil.isValidEmail(request.getEmail())) {
             throw BaseDomainException.of("user.validation.invalid-email");
         }
 
-//        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
-//            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
-//        }
+        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
+            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
+        }
 
         validateUserBeforeGrantingToken(user);
 
 
         authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(user.getEmail(), request.getPassword())
+                new UsernamePasswordAuthenticationToken(user.getEmail(), request.getPassword())
         );
 
         // Generate tokens
@@ -131,13 +125,13 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = refreshTokenService.generateRefreshToken(user);
 
         return LoginResponse.builder()
-            .userId(user.getUserId())
-            .userType(user.getUserType().name())
-            .activeProfile(UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile())
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .expiresIn(jwtService.getExpirationTime() / 1000) // Convert to seconds
-            .build();
+                .userId(user.getUserId())
+                .userType(user.getUserType().name())
+                .activeProfile(UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile())
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(jwtService.getExpirationTime() / 1000) // Convert to seconds
+                .build();
     }
 
     @Override
@@ -162,22 +156,22 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = userRepository.findById(Integer.valueOf(userId))
-            .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-id", "User with ID %s not found", userId));
+                .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-id", "User with ID %s not found", userId));
 
         validateUserBeforeGrantingToken(user);
 
         //TODO: implement context persistence for refresh token
         @SuppressWarnings("unchecked")
         Map<String, Object> claims = Optional.ofNullable(userContext.get(userId))
-            .filter(Map.class::isInstance)
-            .map(obj -> (Map<String, Object>) obj)
-            .orElseGet(() -> buildTokenClaims(user, null));
+                .filter(Map.class::isInstance)
+                .map(obj -> (Map<String, Object>) obj)
+                .orElseGet(() -> buildTokenClaims(user, null));
 
         String newAccessToken = jwtService.generateToken(user.getEmail(), claims);
 
         return TokenRefreshResponse.builder()
-            .accessToken(newAccessToken)
-            .build();
+                .accessToken(newAccessToken)
+                .build();
     }
 
     @Override
@@ -200,8 +194,8 @@ public class AuthServiceImpl implements AuthService {
     public MessageResponse forgotPassword(ForgotPasswordRequest request) {
         String identifier = request.getEmailOrPhone();
         User user = ValidationUtil.isValidEmail(identifier)
-            ? userRepository.findByEmail(identifier).orElse(null)
-            : userRepository.findByPhone(ValidationUtil.normalizePhone(identifier)).orElse(null);
+                ? userRepository.findByEmail(identifier).orElse(null)
+                : userRepository.findByPhone(ValidationUtil.normalizePhone(identifier)).orElse(null);
 
         if (user == null) {
             // Don't reveal if user exists
@@ -221,24 +215,25 @@ public class AuthServiceImpl implements AuthService {
 
     private void createRiderProfile(User user) {
         RiderProfile riderProfile = RiderProfile.builder()
-            .user(user)
-            .totalRides(0)
-            .totalSpent(BigDecimal.ZERO)
-            .preferredPaymentMethod(PaymentMethod.WALLET)
-            .build();
+                .user(user)
+                .status(RiderProfileStatus.PENDING)
+                .totalRides(0)
+                .totalSpent(BigDecimal.ZERO)
+                .preferredPaymentMethod(PaymentMethod.WALLET)
+                .build();
 
         riderProfileRepository.save(riderProfile);
     }
 
     private void createWallet(User user) {
         Wallet wallet = Wallet.builder()
-            .user(user)
-            .shadowBalance(BigDecimal.ZERO)
-            .pendingBalance(BigDecimal.ZERO)
-            .totalToppedUp(BigDecimal.ZERO)
-            .totalSpent(BigDecimal.ZERO)
-            .isActive(true)
-            .build();
+                .user(user)
+                .shadowBalance(BigDecimal.ZERO)
+                .pendingBalance(BigDecimal.ZERO)
+                .totalToppedUp(BigDecimal.ZERO)
+                .totalSpent(BigDecimal.ZERO)
+                .isActive(true)
+                .build();
 
         walletRepository.save(wallet);
     }
@@ -251,12 +246,12 @@ public class AuthServiceImpl implements AuthService {
         }
         return null;
     }
-    
+
     @Override
     public void setUserContext(Integer userId, Map<String, Object> context) {
         userContext.put(userId.toString(), context);
     }
-    
+
     @Override
     public Map<String, Object> buildTokenClaims(User user, String activeProfile) {
         Map<String, Object> claims = new HashMap<>();

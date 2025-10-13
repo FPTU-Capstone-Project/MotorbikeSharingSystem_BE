@@ -42,5 +42,7 @@ public enum TransactionType {
      * Used for corrections, compensation, or technical reversals of failed transactions (e.g., reversing a failed payout debit).
      * Affects the user's shadow_balance (increase or decrease).
      */
-    ADJUSTMENT
+    ADJUSTMENT,
+    REFUND
+
 }
