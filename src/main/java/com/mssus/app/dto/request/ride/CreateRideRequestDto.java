@@ -14,14 +14,6 @@ public record CreateRideRequestDto(
                 example = "550e8400-e29b-41d4-a716-446655440000", required = true)
         UUID quoteId,
 
-        @Positive(message = "Pickup location ID must be positive")
-        @Schema(description = "Pickup location ID (must match quote coordinates)", example = "1")
-        Integer pickupLocationId,
-
-        @Positive(message = "Dropoff location ID must be positive")
-        @Schema(description = "Dropoff location ID (must match quote coordinates)", example = "2")
-        Integer dropoffLocationId,
-
         @Future(message = "Pickup time must be in the future")
         @Schema(description = "Desired pickup time (ISO 8601)", example = "2025-10-05T08:00:00")
         LocalDateTime desiredPickupTime,

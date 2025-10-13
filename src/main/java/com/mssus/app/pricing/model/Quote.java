@@ -8,6 +8,8 @@ import java.util.UUID;
 public record Quote(
     UUID quoteId,
     int riderId,
+    Integer pickupLocationId,
+    Integer dropoffLocationId,
     double pickupLat,
     double pickupLng,
     double dropoffLat,

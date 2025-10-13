@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,60 +52,66 @@ public class SharedRideServiceImpl implements SharedRideService {
         String username = authentication.getName();
         log.info("Driver {} creating new shared ride", username);
 
-        // Get authenticated driver
+        // Get authenticated driver and active config
         User user = userRepository.findByEmail(username)
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
-        PricingConfig activePricingConfig = pricingConfigRepository.findActive(java.time.Instant.now())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+        PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
-
 
         // Validate vehicle ownership
         Vehicle vehicle = vehicleRepository.findById(request.vehicleId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                        "Vehicle not found with ID: " + request.vehicleId()));
+            .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+                "Vehicle not found with ID: " + request.vehicleId()));
 
         if (!vehicle.getDriver().getDriverId().equals(driver.getDriverId())) {
             throw BaseDomainException.of("ride.unauthorized.not-owner",
-                    "You don't own this vehicle");
+                "You don't own this vehicle");
         }
 
+        // Handle locations: Fetch if IDs provided, else use ad-hoc coords
         Location startLoc = null;
         Location endLoc = null;
+        double startLat, startLng, endLat, endLng;
 
-        if (request.startLocationId() != null && request.endLocationId() != null) {
+        if (request.startLocationId() != null) {
             startLoc = locationRepository.findById(request.startLocationId())
                 .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
                     "Start location not found"));
+            startLat = startLoc.getLat();
+            startLng = startLoc.getLng();
+        } else {
+            startLat = request.startLatLng().latitude();
+            startLng = request.startLatLng().longitude();
+        }
+
+        if (request.endLocationId() != null) {
             endLoc = locationRepository.findById(request.endLocationId())
                 .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
                     "End location not found"));
+            endLat = endLoc.getLat();
+            endLng = endLoc.getLng();
+        } else {
+            endLat = request.endLatLng().latitude();
+            endLng = request.endLatLng().longitude();
         }
 
-        // Validate route via RoutingService
+        // Validate route via RoutingService (using extracted coords)
         // TODO: For MVP, log validation only. In production, reject invalid routes.
         try {
-            RouteResponse routeResponse = null;
-
-            if (request.startLocationId() != null && request.endLocationId() != null) {
-                routeResponse = routingService.getRoute(
-                    startLoc.getLat(), startLoc.getLng(),
-                    endLoc.getLat(), endLoc.getLng());
-            } else {
-                routeResponse = routingService.getRoute(
-                    request.startLatLng().latitude(), request.startLatLng().longitude(),
-                    request.endLatLng().latitude(), request.endLatLng().longitude());
-            }
-
+            RouteResponse routeResponse = routingService.getRoute(startLat, startLng, endLat, endLng);
             log.info("Route validated - distance: {} m, duration: {} s",
-                    routeResponse.distance(), routeResponse.time());
+                routeResponse.distance(), routeResponse.time());
 
-
-            // Create ride entity
+            // Create and populate ride entity
             SharedRide ride = new SharedRide();
             ride.setDriver(driver);
             ride.setVehicle(vehicle);
+            ride.setStartLat(startLat);
+            ride.setStartLng(startLng);
+            ride.setEndLat(endLat);
+            ride.setEndLng(endLng);
             ride.setStartLocationId(request.startLocationId());
             ride.setEndLocationId(request.endLocationId());
             ride.setStatus(SharedRideStatus.SCHEDULED);
@@ -119,15 +126,15 @@ public class SharedRideServiceImpl implements SharedRideService {
 
             SharedRide savedRide = rideRepository.save(ride);
             log.info("Ride created successfully - ID: {}, driver: {}, scheduled: {}",
-                    savedRide.getSharedRideId(), driver.getDriverId(), savedRide.getScheduledTime());
+                savedRide.getSharedRideId(), driver.getDriverId(), savedRide.getScheduledTime());
 
             return buildRideResponse(savedRide, startLoc, endLoc);
 
         } catch (Exception e) {
             log.error("Route validation failed for start: {}, end: {}", request.startLocationId(),
-                    request.endLocationId(), e);
+                request.endLocationId(), e);
             throw BaseDomainException.of("ride.validation.route-validation-failed",
-                    "Could not validate route: " + e.getMessage());
+                "Could not validate route: " + e.getMessage());
         }
     }
 
@@ -135,7 +142,7 @@ public class SharedRideServiceImpl implements SharedRideService {
     @Transactional(readOnly = true)
     public SharedRideResponse getRideById(Integer rideId) {
         SharedRide ride = rideRepository.findById(rideId)
-                .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
         Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
         Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
@@ -146,7 +153,7 @@ public class SharedRideServiceImpl implements SharedRideService {
     @Override
     @Transactional(readOnly = true)
     public Page<SharedRideResponse> getRidesByDriver(Integer driverId, String status,
-                                                      Pageable pageable, Authentication authentication) {
+                                                     Pageable pageable, Authentication authentication) {
         log.info("Fetching rides for driver: {}, status: {}", driverId, status);
 
         // TODO: For production, validate user has permission to view driver's rides
@@ -156,7 +163,7 @@ public class SharedRideServiceImpl implements SharedRideService {
         if (status != null && !status.isBlank()) {
             SharedRideStatus rideStatus = SharedRideStatus.valueOf(status.toUpperCase());
             ridePage = rideRepository.findByDriverDriverIdAndStatusOrderByScheduledTimeDesc(
-                    driverId, rideStatus, pageable);
+                driverId, rideStatus, pageable);
         } else {
             ridePage = rideRepository.findByDriverDriverIdOrderByScheduledTimeDesc(driverId, pageable);
         }
@@ -177,7 +184,7 @@ public class SharedRideServiceImpl implements SharedRideService {
         LocalDateTime end = endTime != null ? LocalDateTime.parse(endTime) : start.plusHours(2);
 
         Page<SharedRide> ridePage = rideRepository.findAvailableRides(
-                SharedRideStatus.SCHEDULED, start, end, pageable);
+            SharedRideStatus.SCHEDULED, start, end, pageable);
 
         return ridePage.map(ride -> {
             Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
@@ -194,13 +201,13 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
-                .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
         // Validate driver ownership
         User user = userRepository.findByEmail(username)
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
 
         if (!ride.getDriver().getDriverId().equals(driver.getDriverId())) {
             throw BaseDomainException.of("ride.unauthorized.not-owner");
@@ -209,16 +216,16 @@ public class SharedRideServiceImpl implements SharedRideService {
         // Validate state
         if (ride.getStatus() != SharedRideStatus.SCHEDULED) {
             throw BaseDomainException.of("ride.validation.invalid-state",
-                    Map.of("currentState", ride.getStatus()));
+                Map.of("currentState", ride.getStatus()));
         }
 
         // Ensure ride has at least one confirmed request
         List<SharedRideRequest> confirmedRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
-                rideId, SharedRideRequestStatus.CONFIRMED);
+            rideId, SharedRideRequestStatus.CONFIRMED);
 
         if (confirmedRequests.isEmpty()) {
             throw BaseDomainException.of("ride.validation.invalid-state",
-                    "Cannot start ride without confirmed passengers");
+                "Cannot start ride without confirmed passengers");
         }
 
         // Update ride status
@@ -242,20 +249,20 @@ public class SharedRideServiceImpl implements SharedRideService {
     @Override
     @Transactional
     public RideCompletionResponse completeRide(Integer rideId, Float actualDistance, Integer actualDuration,
-                                                Authentication authentication) {
+                                               Authentication authentication) {
         String username = authentication.getName();
         log.info("Driver {} completing ride {} - distance: {} km, duration: {} min",
-                username, rideId, actualDistance, actualDuration);
+            username, rideId, actualDistance, actualDuration);
 
         // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
-                .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
         // Validate driver ownership
         User user = userRepository.findByEmail(username)
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
 
         if (!ride.getDriver().getDriverId().equals(driver.getDriverId())) {
             throw BaseDomainException.of("ride.unauthorized.not-owner");
@@ -264,14 +271,14 @@ public class SharedRideServiceImpl implements SharedRideService {
         // Validate state
         if (ride.getStatus() != SharedRideStatus.ONGOING) {
             throw BaseDomainException.of("ride.validation.invalid-state",
-                    Map.of("currentState", ride.getStatus()));
+                Map.of("currentState", ride.getStatus()));
         }
 
         // Get all active (CONFIRMED or ONGOING) requests
         List<SharedRideRequest> ongoingRequests = requestRepository.findActiveRequestsByRide(
-                rideId, 
-                SharedRideRequestStatus.CONFIRMED, 
-                SharedRideRequestStatus.ONGOING);
+            rideId,
+            SharedRideRequestStatus.CONFIRMED,
+            SharedRideRequestStatus.ONGOING);
 
         if (ongoingRequests.isEmpty()) {
             log.warn("Completing ride {} without active requests", rideId);
@@ -298,9 +305,9 @@ public class SharedRideServiceImpl implements SharedRideService {
 
                 // Get commission rate from active pricing config
                 PricingConfig activePricingConfig = pricingConfigRepository.findActive(java.time.Instant.now())
-                        .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+                    .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
                 BigDecimal commissionRate = activePricingConfig.getDefaultCommission();
-                
+
                 platformCommission = platformCommission.add(request.getFareAmount().multiply(commissionRate));
 
                 // Update request status
@@ -310,12 +317,12 @@ public class SharedRideServiceImpl implements SharedRideService {
 
                 completedRequestIds.add(request.getSharedRideRequestId());
 
-                log.info("Captured fare for request {} - amount: {}", 
-                        request.getSharedRideRequestId(), request.getFareAmount());
+                log.info("Captured fare for request {} - amount: {}",
+                    request.getSharedRideRequestId(), request.getFareAmount());
 
             } catch (Exception e) {
                 log.error("Failed to capture fare for request {}: {}",
-                        request.getSharedRideRequestId(), e.getMessage(), e);
+                    request.getSharedRideRequestId(), e.getMessage(), e);
                 // Continue with other requests
             }
         }
@@ -333,20 +340,20 @@ public class SharedRideServiceImpl implements SharedRideService {
         driverRepository.updateRideStats(driver.getDriverId(), driverEarnings);
 
         log.info("Ride {} completed successfully - total fare: {}, driver earnings: {}, commission: {}",
-                rideId, totalFareCollected, driverEarnings, platformCommission);
+            rideId, totalFareCollected, driverEarnings, platformCommission);
 
         return RideCompletionResponse.builder()
-                .sharedRideId(rideId)
-                .status("COMPLETED")
-                .actualDistance(actualDistance)
-                .actualDuration(actualDuration)
-                .totalFareCollected(totalFareCollected)
-                .driverEarnings(driverEarnings)
-                .platformCommission(platformCommission)
-                .completedRequestsCount(completedRequestIds.size())
-                .completedAt(ride.getCompletedAt())
-                .completedRequests(completedRequestIds)
-                .build();
+            .sharedRideId(rideId)
+            .status("COMPLETED")
+            .actualDistance(actualDistance)
+            .actualDuration(actualDuration)
+            .totalFareCollected(totalFareCollected)
+            .driverEarnings(driverEarnings)
+            .platformCommission(platformCommission)
+            .completedRequestsCount(completedRequestIds.size())
+            .completedAt(ride.getCompletedAt())
+            .completedRequests(completedRequestIds)
+            .build();
     }
 
     @Override
@@ -357,18 +364,18 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
-                .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
         // Validate ownership or admin role
         User user = userRepository.findByEmail(username)
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
 
         boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
+            .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
 
         if (!isAdmin) {
             DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
-                    .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
 
             if (!ride.getDriver().getDriverId().equals(driver.getDriverId())) {
                 throw BaseDomainException.of("ride.unauthorized.not-owner");
@@ -378,12 +385,12 @@ public class SharedRideServiceImpl implements SharedRideService {
         // Validate state
         if (ride.getStatus() != SharedRideStatus.SCHEDULED) {
             throw BaseDomainException.of("ride.validation.invalid-state",
-                    Map.of("currentState", ride.getStatus()));
+                Map.of("currentState", ride.getStatus()));
         }
 
         // Release holds for all CONFIRMED requests
         List<SharedRideRequest> confirmedRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
-                rideId, SharedRideRequestStatus.CONFIRMED);
+            rideId, SharedRideRequestStatus.CONFIRMED);
 
         for (SharedRideRequest request : confirmedRequests) {
             try {
@@ -401,11 +408,11 @@ public class SharedRideServiceImpl implements SharedRideService {
                 requestRepository.save(request);
 
                 log.info("Released hold for request {} - amount: {}",
-                        request.getSharedRideRequestId(), request.getFareAmount());
+                    request.getSharedRideRequestId(), request.getFareAmount());
 
             } catch (Exception e) {
                 log.error("Failed to release hold for request {}: {}",
-                        request.getSharedRideRequestId(), e.getMessage(), e);
+                    request.getSharedRideRequestId(), e.getMessage(), e);
                 // Continue with other requests
             }
         }

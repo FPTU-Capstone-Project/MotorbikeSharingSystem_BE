@@ -14,21 +14,13 @@ public record JoinRideRequest(
                 example = "550e8400-e29b-41d4-a716-446655440000", required = true)
         UUID quoteId,
 
-        @Positive(message = "Pickup location ID must be positive")
-        @Schema(description = "Pickup location ID along the route (must match quote)", example = "5")
-        Integer pickupLocationId,
-
-        @Positive(message = "Dropoff location ID must be positive")
-        @Schema(description = "Dropoff location ID along the route (must match quote)", example = "6")
-        Integer dropoffLocationId,
-
         @Future(message = "Pickup time must be in the future")
-        @Schema(description = "Desired pickup time (ISO 8601)", example = "2025-10-05T08:30:00")
-        LocalDateTime pickupTime,
-        
-        @Schema(description = "Special requests or notes", example = "Please wait at the gate")
+        @Schema(description = "Desired pickup time (ISO 8601)", example = "2025-10-05T08:00:00")
+        LocalDateTime desiredPickupTime,
+
+        @Schema(description = "Special requests or notes", example = "Need helmet")
         @Size(max = 500, message = "Special requests cannot exceed 500 characters")
-        String specialRequests
+        String notes
 ) {
 }
 

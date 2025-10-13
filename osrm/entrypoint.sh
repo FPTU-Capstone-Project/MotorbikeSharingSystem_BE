@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 OSRM_FILE=/data/hcm.osm.pbf

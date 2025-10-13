@@ -2,6 +2,9 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.config.properties.RideConfigurationProperties;
+import com.mssus.app.dto.LatLng;
+import com.mssus.app.dto.request.QuoteRequest;
+import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.Location;
 import com.mssus.app.entity.SharedRide;
@@ -9,6 +12,7 @@ import com.mssus.app.entity.SharedRideRequest;
 import com.mssus.app.repository.LocationRepository;
 import com.mssus.app.repository.SharedRideRepository;
 import com.mssus.app.service.RideMatchingService;
+import com.mssus.app.service.RoutingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +31,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private final SharedRideRepository rideRepository;
     private final LocationRepository locationRepository;
     private final RideConfigurationProperties rideConfig;
+    private final RoutingService routingService;
 
     private static final double EARTH_RADIUS_KM = 6371.0;
 
@@ -34,13 +39,13 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     @Transactional(readOnly = true)
     public List<RideMatchProposalResponse> findMatches(SharedRideRequest request) {
         log.info("Finding matches for request ID: {}, pickup: {}, dropoff: {}, time: {}",
-                request.getSharedRideRequestId(),
-                request.getPickupLocationId(),
-                request.getDropoffLocationId(),
-                request.getPickupTime());
+            request.getSharedRideRequestId(),
+            request.getPickupLocationId(),
+            request.getDropoffLocationId(),
+            request.getPickupTime());
 
-        Location pickupLoc = null;
-        Location dropoffLoc = null;
+        Location pickupLoc;
+        Location dropoffLoc;
 
         // Step 1: Get request locations
         if (request.getPickupLocationId() != null) {
@@ -91,8 +96,16 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         // Step 4: Score and filter candidates
         List<RideMatchProposalResponse> proposals = new ArrayList<>();
         double maxProximityKm = rideConfig.getMatching().getMaxProximityKm();
+        int processedCandidates = 0;
+        int rejectedProximity = 0;
+        int rejectedDetour = 0;
+        int errors = 0;
 
         for (SharedRide ride : candidateRides) {
+            processedCandidates++;
+            log.debug("Processing candidate ride ID: {}, scheduled: {}, driver: {}",
+                ride.getSharedRideId(), ride.getScheduledTime(), ride.getDriver().getDriverId());
+
             try {
                 // Get ride locations
                 Location rideStart;
@@ -129,63 +142,118 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                     rideEnd.setName("Ride End Location");
                 }
 
+                log.debug("Ride {} locations: Start ({}, {}), End ({}, {})",
+                    ride.getSharedRideId(), rideStart.getLat(), rideStart.getLng(), rideEnd.getLat(), rideEnd.getLng());
 
                 // Calculate proximity scores
                 double pickupToStartDistance = calculateDistance(
-                        pickupLoc.getLat(), pickupLoc.getLng(),
-                        rideStart.getLat(), rideStart.getLng());
+                    pickupLoc.getLat(), pickupLoc.getLng(),
+                    rideStart.getLat(), rideStart.getLng());
                 double dropoffToEndDistance = calculateDistance(
-                        dropoffLoc.getLat(), dropoffLoc.getLng(),
-                        rideEnd.getLat(), rideEnd.getLng());
+                    dropoffLoc.getLat(), dropoffLoc.getLng(),
+                    rideEnd.getLat(), rideEnd.getLng());
+
+                log.debug("Ride {} proximity: Pickup-to-start {} km, Dropoff-to-end {} km (max: {} km)",
+                    ride.getSharedRideId(), pickupToStartDistance, dropoffToEndDistance, maxProximityKm);
 
                 // Filter by proximity threshold
                 if (pickupToStartDistance > maxProximityKm || dropoffToEndDistance > maxProximityKm) {
+                    rejectedProximity++;
                     log.debug("Ride {} rejected - proximity threshold exceeded (pickup: {}, dropoff: {})",
-                            ride.getSharedRideId(), pickupToStartDistance, dropoffToEndDistance);
+                        ride.getSharedRideId(), pickupToStartDistance, dropoffToEndDistance);
                     continue;
                 }
 
                 // TODO: Validate detour distance using OSRM
-                // For MVP, use simple heuristic: average of pickup/dropoff proximity
-                double avgProximity = (pickupToStartDistance + dropoffToEndDistance) / 2.0;
-                double detourDistanceKm = avgProximity;
-                // Assume 30 km/h average speed (0.5 km/min)
-                double averageSpeedKmPerMin = 0.5;
-                int detourDurationMinutes = (int) Math.ceil(avgProximity / averageSpeedKmPerMin);
+                double detourDistanceKm;
+                int detourDurationMinutes;
+
+                try {
+                    // Original route: start -> end
+                    RouteResponse originalRoute = routingService
+                        .getRoute(rideStart.getLat(), rideStart.getLng(), rideEnd.getLat(), rideEnd.getLng());
+
+                    // Modified route: start -> pickup -> dropoff -> end
+                    List<LatLng> waypoints = List.of(
+                        new LatLng(rideStart.getLat(), rideStart.getLng()),
+                        new LatLng(pickupLoc.getLat(), pickupLoc.getLng()),
+                        new LatLng(dropoffLoc.getLat(), dropoffLoc.getLng()),
+                        new LatLng(rideEnd.getLat(), rideEnd.getLng())
+                    );
+
+                    RouteResponse modifiedRoute = routingService
+                        .getMultiStopRoute(waypoints, ride.getScheduledTime());
+
+                    log.debug("Ride {} routes: Original {} km / {} s, Modified {} km / {} s",
+                        ride.getSharedRideId(),
+                        originalRoute.distance(), originalRoute.time(),
+                        modifiedRoute.distance(), modifiedRoute.time());
+
+                    // Calculate detours
+                    detourDistanceKm = modifiedRoute.distance() * 1000 - originalRoute.distance() * 1000;
+                    long durationDiffSeconds = modifiedRoute.time() - originalRoute.time();
+                    detourDurationMinutes = (int) Math.ceil(durationDiffSeconds / 60.0);
+
+                    // Ensure non-negative
+                    if (detourDistanceKm < 0) detourDistanceKm = 0;
+                    if (detourDurationMinutes < 0) detourDurationMinutes = 0;
+
+                    log.debug("Ride {} detour via Goong: {} km / {} min", ride.getSharedRideId(), detourDistanceKm, detourDurationMinutes);
+                } catch (Exception routesEx) {
+                    log.warn("Goong API failed for ride {}: {}. Falling back to heuristic.", ride.getSharedRideId(), routesEx.getMessage());
+                    // Fallback to original heuristic
+                    double avgProximity = (pickupToStartDistance + dropoffToEndDistance) / 2.0;
+                    detourDistanceKm = avgProximity;
+                    double averageSpeedKmPerMin = 0.5;
+                    detourDurationMinutes = (int) Math.ceil(avgProximity / averageSpeedKmPerMin);
+                    log.debug("Ride {} fallback detour: {} km / {} min (avg proximity: {})",
+                        ride.getSharedRideId(), detourDistanceKm, detourDurationMinutes, avgProximity);
+                }
 
                 // Check against driver's max detour preference
                 Integer driverMaxDetour = ride.getDriver().getMaxDetourMinutes();
+                log.debug("Ride {} driver max detour: {} min (calculated: {} min)",
+                    ride.getSharedRideId(), driverMaxDetour, detourDurationMinutes);
+
                 if (driverMaxDetour != null && detourDurationMinutes > driverMaxDetour) {
+                    rejectedDetour++;
                     log.debug("Ride {} rejected - exceeds driver's max detour preference ({} > {})",
-                            ride.getSharedRideId(), detourDurationMinutes, driverMaxDetour);
+                        ride.getSharedRideId(), detourDurationMinutes, driverMaxDetour);
                     continue;
                 }
 
                 // Calculate match score
                 float matchScore = calculateMatchScore(
-                        ride, pickupToStartDistance, dropoffToEndDistance,
-                        requestTime, detourDistanceKm);
+                    ride, pickupToStartDistance, dropoffToEndDistance,
+                    requestTime, detourDistanceKm);
+                log.debug("Ride {} match score calculated: {}", ride.getSharedRideId(), matchScore);
 
                 // Build proposal
                 RideMatchProposalResponse proposal = buildProposal(
-                        ride, pickupLoc, dropoffLoc,
-                        detourDistanceKm, detourDurationMinutes,
-                        matchScore, request);
+                    ride, pickupLoc, dropoffLoc,
+                    detourDistanceKm, detourDurationMinutes,
+                    matchScore, request);
+                log.debug("Ride {} proposal built successfully: score={}, detour={}km/{}min",
+                    ride.getSharedRideId(), matchScore, detourDistanceKm, detourDurationMinutes);
 
                 proposals.add(proposal);
 
             } catch (Exception e) {
+                errors++;
                 log.error("Error scoring ride {}: {}", ride.getSharedRideId(), e.getMessage(), e);
                 // Continue with next candidate
             }
         }
 
+        log.debug("Processing summary: {} candidates processed, {} rejected (proximity: {}, detour: {}), {} errors, {} proposals added",
+            processedCandidates, rejectedProximity + rejectedDetour, rejectedProximity, rejectedDetour, errors, proposals.size());
+
         // Step 5: Sort by score descending and limit
         proposals.sort(Comparator.comparing(RideMatchProposalResponse::getMatchScore).reversed());
         int maxProposals = rideConfig.getMatching().getMaxProposals();
         List<RideMatchProposalResponse> topProposals = proposals.stream()
-                .limit(maxProposals)
-                .toList();
+            .limit(maxProposals)
+            .toList();
 
         log.info("Returning {} match proposals (scored and ranked)", topProposals.size());
         return topProposals;
@@ -198,8 +266,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         double dLng = Math.toRadians(lng2 - lng1);
 
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
 
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
@@ -230,9 +298,9 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         // Weighted sum
         double totalScore = (proximityScore * scoring.getProximityWeight()) +
-                (timeScore * scoring.getTimeWeight()) +
-                (ratingScore * scoring.getRatingWeight()) +
-                (detourScore * scoring.getDetourWeight());
+            (timeScore * scoring.getTimeWeight()) +
+            (ratingScore * scoring.getRatingWeight()) +
+            (detourScore * scoring.getDetourWeight());
 
         // Convert to 0-100 scale
         return (float) (totalScore * 100.0);
@@ -242,28 +310,29 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                                                     double detourKm, int detourMinutes, float matchScore,
                                                     SharedRideRequest request) {
         // Use QuoteService to generate quote for rider's route (pickup to dropoff)
-        com.mssus.app.dto.request.QuoteRequest quoteRequest = new com.mssus.app.dto.request.QuoteRequest(
-                new com.mssus.app.dto.LatLng(pickupLoc.getLat(), pickupLoc.getLng()),
-                new com.mssus.app.dto.LatLng(dropoffLoc.getLat(), dropoffLoc.getLng())
-        );
+//        QuoteRequest quoteRequest = new QuoteRequest(
+//            new LatLng(pickupLoc.getLat(), pickupLoc.getLng()),
+//            new LatLng(dropoffLoc.getLat(), dropoffLoc.getLng()),
+//
+//        );
 
         try {
             var quote = com.mssus.app.pricing.model.Quote.class.cast(null); // Placeholder for actual quote generation
             // Note: We don't call generateQuote here because it would cache the quote
             // Instead, we calculate inline using PricingService
-            
+
             // Get route from RoutingService
             var route = com.mssus.app.dto.response.RouteResponse.class.cast(null); // Will be injected
-            
+
             // For MVP, use ride's estimates if available, otherwise use haversine distance
-            double estimatedDistanceKm = ride.getEstimatedDistance() != null ? 
-                    ride.getEstimatedDistance() : (detourKm * 2); // Rough estimate
-            int estimatedTripMinutes = ride.getEstimatedDuration() != null ? 
-                    ride.getEstimatedDuration() : (int)(estimatedDistanceKm * 2); // ~30 km/h average
+            double estimatedDistanceKm = ride.getEstimatedDistance() != null ?
+                ride.getEstimatedDistance() : (detourKm * 2); // Rough estimate
+            int estimatedTripMinutes = ride.getEstimatedDuration() != null ?
+                ride.getEstimatedDuration() : (int) (estimatedDistanceKm * 2); // ~30 km/h average
 
             // Calculate fare using ride's pricing
             java.math.BigDecimal estimatedFare = ride.getBaseFare()
-                    .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
+                .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
 
             // Calculate estimated times
             // Assume detour happens at beginning, then straight to pickup
@@ -271,53 +340,53 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             LocalDateTime estimatedDropoffTime = estimatedPickupTime.plusMinutes(estimatedTripMinutes);
 
             return RideMatchProposalResponse.builder()
-                    .sharedRideId(ride.getSharedRideId())
-                    .driverId(ride.getDriver().getDriverId())
-                    .driverName(ride.getDriver().getUser().getFullName())
-                    .driverRating(ride.getDriver().getRatingAvg())
-                    .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
-                    .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
-                    .scheduledTime(ride.getScheduledTime())
-                    .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
-                    .estimatedFare(estimatedFare)
-                    .estimatedDuration(estimatedTripMinutes)
-                    .estimatedDistance((float) estimatedDistanceKm)
-                    .detourDistance((float) detourKm)
-                    .detourDuration(detourMinutes)
-                    .matchScore(matchScore)
-                    .estimatedPickupTime(estimatedPickupTime)
-                    .estimatedDropoffTime(estimatedDropoffTime)
-                    .build();
-                    
+                .sharedRideId(ride.getSharedRideId())
+                .driverId(ride.getDriver().getDriverId())
+                .driverName(ride.getDriver().getUser().getFullName())
+                .driverRating(ride.getDriver().getRatingAvg())
+                .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
+                .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
+                .scheduledTime(ride.getScheduledTime())
+                .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
+                .estimatedFare(estimatedFare)
+                .estimatedDuration(estimatedTripMinutes)
+                .estimatedDistance((float) estimatedDistanceKm)
+                .detourDistance((float) detourKm)
+                .detourDuration(detourMinutes)
+                .matchScore(matchScore)
+                .estimatedPickupTime(estimatedPickupTime)
+                .estimatedDropoffTime(estimatedDropoffTime)
+                .build();
+
         } catch (Exception e) {
             log.error("Error building proposal for ride {}: {}", ride.getSharedRideId(), e.getMessage(), e);
             // Fallback: use ride's base pricing
             double estimatedDistanceKm = ride.getEstimatedDistance() != null ? ride.getEstimatedDistance() : 10.0;
             java.math.BigDecimal estimatedFare = ride.getBaseFare()
-                    .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
+                .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
 
             LocalDateTime estimatedPickupTime = ride.getScheduledTime().plusMinutes(detourMinutes);
             int estimatedTripMinutes = ride.getEstimatedDuration() != null ? ride.getEstimatedDuration() : 30;
             LocalDateTime estimatedDropoffTime = estimatedPickupTime.plusMinutes(estimatedTripMinutes);
 
             return RideMatchProposalResponse.builder()
-                    .sharedRideId(ride.getSharedRideId())
-                    .driverId(ride.getDriver().getDriverId())
-                    .driverName(ride.getDriver().getUser().getFullName())
-                    .driverRating(ride.getDriver().getRatingAvg())
-                    .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
-                    .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
-                    .scheduledTime(ride.getScheduledTime())
-                    .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
-                    .estimatedFare(estimatedFare)
-                    .estimatedDuration(estimatedTripMinutes)
-                    .estimatedDistance((float) estimatedDistanceKm)
-                    .detourDistance((float) detourKm)
-                    .detourDuration(detourMinutes)
-                    .matchScore(matchScore)
-                    .estimatedPickupTime(estimatedPickupTime)
-                    .estimatedDropoffTime(estimatedDropoffTime)
-                    .build();
+                .sharedRideId(ride.getSharedRideId())
+                .driverId(ride.getDriver().getDriverId())
+                .driverName(ride.getDriver().getUser().getFullName())
+                .driverRating(ride.getDriver().getRatingAvg())
+                .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
+                .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
+                .scheduledTime(ride.getScheduledTime())
+                .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
+                .estimatedFare(estimatedFare)
+                .estimatedDuration(estimatedTripMinutes)
+                .estimatedDistance((float) estimatedDistanceKm)
+                .detourDistance((float) detourKm)
+                .detourDuration(detourMinutes)
+                .matchScore(matchScore)
+                .estimatedPickupTime(estimatedPickupTime)
+                .estimatedDropoffTime(estimatedDropoffTime)
+                .build();
         }
     }
 }

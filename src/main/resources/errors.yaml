@@ -478,6 +478,16 @@ errors:
     owner: ride-team
     remediation: "Adjust pickup or scheduled time to avoid conflicts"
 
+  - id: ride.validation.service-area-violation
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Service area violation: {reason}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Ensure pickup and dropoff locations are within service areas"
+
   # Ride Operation Errors
   - id: ride.operation.wallet-hold-failed
     httpStatus: 402

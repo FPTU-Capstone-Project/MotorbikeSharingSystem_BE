@@ -58,14 +58,13 @@ public class SharedRideRequestController {
             @ApiResponse(responseCode = "404", description = "Quote expired or location not found",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<List<RideMatchProposalResponse>> bookRide(
+    public ResponseEntity<SharedRideRequestResponse> bookRide(
             @Valid @RequestBody CreateRideRequestDto request,
             Authentication authentication) {
         log.info("Rider {} creating booking request with quote {}",
                 authentication.getName(), request.quoteId());
         SharedRideRequestResponse bookingRequest = requestService.createAIBookingRequest(request, authentication);
-        List<RideMatchProposalResponse> proposals = requestService.getMatchProposals(bookingRequest.getSharedRideRequestId(), authentication);
-        return ResponseEntity.status(HttpStatus.CREATED).body(proposals);
+        return ResponseEntity.status(HttpStatus.CREATED).body(bookingRequest);
     }
 
     @PostMapping("/rides/{rideId}")

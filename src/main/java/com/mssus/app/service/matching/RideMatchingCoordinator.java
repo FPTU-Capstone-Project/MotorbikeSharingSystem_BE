@@ -4,6 +4,7 @@ import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.notification.DriverRideOfferNotification;
+import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Location;
@@ -11,6 +12,7 @@ import com.mssus.app.entity.SharedRideRequest;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.LocationRepository;
 import com.mssus.app.repository.SharedRideRequestRepository;
+import com.mssus.app.service.BookingWalletService;
 import com.mssus.app.service.RealTimeNotificationService;
 import com.mssus.app.service.RideMatchingService;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +56,7 @@ public class RideMatchingCoordinator {
     private final DriverDecisionGateway decisionGateway;
     private final MatchingResponseAssembler responseAssembler;
     private final ThreadPoolTaskExecutor matchingExecutor;
+    private final BookingWalletService bookingWalletService;
 
     public RideMatchingCoordinator(
         SharedRideRequestRepository requestRepository,
@@ -64,7 +67,8 @@ public class RideMatchingCoordinator {
         RealTimeNotificationService notificationService,
         DriverDecisionGateway decisionGateway,
         MatchingResponseAssembler responseAssembler,
-        @Qualifier("matchingTaskExecutor") ThreadPoolTaskExecutor matchingExecutor) {
+        @Qualifier("matchingTaskExecutor") ThreadPoolTaskExecutor matchingExecutor,
+        BookingWalletService bookingWalletService) {
 
         this.requestRepository = requestRepository;
         this.driverRepository = driverRepository;
@@ -75,6 +79,7 @@ public class RideMatchingCoordinator {
         this.decisionGateway = decisionGateway;
         this.responseAssembler = responseAssembler;
         this.matchingExecutor = matchingExecutor;
+        this.bookingWalletService = bookingWalletService;
     }
 
     private final ConcurrentHashMap<Integer, MatchingSession> sessions = new ConcurrentHashMap<>();
@@ -295,6 +300,26 @@ public class RideMatchingCoordinator {
                 // Add debug logging
                 log.info("Sending no-match notification to rider {} for request {}",
                     request.getRider().getUser().getUserId(), request.getSharedRideRequestId());
+
+                int requestId = request.getSharedRideRequestId();
+
+                try {
+                    WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
+                    releaseRequest.setUserId(request.getRider().getRiderId());
+                    releaseRequest.setBookingId(requestId);
+                    releaseRequest.setAmount(request.getFareAmount());
+                    releaseRequest.setNote("Request matching timeout - #" + requestId);
+
+                    bookingWalletService.releaseFunds(releaseRequest);
+
+                    log.info("Wallet hold released for rejected request {} - amount: {}",
+                        requestId, request.getFareAmount());
+
+                } catch (Exception e) {
+                    log.error("Failed to release wallet hold for request {}: {}",
+                        requestId, e.getMessage(), e);
+                    // Continue with rejection even if release fails
+                }
 
                 try {
                     notificationService.notifyRiderStatus(

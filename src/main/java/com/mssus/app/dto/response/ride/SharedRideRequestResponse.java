@@ -64,6 +64,22 @@ public class SharedRideRequestResponse {
     @Schema(description = "Dropoff location name", example = "Bitexco Tower")
     private String dropoffLocationName;
 
+    @JsonProperty("pickup_lat")
+    @Schema(description = "Pickup latitude", example = "10.7769")
+    private Double pickupLat;
+
+    @JsonProperty("pickup_lng")
+    @Schema(description = "Pickup longitude", example = "106.7009")
+    private Double pickupLng;
+
+    @JsonProperty("dropoff_lat")
+    @Schema(description = "Dropoff latitude", example = "10.7722")
+    private Double dropoffLat;
+
+    @JsonProperty("dropoff_lng")
+    @Schema(description = "Dropoff longitude", example = "106.7040")
+    private Double dropoffLng;
+
     @Schema(description = "Request status (PENDING, CONFIRMED, ONGOING, COMPLETED, CANCELLED, EXPIRED)", example = "PENDING")
     private String status;
 

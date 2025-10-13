@@ -1,5 +1,6 @@
 package com.mssus.app.service;
 
+import com.mssus.app.dto.LatLng;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.SharedRideRequest;
 
