@@ -78,14 +78,14 @@ SELECT user_id, '0922111000', 28, 896000.00, 'ACTIVE', 'WALLET', NOW() FROM user
 -- =====================================================
 -- 3. DRIVER PROFILES
 -- =====================================================
-INSERT INTO driver_profiles (driver_id, license_number, license_verified_at, status, rating_avg, total_shared_rides, total_earned, commission_rate, is_available, max_passengers, created_at)
-SELECT user_id, 'B2-987654321', NOW() - INTERVAL '90 days', 'ACTIVE', 4.85, 68, 2244000.00, 0.15, true, 2, NOW() FROM users WHERE email = 'vo.van.f@student.hcmut.edu.vn'
+INSERT INTO driver_profiles (driver_id, license_number, license_verified_at, status, rating_avg, total_shared_rides, total_earned, is_available, max_passengers, created_at)
+SELECT user_id, 'B2-987654321', NOW() - INTERVAL '90 days', 'ACTIVE', 4.85, 68, 2244000.00, true, 2, NOW() FROM users WHERE email = 'vo.van.f@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'B2-876543210', NOW() - INTERVAL '75 days', 'ACTIVE', 4.92, 55, 1815000.00, 0.15, true, 1, NOW() FROM users WHERE email = 'dang.thi.g@student.hcmut.edu.vn'
+SELECT user_id, 'B2-876543210', NOW() - INTERVAL '75 days', 'ACTIVE', 4.92, 55, 1815000.00, true, 1, NOW() FROM users WHERE email = 'dang.thi.g@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'B2-765432109', NOW() - INTERVAL '60 days', 'ACTIVE', 4.78, 72, 2376000.00, 0.15, false, 2, NOW() FROM users WHERE email = 'do.van.h@student.hcmut.edu.vn'
+SELECT user_id, 'B2-765432109', NOW() - INTERVAL '60 days', 'ACTIVE', 4.78, 72, 2376000.00, false, 2, NOW() FROM users WHERE email = 'do.van.h@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'B2-654321098', NOW() - INTERVAL '100 days', 'ACTIVE', 4.95, 85, 2805000.00, 0.15, true, 1, NOW() FROM users WHERE email = 'bui.thi.i@student.hcmut.edu.vn';
+SELECT user_id, 'B2-654321098', NOW() - INTERVAL '100 days', 'ACTIVE', 4.95, 85, 2805000.00, true, 1, NOW() FROM users WHERE email = 'bui.thi.i@student.hcmut.edu.vn';
 
 -- =====================================================
 -- 4. WALLETS
@@ -237,82 +237,6 @@ SELECT u1.user_id, 'DRIVER_LICENSE', 'REJECTED', 'https://cdn.mssus.com/verify/l
        (SELECT user_id FROM users WHERE email = 'admin@mssus.com'),
        NOW() - INTERVAL '10 days', NULL::TIMESTAMP, NULL, NOW() - INTERVAL '11 days'
 FROM users u1 WHERE u1.email = 'hoang.van.e@student.hcmut.edu.vn';
-
--- =====================================================
--- 8. SHARED RIDES
--- =====================================================
-INSERT INTO shared_rides (driver_id, vehicle_id, start_location_id, end_location_id, status, max_passengers, current_passengers, base_fare, per_km_rate, estimated_duration, estimated_distance, actual_distance, scheduled_time, started_at, completed_at, created_at)
-SELECT
-    dp.driver_id, v.vehicle_id, 1, 4, 'COMPLETED', 2, 2, 18000.00, 3500.00, 30, 10.2, 10.5,
-    NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days' + INTERVAL '8 minutes', NOW() - INTERVAL '7 days' + INTERVAL '38 minutes', NOW() - INTERVAL '8 days'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'vo.van.f@student.hcmut.edu.vn' AND v.plate_number = '59-X1 98765'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 2, 5, 'COMPLETED', 1, 1, 22000.00, 4000.00, 28, 8.8, 9.1,
-    NOW() - INTERVAL '6 days', NOW() - INTERVAL '6 days' + INTERVAL '5 minutes', NOW() - INTERVAL '6 days' + INTERVAL '33 minutes', NOW() - INTERVAL '7 days'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'dang.thi.g@student.hcmut.edu.vn' AND v.plate_number = '59-Z3 76543'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 3, 7, 'COMPLETED', 2, 1, 28000.00, 4200.00, 35, 12.5, 12.8,
-    NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days' + INTERVAL '3 minutes', NOW() - INTERVAL '5 days' + INTERVAL '38 minutes', NOW() - INTERVAL '6 days'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'do.van.h@student.hcmut.edu.vn' AND v.plate_number = '59-A4 65432'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 1, 9, 'COMPLETED', 1, 1, 55000.00, 5500.00, 50, 18.3, 18.6,
-    NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days' + INTERVAL '7 minutes', NOW() - INTERVAL '4 days' + INTERVAL '57 minutes', NOW() - INTERVAL '5 days'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'bui.thi.i@student.hcmut.edu.vn' AND v.plate_number = '59-C6 43210'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 4, 6, 'COMPLETED', 2, 2, 32000.00, 3800.00, 25, 9.5, 9.7,
-    NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days' + INTERVAL '4 minutes', NOW() - INTERVAL '3 days' + INTERVAL '29 minutes', NOW() - INTERVAL '4 days'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'vo.van.f@student.hcmut.edu.vn' AND v.plate_number = '59-Y2 87654'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 5, 8, 'COMPLETED', 1, 1, 26000.00, 3600.00, 32, 11.2, 11.5,
-    NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days' + INTERVAL '6 minutes', NOW() - INTERVAL '2 days' + INTERVAL '38 minutes', NOW() - INTERVAL '3 days'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'dang.thi.g@student.hcmut.edu.vn' AND v.plate_number = '59-Z3 76543'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 1, 6, 'ACTIVE', 2, 1, 30000.00, 4000.00, 28, 11.0, NULL,
-    NOW() + INTERVAL '45 minutes', NULL, NULL, NOW() - INTERVAL '3 hours'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'vo.van.f@student.hcmut.edu.vn' AND v.plate_number = '59-X1 98765'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 2, 9, 'SCHEDULED', 1, 1, 58000.00, 5200.00, 55, 19.5, NULL,
-    NOW() + INTERVAL '3 hours', NULL, NULL, NOW() - INTERVAL '2 hours'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'bui.thi.i@student.hcmut.edu.vn' AND v.plate_number = '59-C6 43210'
-UNION ALL
-SELECT
-    dp.driver_id, v.vehicle_id, 3, 10, 'CANCELLED', 2, 0, 38000.00, 4500.00, 42, 15.8, NULL,
-    NOW() + INTERVAL '2 hours', NULL, NULL, NOW() - INTERVAL '4 hours'
-FROM driver_profiles dp
-         JOIN users u ON dp.driver_id = u.user_id
-         JOIN vehicles v ON v.driver_id = dp.driver_id
-WHERE u.email = 'do.van.h@student.hcmut.edu.vn' AND v.plate_number = '59-A4 65432';
 
 -- =====================================================
 -- 9. EMERGENCY CONTACTS
