@@ -33,6 +33,10 @@ build/
 .vscode/
 
 /logs
+env
+.env
+.env.local
+.env.*.local
 
 # Ignore all OSRM artifacts
 *.osrm*

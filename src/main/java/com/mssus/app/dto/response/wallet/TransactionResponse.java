@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -19,36 +20,69 @@ public class TransactionResponse {
     @Schema(description = "Transaction ID", example = "12345")
     private Integer txnId;
 
+    @Schema(description = "Group ID for related transactions", example = "550e8400-e29b-41d4-a716-446655440000")
+    private UUID groupId;
+
     @Schema(description = "Transaction type", example = "TOPUP")
     private String type;
 
-    @Schema(description = "Direction", example = "IN")
+    @Schema(description = "Transaction direction (IN/OUT)", example = "IN")
     private String direction;
 
-    @Schema(description = "Amount", example = "100000")
+    @Schema(description = "Actor kind (USER/SYSTEM)", example = "USER")
+    private String actorKind;
+
+    @Schema(description = "Actor user ID", example = "1")
+    private Integer actorUserId;
+
+    @Schema(description = "Actor username", example = "john_doe")
+    private String actorUsername;
+
+    @Schema(description = "System wallet involved (if any)", example = "COMMISSION")
+    private String systemWallet;
+
+    @Schema(description = "Transaction amount", example = "100000")
     private BigDecimal amount;
 
-    @Schema(description = "Currency", example = "VND")
+    @Schema(description = "Currency code", example = "VND")
     private String currency;
-
-    @Schema(description = "Status", example = "COMPLETED")
-    private String status;
-
-    @Schema(description = "Balance before transaction", example = "500000")
-    private BigDecimal beforeAvail;
-
-    @Schema(description = "Balance after transaction", example = "600000")
-    private BigDecimal afterAvail;
-
-    @Schema(description = "Transaction note", example = "Top-up via MoMo")
-    private String note;
-
-    @Schema(description = "Transaction created at", example = "2025-01-15T10:30:00")
-    private LocalDateTime createdAt;
 
     @Schema(description = "Booking ID (if applicable)", example = "456")
     private Long bookingId;
 
-    @Schema(description = "PSP reference", example = "MOMO123456")
+    @Schema(description = "Rider user ID (if applicable)", example = "2")
+    private Integer riderUserId;
+
+    @Schema(description = "Rider username (if applicable)", example = "rider_user")
+    private String riderUsername;
+
+    @Schema(description = "Driver user ID (if applicable)", example = "3")
+    private Integer driverUserId;
+
+    @Schema(description = "Driver username (if applicable)", example = "driver_user")
+    private String driverUsername;
+
+    @Schema(description = "Payment service provider reference", example = "MOMO123456")
     private String pspRef;
+
+    @Schema(description = "Transaction status", example = "COMPLETED")
+    private String status;
+
+    @Schema(description = "Available balance before transaction", example = "500000")
+    private BigDecimal beforeAvail;
+
+    @Schema(description = "Available balance after transaction", example = "600000")
+    private BigDecimal afterAvail;
+
+    @Schema(description = "Pending balance before transaction", example = "0")
+    private BigDecimal beforePending;
+
+    @Schema(description = "Pending balance after transaction", example = "0")
+    private BigDecimal afterPending;
+
+    @Schema(description = "Transaction created timestamp", example = "2025-01-15T10:30:00")
+    private LocalDateTime createdAt;
+
+    @Schema(description = "Additional transaction note", example = "Top-up via MoMo")
+    private String note;
 }

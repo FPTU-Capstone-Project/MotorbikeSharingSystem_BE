@@ -1,11 +1,8 @@
 package com.mssus.app.service;
 
 import com.mssus.app.dto.request.*;
-import com.mssus.app.dto.response.MessageResponse;
-import com.mssus.app.dto.response.SwitchProfileResponse;
-import com.mssus.app.dto.response.UserProfileResponse;
-import com.mssus.app.dto.response.VerificationResponse;
-import org.springframework.security.core.Authentication;
+import com.mssus.app.dto.response.*;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -21,7 +18,14 @@ public interface ProfileService {
 
     SwitchProfileResponse switchProfile(String username, SwitchProfileRequest request);
 
-    VerificationResponse submitStudentVerification(String username, MultipartFile document);
+    VerificationResponse submitStudentVerification(String username, List<MultipartFile> documents);
 
-    VerificationResponse submitDriverVerification(String username, DriverVerificationRequest request);
+
+    VerificationResponse submitDriverLicense(String username, List<MultipartFile> documents);
+
+    VerificationResponse submitDriverDocuments(String username, List<MultipartFile> documents);
+
+    VerificationResponse submitVehicleRegistration(String username, List<MultipartFile> documents);
+
+    PageResponse<UserResponse> getAllUsers(Pageable pageable);
 }

@@ -26,6 +26,13 @@ ALTER SEQUENCE verifications_verification_id_seq RESTART WITH 1;
 ALTER SEQUENCE shared_rides_shared_ride_id_seq RESTART WITH 1;
 ALTER SEQUENCE emergency_contacts_contact_id_seq RESTART WITH 1;
 ALTER SEQUENCE promotions_promotion_id_seq RESTART WITH 1;
+
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP;
+ALTER TABLE rider_profiles ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP;
+ALTER TABLE rider_profiles ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP;
+ALTER TABLE rider_profiles ADD CONSTRAINT chk_status CHECK (status IN ('ACTIVE', 'PENDING','SUSPENDED','REJECTED'));
+
 -- =====================================================
 -- 0. ADMIN USER (Must be first!)
 -- =====================================================

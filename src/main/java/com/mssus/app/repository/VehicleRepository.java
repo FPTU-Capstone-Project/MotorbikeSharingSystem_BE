@@ -14,22 +14,13 @@ import java.util.Optional;
 @Repository
 public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
 
-    Optional<Vehicle> findByPlateNumber(String plateNumber);
-
     boolean existsByPlateNumber(String plateNumber);
 
-    List<Vehicle> findByDriverDriverId(Integer driverId);
-
+    Optional<Vehicle> findByDriver_DriverId(Integer driverProfileId);
     Page<Vehicle> findByStatus(String status, Pageable pageable);
 
     Page<Vehicle> findByDriverDriverId(Integer driverId, Pageable pageable);
 
     @Query("SELECT v FROM Vehicle v JOIN FETCH v.driver WHERE v.vehicleId = :vehicleId")
     Optional<Vehicle> findByIdWithDriver(@Param("vehicleId") Integer vehicleId);
-
-    @Query("SELECT v FROM Vehicle v JOIN FETCH v.driver WHERE v.status = :status")
-    List<Vehicle> findByStatusWithDriver(@Param("status") String status);
-
-    @Query("SELECT COUNT(v) FROM Vehicle v WHERE v.driver.driverId = :driverId AND v.status = :status")
-    long countByDriverIdAndStatus(@Param("driverId") Integer driverId, @Param("status") String status);
 }
