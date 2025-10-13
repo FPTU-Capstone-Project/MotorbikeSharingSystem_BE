@@ -138,6 +138,24 @@ public class FPTAIServiceImpl implements FPTAIService {
             return false;
         }
 
+        if (dob.isEmpty()) {
+            log.warn("❌ Không tìm thấy ngày sinh trên GPLX");
+            return false;
+        } else {
+            try {
+                LocalDate parsedDob = LocalDate.parse(dob, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                if (!parsedDob.equals(user.getDateOfBirth())) {
+                    log.warn("❌ Ngày sinh trên GPLX không khớp: expected={}, found={}", user.getDateOfBirth(), parsedDob);
+                    return false;
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ Không thể parse ngày sinh: {}", dob);
+                return false;
+            }
+        }
+
+
+
         if (id.isEmpty()) {
             log.warn("❌ Không tìm thấy số GPLX");
             return false;
