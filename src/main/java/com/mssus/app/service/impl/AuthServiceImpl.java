@@ -113,9 +113,9 @@ public class AuthServiceImpl implements AuthService {
             throw BaseDomainException.of("user.validation.invalid-email");
         }
 
-        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
-            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
-        }
+//        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
+//            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
+//        }
 
         validateUserBeforeGrantingToken(user);
 

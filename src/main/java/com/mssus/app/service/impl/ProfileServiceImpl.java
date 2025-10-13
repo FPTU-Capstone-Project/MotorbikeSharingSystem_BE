@@ -2,49 +2,58 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.*;
-import com.mssus.app.dto.request.DriverVerificationRequest;
 import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
-import com.mssus.app.dto.response.MessageResponse;
-import com.mssus.app.dto.response.SwitchProfileResponse;
-import com.mssus.app.dto.response.UserProfileResponse;
-import com.mssus.app.dto.response.VerificationResponse;
+import com.mssus.app.dto.response.*;
+import com.mssus.app.service.FPTAIService;
+import org.json.JSONArray;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import com.mssus.app.entity.*;
 import com.mssus.app.mapper.UserMapper;
+import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
-import com.mssus.app.service.AuthService;
 import com.mssus.app.service.FileUploadService;
 import com.mssus.app.service.ProfileService;
-import com.mssus.app.util.Constants;
-import com.mssus.app.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tomcat.util.http.fileupload.FileUploadException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.retry.annotation.Retryable;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.json.JSONObject;
 
-import java.math.BigDecimal;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProfileServiceImpl implements ProfileService {
     private final UserRepository userRepository;
     private final DriverProfileRepository driverProfileRepository;
     private final VerificationRepository verificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
+    private final VerificationMapper verificationMapper;
     private final AuthServiceImpl authService;
     private final JwtService jwtService;
     private final FileUploadService fileUploadService;
+    private final FPTAIService fptaiService;
+
 
     @Override
     @Transactional(readOnly = true)
@@ -162,33 +171,50 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    public VerificationResponse submitStudentVerification(String username, MultipartFile document) {
+    public VerificationResponse submitStudentVerification(String username, List<MultipartFile> documents) {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if(documents == null || documents.isEmpty()){
+            throw new ValidationException("At least one documents to upload");
+        }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.STUDENT_ID,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Student verification already exists");
+        }
         try {
-            // Check if already verified
             if (verificationRepository.isUserVerifiedForType(user.getUserId(), VerificationType.STUDENT_ID)) {
                 throw ConflictException.of("Student verification already approved");
             }
 
-            String documentUrl = fileUploadService.uploadFile(document).get();
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture:: join)
+                    .collect(Collectors.toList());
+
+            String documentUrlsCombined = String.join(",", documentUrls);
 
             Verification verification = Verification.builder()
                     .user(user)
                     .type(VerificationType.STUDENT_ID)
                     .status(VerificationStatus.PENDING)
-                    .documentUrl(documentUrl)
+                    .documentUrl(documentUrlsCombined)
                     .documentType(DocumentType.IMAGE)
                     .build();
 
             verification = verificationRepository.save(verification);
 
-            return VerificationResponse.builder()
-                    .verificationId(verification.getVerificationId())
-                    .status(verification.getStatus().name())
-                    .type(verification.getType().name())
-                    .documentUrl(verification.getDocumentUrl())
-                    .build();
+            return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
             throw new RuntimeException("Failed to upload document: " + e.getMessage());
         }
@@ -209,66 +235,167 @@ public class ProfileServiceImpl implements ProfileService {
         }
     }
 
+
     @Override
     @Transactional
-    public VerificationResponse submitDriverVerification(String username, DriverVerificationRequest request) {
+    public VerificationResponse submitDriverLicense(String username, List<MultipartFile> documents) {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if (documents == null || documents.isEmpty()) {
+            throw ValidationException.of("At least one document to upload");
+        }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_LICENSE,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Driver verification already exists");
+        }
+        boolean isValid = fptaiService.verifyDriverLicense(user, documents.get(0));
+        if (!isValid) {
+            throw ValidationException.of("Driver license does not match user info");
+        }
+
         try {
-            // Check if driver profile already exists
-            if (user.getDriverProfile() != null) {
-                throw ConflictException.profileAlreadyExists("Driver");
-            }
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
 
-            // Check license number uniqueness
-            if (driverProfileRepository.existsByLicenseNumber(request.getLicenseNumber())) {
-                throw ConflictException.licenseNumberAlreadyExists(request.getLicenseNumber());
-            }
-
-            // Create driver profile with pending status
-            DriverProfile driverProfile = DriverProfile.builder()
-                    .user(user)
-                    .licenseNumber(request.getLicenseNumber())
-                    .status(DriverProfileStatus.PENDING)
-                    .ratingAvg(Constants.DEFAULT_RATING)
-                    .totalSharedRides(0)
-                    .totalEarned(BigDecimal.ZERO)
-                    .isAvailable(false)
-                    .maxPassengers(Constants.DEFAULT_MAX_PASSENGERS)
-                    .build();
-
-            driverProfileRepository.save(driverProfile);
+            String documentUrlsCombined = String.join(",", documentUrls);
 
             Verification verification = Verification.builder()
                     .user(user)
                     .type(VerificationType.DRIVER_LICENSE)
                     .status(VerificationStatus.PENDING)
-//                    .documentUrl()
-//                    .documentType()
+                    .documentUrl(documentUrlsCombined)
+                    .documentType(DocumentType.IMAGE)
                     .build();
 
-            return VerificationResponse.builder()
-                    .verificationId(1)
-                    .status(VerificationStatus.PENDING.name())
-                    .type(VerificationType.DRIVER_LICENSE.name())
-                    .build();
+            verification = verificationRepository.save(verification);
+            return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to submit driver verification: " + e.getMessage());
+            throw new RuntimeException("Failed to upload driver license: " + e.getMessage());
         }
     }
 
-    // --- Helper Methods ---
+    @Override
+    @Transactional
+    public VerificationResponse submitDriverDocuments(String username, List<MultipartFile> documents) {
+        User user = userRepository.findByEmail(username)
+                .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if (documents == null || documents.isEmpty()) {
+            throw ValidationException.of("At least one document to upload");
+        }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_DOCUMENTS,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Driver verification already exists");
+        }
+        try {
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
 
-    private void validateEmailUniqueness(String email) {
-        if (userRepository.existsByEmail(email)) {
-            throw ConflictException.emailAlreadyExists(email);
+            String documentUrlsCombined = String.join(",", documentUrls);
+
+            Verification verification = Verification.builder()
+                    .user(user)
+                    .type(VerificationType.DRIVER_DOCUMENTS)
+                    .status(VerificationStatus.PENDING)
+                    .documentUrl(documentUrlsCombined)
+                    .documentType(DocumentType.IMAGE)
+                    .build();
+
+            verification = verificationRepository.save(verification);
+            return verificationMapper.mapToVerificationResponse(verification);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload driver documents: " + e.getMessage());
         }
     }
 
-    private void validatePhoneUniqueness(String phone) {
-        if (userRepository.existsByPhone(phone)) {
-            throw ConflictException.phoneAlreadyExists(phone);
+    @Override
+    @Transactional
+    public VerificationResponse submitVehicleRegistration(String username, List<MultipartFile> documents) {
+        User user = userRepository.findByEmail(username)
+                .orElseThrow(() -> NotFoundException.userNotFound(username));
+        if (documents == null || documents.isEmpty()) {
+            throw ValidationException.of("At least one document to upload");
+        }
+        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.VEHICLE_REGISTRATION,VerificationStatus.PENDING).isPresent()){
+            throw new IllegalStateException("Driver verification already exists: ");
+        }
+        try {
+            List<CompletableFuture<String>> futuresList = documents.parallelStream()
+                    .map(file -> {
+                        try {
+                            return fileUploadService.uploadFile(file);
+                        } catch (Exception e) {
+                            log.error("Failed to upload file: {}", e.getMessage());
+                            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+                            failedFuture.completeExceptionally(
+                                    new FileUploadException("Failed to upload file: " + file.getOriginalFilename()));
+                            return failedFuture;
+                        }
+                    })
+                    .collect(Collectors.toList());
+            List<String> documentUrls = futuresList.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
+
+            String documentUrlsCombined = String.join(",", documentUrls);
+
+            Verification verification = Verification.builder()
+                    .user(user)
+                    .type(VerificationType.VEHICLE_REGISTRATION)
+                    .status(VerificationStatus.PENDING)
+                    .documentUrl(documentUrlsCombined)
+                    .documentType(DocumentType.IMAGE)
+                    .build();
+
+            verification = verificationRepository.save(verification);
+            return verificationMapper.mapToVerificationResponse(verification);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload vehicle registration: " + e.getMessage());
         }
     }
-    // --- Helper Methods ---
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<UserResponse> getAllUsers(Pageable pageable) {
+        Page<User> userPage = userRepository.findAll(pageable);
+
+        List<UserResponse> userResponses = userPage.getContent().stream()
+                .map(userMapper::toUserResponse)
+                .collect(Collectors.toList());
+
+        return PageResponse.<UserResponse>builder()
+                .data(userResponses)
+                .pagination(PageResponse.PaginationInfo.builder()
+                        .page(userPage.getNumber() + 1)
+                        .pageSize(userPage.getSize())
+                        .totalPages(userPage.getTotalPages())
+                        .totalRecords(userPage.getTotalElements())
+                        .build())
+                .build();
+    }
 }

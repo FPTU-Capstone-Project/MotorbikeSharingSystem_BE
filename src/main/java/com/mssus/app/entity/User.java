@@ -10,6 +10,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -44,6 +45,11 @@ public class User {
 
     @Column(name = "student_id", unique = true)
     private String studentId;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
+
+    private String gender;
 
     @Column(name = "user_type", length = 20)
     @Enumerated(EnumType.STRING)

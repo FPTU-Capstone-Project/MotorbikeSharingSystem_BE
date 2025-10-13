@@ -1,5 +1,5 @@
 package com.mssus.app.common.enums;
 
 public enum RiderProfileStatus{
-    ACTIVE, SUSPENDED;
+    ACTIVE, PENDING,SUSPENDED,REJECTED;
 }
