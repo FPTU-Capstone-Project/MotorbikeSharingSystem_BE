@@ -1,5 +1,6 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.VerificationType;
 import com.mssus.app.common.exception.EmailException;
 import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.dto.response.notification.EmailRequest;
@@ -120,7 +121,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public CompletableFuture<EmailResult> notifyDriverActivated(User user) {
+    public CompletableFuture<EmailResult> notifyUserActivated(User user) {
         try{
             Context context = new Context();
             context.setVariable("fullName", user.getFullName());
@@ -134,7 +135,7 @@ public class EmailServiceImpl implements EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(fromAddress, fromName);
             helper.setTo(user.getEmail());
-            helper.setSubject("[Motorbike Sharing] Tài khoản tài xế của bạn đã được kích hoạt");
+            helper.setSubject("[Motorbike Sharing] Tài khoản của bạn đã được kích hoạt");
             helper.setText(htmlContent, true);
 
             javaMailSender.send(message);
@@ -147,12 +148,14 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public CompletableFuture<EmailResult> notifyDriverSuspended(User user) {
+    public CompletableFuture<EmailResult> notifyUserRejected(User user, VerificationType type, String reason) {
         try{
             Context context = new Context();
             context.setVariable("fullName", user.getFullName());
             context.setVariable("supportEmail", fromAddress);
             context.setVariable("email",user.getEmail());
+            context.setVariable("rejectionReason", reason );
+            context.setVariable("rejectionType", type.toString());
             context.setVariable("rejectionDate", LocalDateTime.now().format(DATE_FORMATTER));
 
             String htmlContent = templateEngine.process("emails/driver-verification-rejected", context);
@@ -161,15 +164,15 @@ public class EmailServiceImpl implements EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(fromAddress, fromName);
             helper.setTo(user.getEmail());
-            helper.setSubject("[Motorbike Sharing] Tài khoản tài xế của bạn đã bị khóa");
+            helper.setSubject("[Motorbike Sharing] Giấy tờ không hợp lệ ");
             helper.setText(htmlContent, true);
 
             javaMailSender.send(message);
 
-            return CompletableFuture.completedFuture(EmailResult.success("Driver suspended email sent successfully"));
+            return CompletableFuture.completedFuture(EmailResult.success("User rejected email sent successfully"));
         }catch (Exception e){
-            log.error("Failed to send driver activated email to: {}", user.getEmail(), e);
-            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send driver activated email: " + e.getMessage()));
+            log.error("Failed to send User rejected email to: {}", user.getEmail(), e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send User rejected email: " + e.getMessage()));
         }
     }
 

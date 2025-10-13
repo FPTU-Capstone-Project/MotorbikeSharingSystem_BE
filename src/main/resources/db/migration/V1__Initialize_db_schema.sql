@@ -431,7 +431,6 @@ CREATE TABLE promotions
     title                  VARCHAR(255)   NOT NULL,
     description            TEXT,
     discount_type          VARCHAR(20)    NOT NULL,
-    discount_value         DECIMAL(19, 2) NOT NULL,
     target_user_type       VARCHAR(20),
     min_shared_ride_amount DECIMAL(19, 2),
     max_discount           DECIMAL(19, 2),
@@ -455,9 +454,6 @@ CREATE INDEX idx_promotions_target_user_type ON promotions (target_user_type);
 ALTER TABLE promotions
     ADD CONSTRAINT chk_discount_type
         CHECK (discount_type IN ('PERCENTAGE', 'FIXED_AMOUNT'));
-ALTER TABLE promotions
-    ADD CONSTRAINT chk_discount_value
-        CHECK (discount_value > 0);
 ALTER TABLE promotions
     ADD CONSTRAINT chk_target_user_type
         CHECK (target_user_type IN ('RIDER', 'DRIVER', 'ALL') OR target_user_type IS NULL);

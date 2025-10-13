@@ -84,6 +84,12 @@ public interface UserMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateUserFromRequest(UpdateAccountRequest request, @MappingTarget User user);
 
+    @Mapping(target = "userType", expression = "java(user.getUserType() != null ? user.getUserType().name() : null)")
+    @Mapping(target = "status", expression = "java(user.getStatus() != null ? user.getStatus().name() : null)")
+    @Mapping(target = "riderProfile", source = "riderProfile")
+    @Mapping(target = "driverProfile", source = "driverProfile")
+    com.mssus.app.dto.response.UserResponse toUserResponse(User user);
+
     default java.util.List<String> getUserProfiles(User user) {
         java.util.List<String> profiles = new java.util.ArrayList<>();
 

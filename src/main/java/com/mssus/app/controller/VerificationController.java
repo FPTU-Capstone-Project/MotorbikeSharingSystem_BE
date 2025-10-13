@@ -70,14 +70,14 @@ public class VerificationController {
 
 
     @PostMapping("/bulk-approve")
-    @Operation(summary = "Bulk approve student verifications")
+    @Operation(summary = "Bulk approve verifications")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Bulk approval completed",
                     content = @Content(schema = @Schema(implementation = BulkOperationResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid request",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<BulkOperationResponse> bulkApproveStudentVerifications(
+    public ResponseEntity<BulkOperationResponse> bulkApproveVerifications(
             Authentication authentication,
             @Valid @RequestBody BulkApprovalRequest request) {
         BulkOperationResponse response = verificationService.bulkApproveVerifications(authentication.getName(), request);
@@ -98,19 +98,18 @@ public class VerificationController {
         return ResponseEntity.ok(response);
     }
 
-
-    @PostMapping("/approve-vehicle")
-    @Operation(summary = "Approve driver vehicle")
+    @PostMapping("/approve")
+    @Operation(summary = "Approve verification")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Driver vehicle approved",
+            @ApiResponse(responseCode = "200", description = " approved",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Vehicle verification not found",
+            @ApiResponse(responseCode = "404", description = " not found",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<MessageResponse> approveDriverVehicle(
+    public ResponseEntity<MessageResponse> approveVerifications(
             Authentication authentication,
             @Valid @RequestBody VerificationDecisionRequest request) {
-        MessageResponse response = verificationService.approveDriverVehicle(authentication.getName(), request);
+        MessageResponse response = verificationService.approveVerification(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 

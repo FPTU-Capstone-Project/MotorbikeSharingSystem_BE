@@ -1,6 +1,5 @@
 package com.mssus.app.controller;
 
-import com.mssus.app.dto.request.DriverVerificationRequest;
 import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
@@ -15,25 +14,24 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/me")
 public class ProfileController {
     private final ProfileService profileService;
-
-//    @GetMapping
-//    public ResponseEntity<List<UserProfileResponse>> getAllUsers() {
-//        List<UserProfileResponse> users = profileService.getAllUserProfiles();
-//        return ResponseEntity.ok(users);
-//    }
 
     @PutMapping
     public ResponseEntity<UserProfileResponse> updateProfile(
@@ -116,29 +114,73 @@ public class ProfileController {
         MessageResponse response = profileService.updateAvatar(username, file);
         return ResponseEntity.ok(response);
     }
-
-    @Operation(summary = "Submit Driver Verification",
-        description = "Submit documents required to become a driver",
+    @PreAuthorize("hasRole('RIDER')")
+    @Operation(summary = "Submit Driver License",
+        description = "Submit driver license images for verification",
         security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "201", description = "Driver verification submitted successfully",
+        @ApiResponse(responseCode = "201", description = "Driver license submitted successfully",
             content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
         @ApiResponse(responseCode = "400", description = "Invalid documents or information",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "401", description = "Unauthorized",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Driver profile already exists",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PostMapping(value = "/driver-verifications", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<VerificationResponse> submitDriverVerification(
+    @PostMapping(value = "/driver-verifications/license", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<VerificationResponse> submitDriverLicense(
         Authentication authentication,
-        @ModelAttribute @Valid DriverVerificationRequest request) {
+        @Parameter(description = "Driver license images", required = true)
+        @RequestParam("documents") List<MultipartFile> documents) {
         String username = authentication.getName();
-        VerificationResponse response = profileService.submitDriverVerification(username, request);
+        VerificationResponse response = profileService.submitDriverLicense(username, documents);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PreAuthorize("hasRole('RIDER')")
+    @Operation(summary = "Submit Driver Documents",
+        description = "Submit additional driver documents for verification",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Driver documents submitted successfully",
+            content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid documents or information",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping(value = "/driver-verifications/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<VerificationResponse> submitDriverDocuments(
+        Authentication authentication,
+        @Parameter(description = "Driver supporting documents", required = true)
+        @RequestParam("documents") List<MultipartFile> documents) {
+        String username = authentication.getName();
+        VerificationResponse response = profileService.submitDriverDocuments(username, documents);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PreAuthorize("hasRole('RIDER')")
+    @Operation(summary = "Submit Vehicle Registration",
+        description = "Submit vehicle registration documents for verification",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Vehicle registration submitted successfully",
+            content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid documents or information",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping(value = "/driver-verifications/vehicle-registration", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<VerificationResponse> submitVehicleRegistration(
+        Authentication authentication,
+        @Parameter(description = "Vehicle registration documents", required = true)
+        @RequestParam("documents") List<MultipartFile> documents) {
+        String username = authentication.getName();
+        VerificationResponse response = profileService.submitVehicleRegistration(username, documents);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Submit Student Verification",
         description = "Upload documentation to verify student status",
         security = @SecurityRequirement(name = "bearerAuth"))
@@ -156,10 +198,36 @@ public class ProfileController {
     public ResponseEntity<VerificationResponse> submitStudentVerification(
         Authentication authentication,
         @Parameter(description = "Student ID document", required = true)
-        @RequestParam("document") MultipartFile document) {
+        @RequestParam("document") List<MultipartFile> document
+    ) {
         String username = authentication.getName();
         VerificationResponse response = profileService.submitStudentVerification(username, document);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @Operation(summary = "Get All Users",
+            description = "Retrieve paginated list of all users with their profile details (Admin only)",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Users retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = PageResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Forbidden - Admin access required",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PageResponse<UserResponse>> getAllUsers(
+            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        Sort.Direction sort = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sort, sortBy));
+        PageResponse<UserResponse> response = profileService.getAllUsers(pageable);
+        return ResponseEntity.ok(response);
     }
 
 }

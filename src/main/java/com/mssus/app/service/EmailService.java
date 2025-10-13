@@ -1,5 +1,6 @@
 package com.mssus.app.service;
 
+import com.mssus.app.common.enums.VerificationType;
 import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.dto.response.notification.EmailRequest;
 import com.mssus.app.dto.response.notification.EmailResult;
@@ -15,6 +16,6 @@ public interface EmailService {
                                              Long userId, String emailType);
     CompletableFuture<EmailResult> sendTopUpSuccessEmail(String email, String fullName, BigDecimal amount, String transactionId, BigDecimal newBalance);
     CompletableFuture<EmailResult> sendPaymentFailedEmail(String email, String fullName, BigDecimal amount, String transactionId, String reason);
-    CompletableFuture<EmailResult> notifyDriverActivated(User user);
-    CompletableFuture<EmailResult> notifyDriverSuspended(User user);
+    CompletableFuture<EmailResult> notifyUserActivated(User user);
+    CompletableFuture<EmailResult> notifyUserRejected(User user, VerificationType type, String reason);
 }
