@@ -1,4 +1,4 @@
--- V999_Seed_data.sql
+-- V999__Seed_data.sql
 -- Mock data for Motorbike Sharing System
 -- This data is completely different from V1_Initialize data
 SET session_replication_role = 'replica';
@@ -248,24 +248,24 @@ FROM users u1 WHERE u1.email = 'hoang.van.e@student.hcmut.edu.vn';
 -- =====================================================
 -- 9. EMERGENCY CONTACTS
 -- =====================================================
-INSERT INTO emergency_contacts (user_id, name, phone,fall_back_phone, relationship, is_primary, created_at )
-SELECT user_id, 'Nguyen Thi X', '0988999000','113', 'Mother', true, NOW() FROM users WHERE email = 'nguyen.van.a@student.hcmut.edu.vn'
+INSERT INTO emergency_contacts (user_id, name, phone, relationship, is_primary, created_at )
+SELECT user_id, 'Nguyen Thi X', '0988999000','Mother', true, NOW() FROM users WHERE email = 'nguyen.van.a@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Tran Van Y', '0977888999', '113','Father', true, NOW() FROM users WHERE email = 'tran.thi.b@student.hcmut.edu.vn'
+SELECT user_id, 'Tran Van Y', '0977888999', 'Father', true, NOW() FROM users WHERE email = 'tran.thi.b@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Le Thi Z', '0966777888','113', 'Sister', true, NOW() FROM users WHERE email = 'le.van.c@student.hcmut.edu.vn'
+SELECT user_id, 'Le Thi Z', '0966777888', 'Sister', true, NOW() FROM users WHERE email = 'le.van.c@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Pham Van M', '0955666777','113', 'Brother', true, NOW() FROM users WHERE email = 'pham.thi.d@student.hcmut.edu.vn'
+SELECT user_id, 'Pham Van M', '0955666777', 'Brother', true, NOW() FROM users WHERE email = 'pham.thi.d@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Hoang Thi N', '0944555666','113', 'Mother', true, NOW()FROM users WHERE email = 'hoang.van.e@student.hcmut.edu.vn'
+SELECT user_id, 'Hoang Thi N', '0944555666','Mother', true, NOW()FROM users WHERE email = 'hoang.van.e@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Vo Thi P', '0933444555','113', 'Wife', true, NOW() FROM users WHERE email = 'vo.van.f@student.hcmut.edu.vn'
+SELECT user_id, 'Vo Thi P', '0933444555', 'Wife', true, NOW() FROM users WHERE email = 'vo.van.f@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Dang Van Q', '0922333444', '113','Husband', true, NOW() FROM users WHERE email = 'dang.thi.g@student.hcmut.edu.vn'
+SELECT user_id, 'Dang Van Q', '0922333444', 'Husband', true, NOW() FROM users WHERE email = 'dang.thi.g@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Do Thi R', '0911222333', '113','Mother', true, NOW() FROM users WHERE email = 'do.van.h@student.hcmut.edu.vn'
+SELECT user_id, 'Do Thi R', '0911222333', 'Mother', true, NOW() FROM users WHERE email = 'do.van.h@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, 'Bui Van S', '0900111222', '113','Father', true, NOW() FROM users WHERE email = 'bui.thi.i@student.hcmut.edu.vn';
+SELECT user_id, 'Bui Van S', '0900111222', 'Father', true, NOW() FROM users WHERE email = 'bui.thi.i@student.hcmut.edu.vn';
 
 -- =====================================================
 -- 10. PROMOTIONS

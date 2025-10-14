@@ -1,6 +1,6 @@
 package com.mssus.app.service;
 
-import com.mssus.app.dto.LatLng;
+import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.dto.response.RouteResponse;
 
 import java.time.LocalDateTime;

@@ -55,16 +55,15 @@ ALTER TABLE users
         CHECK (user_type IN ('USER', 'ADMIN'));
 
 INSERT INTO users (email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified)
-VALUES (
-           'admin@mssus.com',
-           '0900000001',
-           '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
-           'System Administrator',
-           'ADMIN',
-              'ACTIVE',
-           true,
-           true
-       ) ON CONFLICT (email) DO NOTHING;
+VALUES ('admin@mssus.com',
+        '0900000001',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
+        'System Administrator',
+        'ADMIN',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
 
 -- Rider profiles table
 CREATE TABLE rider_profiles
@@ -121,18 +120,18 @@ ALTER TABLE rider_profiles
         CHECK (preferred_payment_method IN ('WALLET', 'CREDIT_CARD'));
 
 -- Insert ordinary user
-INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified, phone_verified)
-VALUES (
-           'john.doe@example.com',
-           '0987654321',
-           '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
-           'John Doe',
-           'STU123456',
-           'USER',
-           'ACTIVE',
-           true,
-           true
-       ) ON CONFLICT (email) DO NOTHING;
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified,
+                   phone_verified)
+VALUES ('john.doe@example.com',
+        '0987654321',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+        'John Doe',
+        'STU123456',
+        'USER',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
 
 -- Insert rider profile for the user
 INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
@@ -237,7 +236,8 @@ CREATE INDEX idx_verification_status ON verifications (status);
 -- Add check constraints for verifications
 ALTER TABLE verifications
     ADD CONSTRAINT chk_verification_type
-        CHECK (type IN ('STUDENT_ID', 'DRIVER_LICENSE', 'BACKGROUND_CHECK', 'VEHICLE_REGISTRATION', 'DRIVER_DOCUMENTS'));
+        CHECK (type IN
+               ('STUDENT_ID', 'DRIVER_LICENSE', 'BACKGROUND_CHECK', 'VEHICLE_REGISTRATION', 'DRIVER_DOCUMENTS'));
 ALTER TABLE verifications
     ADD CONSTRAINT chk_verification_status
         CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED'));
@@ -378,8 +378,8 @@ CREATE TABLE shared_rides
     shared_ride_id     SERIAL PRIMARY KEY,
     driver_id          INTEGER                               NOT NULL REFERENCES driver_profiles (driver_id) ON DELETE CASCADE,
     vehicle_id         INTEGER                               NOT NULL REFERENCES vehicles (vehicle_id) ON DELETE CASCADE,
-    start_location_id  INTEGER                               REFERENCES locations (location_id),
-    end_location_id    INTEGER                               REFERENCES locations (location_id),
+    start_location_id  INTEGER REFERENCES locations (location_id),
+    end_location_id    INTEGER REFERENCES locations (location_id),
     start_lat          DOUBLE PRECISION                      NOT NULL,
     start_lng          DOUBLE PRECISION                      NOT NULL,
     end_lat            DOUBLE PRECISION                      NOT NULL,
@@ -431,6 +431,7 @@ CREATE TABLE promotions
     title                  VARCHAR(255)   NOT NULL,
     description            TEXT,
     discount_type          VARCHAR(20)    NOT NULL,
+    discount_rate          DECIMAL(10, 2) NOT NULL,
     target_user_type       VARCHAR(20),
     min_shared_ride_amount DECIMAL(19, 2),
     max_discount           DECIMAL(19, 2),
@@ -471,7 +472,7 @@ ALTER TABLE promotions
 CREATE TABLE shared_ride_requests
 (
     shared_ride_request_id SERIAL PRIMARY KEY,
-    shared_ride_id          INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
+    shared_ride_id         INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
     rider_id               INTEGER                               NOT NULL REFERENCES rider_profiles (rider_id) ON DELETE CASCADE,
     pickup_location_id     INTEGER REFERENCES locations (location_id),
     dropoff_location_id    INTEGER REFERENCES locations (location_id),

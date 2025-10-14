@@ -1,7 +1,7 @@
 package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.mssus.app.dto.LatLng;
+import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.service.RoutingService;
 import lombok.RequiredArgsConstructor;

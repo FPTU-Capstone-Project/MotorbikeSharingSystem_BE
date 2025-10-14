@@ -1,10 +1,15 @@
 package com.mssus.app.controller;
 
+import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
+import com.mssus.app.dto.request.ride.StartRideRequest;
 import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
+import com.mssus.app.dto.response.ride.TrackingResponse;
+import com.mssus.app.dto.ride.LocationPoint;
+import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.SharedRideService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,6 +33,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/rides")
@@ -37,6 +44,7 @@ import org.springframework.web.bind.annotation.*;
 public class SharedRideController {
 
     private final SharedRideService sharedRideService;
+    private final RideTrackingService rideTrackingService;
 
     @PostMapping
     @PreAuthorize("hasRole('DRIVER')")
@@ -119,10 +127,10 @@ public class SharedRideController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<SharedRideResponse> startRide(
-            @Parameter(description = "Ride ID") @PathVariable Integer rideId,
+            @Valid @RequestBody StartRideRequest request,
             Authentication authentication) {
-        log.info("Driver {} starting ride {}", authentication.getName(), rideId);
-        SharedRideResponse response = sharedRideService.startRide(rideId, authentication);
+        log.info("Driver {} starting ride {}", authentication.getName(), request.rideId());
+        SharedRideResponse response = sharedRideService.startRide(request, authentication);
         return ResponseEntity.ok(response);
     }
 
@@ -143,15 +151,11 @@ public class SharedRideController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<RideCompletionResponse> completeRide(
-            @Parameter(description = "Ride ID") @PathVariable Integer rideId,
-            @Parameter(description = "Actual distance traveled (km)", required = true) 
-            @RequestParam @Positive Float actualDistance,
-            @Parameter(description = "Actual duration (minutes)", required = true) 
-            @RequestParam @Positive Integer actualDuration,
+            @Valid @RequestBody CompleteRideRequest request,
             Authentication authentication) {
-        log.info("Driver {} completing ride {}", authentication.getName(), rideId);
+        log.info("Driver {} completing ride {}", authentication.getName(), request.rideId());
         RideCompletionResponse response = sharedRideService.completeRide(
-                rideId, actualDistance, actualDuration, authentication);
+            request, authentication);
         return ResponseEntity.ok(response);
     }
 
@@ -231,6 +235,18 @@ public class SharedRideController {
             @Parameter(description = "Ride ID") @PathVariable Integer rideId) {
         log.info("Fetching ride: {}", rideId);
         SharedRideResponse response = sharedRideService.getRideById(rideId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/rides/{rideId}/track")
+    public ResponseEntity<TrackingResponse> trackRide(
+        @PathVariable Integer rideId,
+        @RequestBody List<LocationPoint> points,
+        Authentication authentication) {
+
+        String username = authentication.getName();
+
+        TrackingResponse response = rideTrackingService.appendGpsPoints(rideId, points, username);
         return ResponseEntity.ok(response);
     }
 }

@@ -1,7 +1,7 @@
 package com.mssus.app.service;
 
-import com.mssus.app.dto.request.ride.AcceptRequestDto;
-import com.mssus.app.dto.request.ride.CreateRideRequestDto;
+import com.mssus.app.dto.ride.AcceptRequestDto;
+import com.mssus.app.dto.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;

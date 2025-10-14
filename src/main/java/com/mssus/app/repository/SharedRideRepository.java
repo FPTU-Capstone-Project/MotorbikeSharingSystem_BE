@@ -63,7 +63,7 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
             @Param("actualDuration") Integer actualDuration);
 
     @Query("SELECT r FROM SharedRide r " +
-           "WHERE r.status = 'SCHEDULED' " +
+           "WHERE r.status = 'SCHEDULED' OR r.status = 'ONGOING'" +
            "AND r.currentPassengers < r.maxPassengers " +
            "AND r.scheduledTime BETWEEN :startTime AND :endTime")
     List<SharedRide> findCandidateRidesForMatching(

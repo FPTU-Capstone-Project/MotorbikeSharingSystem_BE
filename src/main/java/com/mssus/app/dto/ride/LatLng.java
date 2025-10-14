@@ -1,4 +1,4 @@
-package com.mssus.app.dto;
+package com.mssus.app.dto.ride;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;

@@ -2,8 +2,7 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.config.properties.RideConfigurationProperties;
-import com.mssus.app.dto.LatLng;
-import com.mssus.app.dto.request.QuoteRequest;
+import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.Location;
@@ -12,7 +11,9 @@ import com.mssus.app.entity.SharedRideRequest;
 import com.mssus.app.repository.LocationRepository;
 import com.mssus.app.repository.SharedRideRepository;
 import com.mssus.app.service.RideMatchingService;
+import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.RoutingService;
+import com.mssus.app.util.PolylineDistance;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,12 +33,17 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private final LocationRepository locationRepository;
     private final RideConfigurationProperties rideConfig;
     private final RoutingService routingService;
+    private final RideTrackingService rideTrackingService;
 
     private static final double EARTH_RADIUS_KM = 6371.0;
 
     @Override
     @Transactional(readOnly = true)
     public List<RideMatchProposalResponse> findMatches(SharedRideRequest request) {
+        //TODO: Find a solution to allow ONGOING rides to be matched
+        // Currently, ongoing rides are excluded from matching to avoid complex detour calculations
+
+        //TODO: Add notification to driver in requestToJoinRide method
         log.info("Finding matches for request ID: {}, pickup: {}, dropoff: {}, time: {}",
             request.getSharedRideRequestId(),
             request.getPickupLocationId(),
@@ -146,10 +152,10 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                     ride.getSharedRideId(), rideStart.getLat(), rideStart.getLng(), rideEnd.getLat(), rideEnd.getLng());
 
                 // Calculate proximity scores
-                double pickupToStartDistance = calculateDistance(
+                double pickupToStartDistance = PolylineDistance.haversineMeters(
                     pickupLoc.getLat(), pickupLoc.getLng(),
                     rideStart.getLat(), rideStart.getLng());
-                double dropoffToEndDistance = calculateDistance(
+                double dropoffToEndDistance = PolylineDistance.haversineMeters(
                     dropoffLoc.getLat(), dropoffLoc.getLng(),
                     rideEnd.getLat(), rideEnd.getLng());
 
@@ -164,7 +170,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                     continue;
                 }
 
-                // TODO: Validate detour distance using OSRM
                 double detourDistanceKm;
                 int detourDurationMinutes;
 
@@ -259,21 +264,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         return topProposals;
     }
 
-    @Override
-    public double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
-        // Haversine formula
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLng = Math.toRadians(lng2 - lng1);
-
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        return EARTH_RADIUS_KM * c;
-    }
-
 
     private float calculateMatchScore(SharedRide ride, double pickupDistance, double dropoffDistance,
                                       LocalDateTime requestTime, double detourKm) {
@@ -317,14 +307,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 //        );
 
         try {
-            var quote = com.mssus.app.pricing.model.Quote.class.cast(null); // Placeholder for actual quote generation
-            // Note: We don't call generateQuote here because it would cache the quote
-            // Instead, we calculate inline using PricingService
-
-            // Get route from RoutingService
-            var route = com.mssus.app.dto.response.RouteResponse.class.cast(null); // Will be injected
-
-            // For MVP, use ride's estimates if available, otherwise use haversine distance
             double estimatedDistanceKm = ride.getEstimatedDistance() != null ?
                 ride.getEstimatedDistance() : (detourKm * 2); // Rough estimate
             int estimatedTripMinutes = ride.getEstimatedDuration() != null ?

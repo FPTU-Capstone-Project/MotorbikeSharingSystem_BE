@@ -1,12 +1,15 @@
 package com.mssus.app.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mssus.app.common.enums.NotificationType;
+import com.mssus.app.common.enums.Priority;
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.config.properties.RideConfigurationProperties;
-import com.mssus.app.dto.request.ride.AcceptRequestDto;
-import com.mssus.app.dto.request.ride.CreateRideRequestDto;
+import com.mssus.app.dto.ride.AcceptRequestDto;
+import com.mssus.app.dto.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.request.wallet.WalletHoldRequest;
 import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
@@ -22,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -31,6 +35,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,6 +59,8 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final RideMatchingService matchingService;
     private final RideConfigurationProperties rideConfig;
     private final RideMatchingCoordinator matchingCoordinator;
+    private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -242,8 +249,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         log.info("Join ride request created - ID: {}, rider: {}, ride: {}, fare: {}, status: {}",
             savedRequest.getSharedRideRequestId(), rider.getRiderId(), rideId, fareAmount, savedRequest.getStatus());
 
-        // TODO: Notify driver of new join request (placeholder for MVP)
-        // notificationService.notifyDriverOfJoinRequest(ride.getDriver(), savedRequest);
+        matchingCoordinator.initiateRideJoining(savedRequest.getSharedRideRequestId());
 
         return buildRequestResponse(savedRequest);
     }
@@ -340,10 +346,10 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             SharedRideRequestStatus requestStatus = SharedRideRequestStatus.valueOf(status.toUpperCase());
             List<SharedRideRequest> requests = requestRepository.findBySharedRideSharedRideIdAndStatus(
                 rideId, requestStatus);
-            requestPage = new org.springframework.data.domain.PageImpl<>(requests, pageable, requests.size());
+            requestPage = new PageImpl<>(requests, pageable, requests.size());
         } else {
             List<SharedRideRequest> requests = requestRepository.findBySharedRideSharedRideId(rideId);
-            requestPage = new org.springframework.data.domain.PageImpl<>(requests, pageable, requests.size());
+            requestPage = new PageImpl<>(requests, pageable, requests.size());
         }
 
         return requestPage.map(this::buildRequestResponse);

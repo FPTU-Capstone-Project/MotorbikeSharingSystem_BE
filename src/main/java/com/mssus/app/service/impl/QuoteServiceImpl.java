@@ -12,6 +12,7 @@ import com.mssus.app.repository.PricingConfigRepository;
 import com.mssus.app.service.QuoteService;
 import com.mssus.app.service.RideMatchingService;
 import com.mssus.app.service.RoutingService;
+import com.mssus.app.util.PolylineDistance;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,7 +29,6 @@ public class QuoteServiceImpl implements QuoteService {
     private final PricingConfigRepository cfgRepo;
     private final PricingService pricingService;
     private final LocationRepository locationRepository;
-    private final RideMatchingService rideMatchingService;
 
     @Override
     public Quote generateQuote(QuoteRequest request, int userId) {
@@ -96,8 +96,8 @@ public class QuoteServiceImpl implements QuoteService {
         double centerLng = fptuLoc.getLng();
         double maxRadiusKm = 25.0; //TODO: Configurable via rideConfig.getServiceArea().getRadiusKm()
 
-        double pickupDistKm = rideMatchingService.calculateDistance(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng());
-        double dropoffDistKm = rideMatchingService.calculateDistance(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng());
+        double pickupDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng());
+        double dropoffDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng());
 
         if (pickupDistKm > maxRadiusKm || dropoffDistKm > maxRadiusKm) {
             throw BaseDomainException.formatted("ride.validation.service-area-violation",

@@ -64,7 +64,7 @@ public final class PolylineDistance {
         return q * s;
     }
 
-    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+    public static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
         double phi1 = Math.toRadians(lat1), phi2 = Math.toRadians(lat2);
         double deltaPhi = phi2 - phi1, deltaLambda = Math.toRadians(lon2 - lon1);
         double a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);

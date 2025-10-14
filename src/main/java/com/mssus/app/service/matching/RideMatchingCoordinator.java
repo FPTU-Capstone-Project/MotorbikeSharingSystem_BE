@@ -136,6 +136,143 @@ public class RideMatchingCoordinator {
         scheduleNext(session);
     }
 
+    @Async("matchingTaskExecutor")
+    public void initiateRideJoining(Integer requestId) {
+        if (requestId == null) {
+            return;
+        }
+
+        if (sessions.containsKey(requestId)) {
+            log.debug("Join request already in progress for request {}", requestId);
+            return;
+        }
+
+        Optional<SharedRideRequest> maybeRequest = requestRepository.findById(requestId);
+        if (maybeRequest.isEmpty()) {
+            log.warn("Cannot start join request. Request {} not found.", requestId);
+            return;
+        }
+
+        SharedRideRequest request = maybeRequest.get();
+        if (request.getRequestKind() != RequestKind.JOIN_RIDE ||
+            request.getStatus() != SharedRideRequestStatus.PENDING ||
+            request.getSharedRide() == null) {
+            log.debug("Skipping join request for request {} - kind={} status={} ride={}",
+                requestId, request.getRequestKind(), request.getStatus(),
+                request.getSharedRide() != null ? request.getSharedRide().getSharedRideId() : "null");
+            return;
+        }
+
+        // Get locations for notification
+        Location pickup = request.getPickupLocationId() != null
+            ? locationRepository.findById(request.getPickupLocationId()).orElse(null)
+            : null;
+        Location dropoff = request.getDropoffLocationId() != null
+            ? locationRepository.findById(request.getDropoffLocationId()).orElse(null)
+            : null;
+
+        JoinRequestSession session = new JoinRequestSession(
+            request.getSharedRideRequestId(),
+            request.getSharedRide().getSharedRideId(),
+            request.getSharedRide().getDriver().getDriverId(),
+            pickup,
+            dropoff,
+            Instant.now().plus(rideConfig.getRequestAcceptTimeout()));
+
+        sessions.put(requestId, new MatchingSession(session));
+
+        // Send notification to the specific driver
+        sendJoinRequestNotification(session, request);
+    }
+
+    private void sendJoinRequestNotification(JoinRequestSession session, SharedRideRequest request) {
+        Optional<DriverProfile> maybeDriver = driverRepository.findById(session.driverId());
+        if (maybeDriver.isEmpty() || maybeDriver.get().getUser() == null) {
+            log.warn("Cannot send join request - driver {} not found", session.driverId());
+            handleJoinRequestFailure(session, request, "Driver not found");
+            return;
+        }
+
+        DriverProfile driver = maybeDriver.get();
+
+        Duration responseWindow = Duration.ofSeconds(
+            rideConfig.getMatching().getDriverResponseSeconds());
+        Instant offerDeadline = Instant.now().plus(responseWindow);
+
+        // Create a join-specific notification payload
+        DriverRideOfferNotification driverPayload = responseAssembler.toDriverJoinRequest(
+            request,
+            driver,
+            session.pickupLocation(),
+            session.dropoffLocation(),
+            offerDeadline);
+
+        notificationService.notifyDriverJoinRequest(driver, driverPayload);
+
+        // Register with decision gateway
+        decisionGateway.registerOffer(
+            request.getSharedRideRequestId(),
+            session.rideId(),
+            driver.getDriverId(),
+            responseWindow,
+            () -> handleJoinRequestTimeout(session, request));
+
+        log.info("Sent join request to driver {} for request {} (ride {})",
+            driver.getDriverId(),
+            request.getSharedRideRequestId(),
+            session.rideId());
+    }
+
+    private void handleJoinRequestTimeout(JoinRequestSession session, SharedRideRequest request) {
+        log.info("Driver {} timed out for join request {}", session.driverId(), session.requestId());
+        handleJoinRequestFailure(session, request, "Driver response timeout");
+    }
+
+    private void handleJoinRequestFailure(JoinRequestSession session, SharedRideRequest request, String reason) {
+        sessions.remove(session.requestId());
+        decisionGateway.cancelOffer(session.requestId());
+
+        if (request.getStatus() == SharedRideRequestStatus.PENDING) {
+            request.setStatus(SharedRideRequestStatus.EXPIRED);
+            requestRepository.save(request);
+
+            // Release wallet hold
+            try {
+                WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
+                releaseRequest.setUserId(request.getRider().getRiderId());
+                releaseRequest.setBookingId(request.getSharedRideRequestId());
+                releaseRequest.setAmount(request.getFareAmount());
+                releaseRequest.setNote("Join request failed - #" + request.getSharedRideRequestId());
+
+                bookingWalletService.releaseFunds(releaseRequest);
+                log.info("Wallet hold released for failed join request {} - amount: {}",
+                    request.getSharedRideRequestId(), request.getFareAmount());
+            } catch (Exception e) {
+                log.error("Failed to release wallet hold for join request {}: {}",
+                    request.getSharedRideRequestId(), e.getMessage(), e);
+            }
+
+            // Notify rider of failure
+            try {
+                notificationService.notifyRiderStatus(
+                    request.getRider().getUser(),
+                    responseAssembler.toRiderJoinRequestFailed(request, reason));
+            } catch (Exception e) {
+                log.error("Failed to send join request failure notification", e);
+            }
+        }
+
+        log.info("Join request {} failed - {}", request.getSharedRideRequestId(), reason);
+    }
+
+    private record JoinRequestSession(int requestId, int rideId, int driverId, Location pickupLocation,
+                                      Location dropoffLocation, Instant expiresAt) {
+        boolean isExpired() {
+            return Instant.now().isAfter(expiresAt);
+        }
+    }
+
+
     public boolean beginDriverAcceptance(Integer requestId, Integer rideId, Integer driverId) {
         MatchingSession session = sessions.get(requestId);
         if (session == null) {
@@ -356,6 +493,7 @@ public class RideMatchingCoordinator {
         private final AtomicInteger rankCounter = new AtomicInteger(0);
         private RideMatchProposalResponse currentCandidate;
         private int currentRank;
+        private final JoinRequestSession joinSession;
 
         private MatchingSession(int requestId,
                                 CandidateSelector selector,
@@ -367,6 +505,24 @@ public class RideMatchingCoordinator {
             this.pickupLocation = pickupLocation;
             this.dropoffLocation = dropoffLocation;
             this.expiresAt = expiresAt;
+            this.joinSession = null;
+        }
+
+        private MatchingSession(JoinRequestSession joinSession) {
+            this.requestId = joinSession.requestId();
+            this.selector = null;
+            this.pickupLocation = joinSession.pickupLocation();
+            this.dropoffLocation = joinSession.dropoffLocation();
+            this.expiresAt = joinSession.expiresAt();
+            this.joinSession = joinSession;
+        }
+
+        static MatchingSession forJoinRequest(JoinRequestSession joinSession) {
+            return new MatchingSession(joinSession);
+        }
+
+        boolean isJoinRequest() {
+            return joinSession != null;
         }
 
         synchronized Optional<RideMatchProposalResponse> advance() {

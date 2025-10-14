@@ -87,6 +87,34 @@ public class RealTimeNotificationService {
         }
     }
 
+    public void notifyDriverJoinRequest(DriverProfile driver, DriverRideOfferNotification payload) {
+        try {
+            // Send domain payload to driver's user-queue for actionable UI
+            messagingTemplate.convertAndSendToUser(
+                driver.getUser().getUserId().toString(),
+                DRIVER_QUEUE,
+                payload);
+
+            notificationService.sendNotification(
+                driver.getUser(),
+                NotificationType.RIDE_REQUEST,
+                "Join ride request",
+                String.format("Rider %s wants to join your shared ride",
+                    payload.getRiderName()),
+                toJson(payload),
+                Priority.HIGH,
+                DeliveryMethod.PUSH,
+                DRIVER_QUEUE);
+
+            log.info("Join request notification sent to driver {} for request {}",
+                driver.getDriverId(), payload.getRequestId());
+        } catch (Exception ex) {
+            log.error("Failed to notify driver {} about join request {}",
+                driver.getDriverId(), payload.getRequestId(), ex);
+        }
+    }
+
+
 
     private String toJson(Object payload) throws JsonProcessingException {
         return objectMapper.writeValueAsString(payload);

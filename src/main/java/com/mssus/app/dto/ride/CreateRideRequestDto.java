@@ -1,4 +1,4 @@
-package com.mssus.app.dto.request.ride;
+package com.mssus.app.dto.ride;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;

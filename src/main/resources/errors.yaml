@@ -10,7 +10,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Authentication credentials are required"
+    messageTemplate: "Yêu cầu thông tin xác thực"
     domain: auth
     category: validation
     owner: auth-team
@@ -20,7 +20,7 @@ errors:
     httpStatus: 401
     severity: WARN
     isRetryable: false
-    messageTemplate: "Invalid username or password"
+    messageTemplate: "Tên người dùng hoặc mật khẩu không đúng. Vui lòng kiểm tra lại thông tin và thử lại."
     domain: auth
     category: validation
     owner: auth-team
@@ -30,7 +30,7 @@ errors:
     httpStatus: 401
     severity: INFO
     isRetryable: true
-    messageTemplate: "Authentication token has expired"
+    messageTemplate: "Phiên xác thực đã hết hạn"
     domain: auth
     category: unauthorized
     owner: auth-team
@@ -40,7 +40,7 @@ errors:
     httpStatus: 401
     severity: WARN
     isRetryable: false
-    messageTemplate: "Authentication token is invalid"
+    messageTemplate: "Phiên xác thực không hợp lệ"
     domain: auth
     category: unauthorized
     owner: auth-team
@@ -50,7 +50,7 @@ errors:
     httpStatus: 401
     severity: WARN
     isRetryable: false
-    messageTemplate: "Refresh token is invalid"
+    messageTemplate: "Phiên đăng nhập không hợp lệ"
     domain: auth
     category: unauthorized
     owner: auth-team
@@ -60,7 +60,7 @@ errors:
     httpStatus: 403
     severity: WARN
     isRetryable: false
-    messageTemplate: "You don't have permission to access this resource"
+    messageTemplate: "Bạn không có quyền truy cập tài nguyên này"
     domain: auth
     category: unauthorized
     owner: auth-team
@@ -70,7 +70,7 @@ errors:
     httpStatus: 403
     severity: INFO
     isRetryable: false
-    messageTemplate: "Account is pending approval"
+    messageTemplate: "Tài khoản đang chờ phê duyệt"
     domain: auth
     category: unauthorized
     owner: auth-team
@@ -80,7 +80,7 @@ errors:
     httpStatus: 403
     severity: WARN
     isRetryable: false
-    messageTemplate: "Account is suspended"
+    messageTemplate: "Tài khoản của bạn đã bị đình chỉ. Vui lòng liên hệ hỗ trợ để được trợ giúp."
     domain: auth
     category: unauthorized
     owner: auth-team
@@ -90,7 +90,7 @@ errors:
     httpStatus: 403
     severity: WARN
     isRetryable: true
-    messageTemplate: "Email verification is pending"
+    messageTemplate: "Vui lòng xác minh email của bạn"
     domain: user
     category: validation
     owner: user-team
@@ -102,7 +102,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "User not found"
+    messageTemplate: "Không tìm thấy người dùng"
     domain: user
     category: not-found
     owner: user-team
@@ -111,7 +111,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "User not found"
+    messageTemplate: "Không tìm thấy người dùng"
     domain: user
     category: not-found
     owner: user-team
@@ -120,7 +120,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Email address already exists"
+    messageTemplate: "Địa chỉ email đã tồn tại. Vui lòng sử dụng email khác hoặc khôi phục tài khoản hiện có."
     domain: user
     category: conflict
     owner: user-team
@@ -130,7 +130,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Username already exists"
+    messageTemplate: "Tên người dùng đã tồn tại"
     domain: user
     category: conflict
     owner: user-team
@@ -140,7 +140,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Phone already exists"
+    messageTemplate: "Số điện thoại đã tồn tại. Vui lòng sử dụng số điện thoại khác."
     domain: user
     category: conflict
     owner: user-team
@@ -150,7 +150,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Invalid email format"
+    messageTemplate: "Định dạng email không hợp lệ. Vui lòng nhập địa chỉ email hợp lệ."
     domain: user
     category: validation
     owner: user-team
@@ -160,7 +160,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Password does not meet security requirements"
+    messageTemplate: "Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt."
     domain: user
     category: validation
     owner: user-team
@@ -170,7 +170,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "User profile does not exist"
+    messageTemplate: "Hồ sơ người dùng không tồn tại"
     domain: user
     category: validation
     owner: user-team
@@ -180,7 +180,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "User profile is not active"
+    messageTemplate: "Hồ sơ người dùng không hoạt động"
     domain: user
     category: validation
     owner: user-team
@@ -190,7 +190,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: true
-    messageTemplate: "Invalid OTP code or expired"
+    messageTemplate: "Mã OTP không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra mã và thử lại."
     domain: otp
     category: validation
     owner: otp-team
@@ -202,7 +202,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "Wallet not found for user"
+    messageTemplate: "Không tìm thấy ví cho người dùng"
     domain: wallet
     category: not-found
     owner: wallet-team
@@ -211,7 +211,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Wallet already exists for this user"
+    messageTemplate: "Ví đã tồn tại cho người dùng này"
     domain: wallet
     category: conflict
     owner: wallet-team
@@ -220,7 +220,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Insufficient wallet balance for this operation"
+    messageTemplate: "Số dư ví không đủ cho thao tác này."
     domain: wallet
     category: operation
     owner: wallet-team
@@ -230,7 +230,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Wallet is inactive and cannot be used"
+    messageTemplate: "Ví không hoạt động và không thể sử dụng"
     domain: wallet
     category: operation
     owner: wallet-team
@@ -240,7 +240,7 @@ errors:
     httpStatus: 500
     severity: ERROR
     isRetryable: true
-    messageTemplate: "Wallet operation failed"
+    messageTemplate: "Thao tác ví thất bại"
     domain: wallet
     category: operation
     owner: wallet-team
@@ -251,7 +251,7 @@ errors:
     httpStatus: 500
     severity: ERROR
     isRetryable: true
-    messageTemplate: "Failed to send email notification"
+    messageTemplate: "Gửi thông báo qua email thất bại"
     domain: notification
     category: operation
     owner: notification-team
@@ -260,7 +260,7 @@ errors:
     httpStatus: 500
     severity: ERROR
     isRetryable: true
-    messageTemplate: "Failed to send SMS notification"
+    messageTemplate: "Gửi thông báo qua SMS thất bại"
     domain: notification
     category: operation
     owner: notification-team
@@ -269,7 +269,7 @@ errors:
     httpStatus: 500
     severity: ERROR
     isRetryable: false
-    messageTemplate: "Email template not found"
+    messageTemplate: "Không tìm thấy mẫu email"
     domain: notification
     category: operation
     owner: notification-team
@@ -279,7 +279,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Request body is invalid"
+    messageTemplate: "Nội dung yêu cầu không hợp lệ"
     domain: validation
     category: validation
     owner: platform-team
@@ -288,7 +288,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Required request parameter is missing"
+    messageTemplate: "Thiếu tham số yêu cầu bắt buộc"
     domain: validation
     category: validation
     owner: platform-team
@@ -297,7 +297,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Request parameter has invalid type"
+    messageTemplate: "Tham số yêu cầu có loại không hợp lệ"
     domain: validation
     category: validation
     owner: platform-team
@@ -306,7 +306,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "File size exceeds maximum limit"
+    messageTemplate: "Dung lượng tệp vượt quá giới hạn tối đa {maxSize}MB. Vui lòng giảm dung lượng tệp và thử lại."
     domain: validation
     category: validation
     owner: platform-team
@@ -317,7 +317,7 @@ errors:
     httpStatus: 500
     severity: ERROR
     isRetryable: false
-    messageTemplate: "An unexpected error occurred"
+    messageTemplate: "Đã xảy ra lỗi không mong muốn"
     domain: system
     category: internal
     owner: platform-team
@@ -326,7 +326,7 @@ errors:
     httpStatus: 500
     severity: ERROR
     isRetryable: true
-    messageTemplate: "Database operation failed"
+    messageTemplate: "Thao tác cơ sở dữ liệu thất bại"
     domain: system
     category: internal
     owner: platform-team
@@ -335,7 +335,7 @@ errors:
     httpStatus: 503
     severity: ERROR
     isRetryable: true
-    messageTemplate: "Service is temporarily unavailable"
+    messageTemplate: "Dịch vụ tạm thời không khả dụng"
     domain: system
     category: internal
     owner: platform-team
@@ -345,7 +345,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "Requested resource not found"
+    messageTemplate: "Không tìm thấy tài nguyên được yêu cầu"
     domain: system
     category: not-found
     owner: platform-team
@@ -355,7 +355,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "No active pricing configuration found"
+    messageTemplate: "Không tìm thấy cấu hình giá đang hoạt động"
     domain: pricing-config
     category: not-found
     owner: pricing-team
@@ -370,7 +370,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "Shared ride not found with ID: {rideId}"
+    messageTemplate: "Không tìm thấy chuyến đi chung với ID: {rideId}"
     domain: ride
     category: not-found
     owner: ride-team
@@ -380,7 +380,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "Ride request not found with ID: {requestId}"
+    messageTemplate: "Không tìm thấy yêu cầu chuyến đi với ID: {requestId}"
     domain: ride
     category: not-found
     owner: ride-team
@@ -391,7 +391,7 @@ errors:
     httpStatus: 403
     severity: WARN
     isRetryable: false
-    messageTemplate: "You are not the owner of this ride"
+    messageTemplate: "Bạn không phải là chủ của chuyến đi này"
     domain: ride
     category: unauthorized
     owner: ride-team
@@ -401,7 +401,7 @@ errors:
     httpStatus: 403
     severity: WARN
     isRetryable: false
-    messageTemplate: "You are not the owner of this ride request"
+    messageTemplate: "Bạn không phải là người tạo yêu cầu chuyến đi này"
     domain: ride
     category: unauthorized
     owner: ride-team
@@ -411,7 +411,7 @@ errors:
     httpStatus: 403
     severity: WARN
     isRetryable: false
-    messageTemplate: "Your profile is not authorized to perform this action"
+    messageTemplate: "Hồ sơ của bạn không được phép thực hiện hành động này"
     domain: ride
     category: unauthorized
     owner: ride-team
@@ -422,7 +422,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "No seats available on this ride"
+    messageTemplate: "Không còn ghế trống trên chuyến đi này"
     domain: ride
     category: validation
     owner: ride-team
@@ -432,7 +432,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Ride is in invalid state for this operation: {currentState}"
+    messageTemplate: "Chuyến đi đang ở trạng thái không hợp lệ cho thao tác này: {currentState}"
     domain: ride
     category: validation
     owner: ride-team
@@ -442,7 +442,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Request is in invalid state for this operation: {currentState}"
+    messageTemplate: "Yêu cầu đang ở trạng thái không hợp lệ cho thao tác này: {currentState}"
     domain: ride
     category: validation
     owner: ride-team
@@ -452,7 +452,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Invalid location configuration: {reason}"
+    messageTemplate: "Cấu hình vị trí không hợp lệ: {reason}"
     domain: ride
     category: validation
     owner: ride-team
@@ -462,7 +462,7 @@ errors:
     httpStatus: 400
     severity: WARN
     isRetryable: false
-    messageTemplate: "Route validation failed: {reason}"
+    messageTemplate: "Xác thực tuyến đường thất bại: {reason}"
     domain: ride
     category: validation
     owner: ride-team
@@ -472,7 +472,7 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Time conflict: {reason}"
+    messageTemplate: "Xung đột thời gian: {reason}"
     domain: ride
     category: validation
     owner: ride-team
@@ -482,18 +482,28 @@ errors:
     httpStatus: 409
     severity: WARN
     isRetryable: false
-    messageTemplate: "Service area violation: {reason}"
+    messageTemplate: "Vi phạm khu vực dịch vụ: {reason}"
     domain: ride
     category: validation
     owner: ride-team
     remediation: "Ensure pickup and dropoff locations are within service areas"
+
+  - id: ride.validation.missing-current-location
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Yêu cầu vị trí hiện tại cho thao tác này"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Provide your current location"
 
   # Ride Operation Errors
   - id: ride.operation.wallet-hold-failed
     httpStatus: 402
     severity: WARN
     isRetryable: true
-    messageTemplate: "Failed to place wallet hold: {reason}"
+    messageTemplate: "Không thể tạm giữ tiền trong ví: {reason}"
     domain: ride
     category: operation
     owner: ride-team
@@ -503,7 +513,7 @@ errors:
     httpStatus: 500
     severity: ERROR
     isRetryable: true
-    messageTemplate: "AI matching algorithm failed: {reason}"
+    messageTemplate: "Ghép chuyến xe chia sẻ thất bại: {reason}"
     domain: ride
     category: operation
     owner: ride-team
@@ -513,7 +523,7 @@ errors:
     httpStatus: 404
     severity: INFO
     isRetryable: false
-    messageTemplate: "No matching rides found for your request"
+    messageTemplate: "Không tìm thấy chuyến đi phù hợp cho yêu cầu của bạn"
     domain: ride
     category: operation
     owner: ride-team
@@ -523,7 +533,7 @@ errors:
     httpStatus: 410
     severity: INFO
     isRetryable: false
-    messageTemplate: "Ride request has expired (no driver accepted within timeout window)"
+    messageTemplate: "Yêu cầu chuyến đi đã hết hạn (không có tài xế nào chấp nhận trong khoảng thời gian chờ)"
     domain: ride
     category: operation
     owner: ride-team
@@ -533,8 +543,19 @@ errors:
     httpStatus: 402
     severity: WARN
     isRetryable: true
-    messageTemplate: "Cancellation fee required: {feeAmount}"
+    messageTemplate: "Phí hủy chuyến muộn {feeAmount} VND đã được áp dụng vào tài khoản của bạn."
     domain: ride
     category: operation
     owner: ride-team
     remediation: "Ensure sufficient balance to cover cancellation fee"
+
+  # Notification Errors
+  - id: notification.not-found.by-id
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: "Không tìm thấy thông báo với ID: {notificationId}"
+    domain: notification
+    category: not-found
+    owner: notification-team
+    remediation: "Verify the notification ID and try again"

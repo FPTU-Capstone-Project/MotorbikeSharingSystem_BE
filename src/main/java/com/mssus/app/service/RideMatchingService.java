@@ -1,6 +1,5 @@
 package com.mssus.app.service;
 
-import com.mssus.app.dto.LatLng;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.SharedRideRequest;
 
@@ -61,8 +60,5 @@ public interface RideMatchingService {
      * @return list of match proposals sorted by score (best first), empty if no matches
      */
     List<RideMatchProposalResponse> findMatches(SharedRideRequest request);
-
-
-    double calculateDistance(double lat1, double lng1, double lat2, double lng2);
 }
 
