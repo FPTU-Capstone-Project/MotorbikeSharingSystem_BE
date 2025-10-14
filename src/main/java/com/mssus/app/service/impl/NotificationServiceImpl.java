@@ -12,7 +12,9 @@ import com.mssus.app.entity.User;
 import com.mssus.app.mapper.NotificationMapper;
 import com.mssus.app.repository.NotificationRepository;
 import com.mssus.app.repository.UserRepository;
+import com.mssus.app.service.FcmService;
 import com.mssus.app.service.NotificationService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RequiredArgsConstructor
 @Service
@@ -33,55 +36,124 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final NotificationMapper notificationMapper;
+    private final FcmService fcmService;
 
     @Override
-    public void sendNotification(User user, NotificationType type, String title, String message, String payload,
-                                 Priority priority, DeliveryMethod method, String queue) {
-        String subPath;
-        if (type == NotificationType.RIDE_REQUEST && queue != null && queue.equals("/queue/ride-offers")) {
-            subPath = "/queue/ride-offers";
-        } else if (type == NotificationType.RIDE_REQUEST && queue != null && queue.equals("/queue/ride-matching")) {
-            subPath = "/queue/ride-matching";
-        } else {
-            subPath = "/queue/notifications";
-        }
-
-        String userIdStr = String.valueOf(user.getUserId());
-
-        log.debug("Creating notification for user {} - title: {}, message: {}", userIdStr, title, message);
-
-        Notification notification = Notification.builder()
-            .user(user)
-            .type(type)
-            .title(title)
-            .message(message)
-            .payload(payload)
-            .priority(priority)
-            .deliveryMethod(method)
-            .isRead(false)
-            .sentAt(LocalDateTime.now())
-            .build();
-        notificationRepository.save(notification);
-
-        WebSocketNotificationDto dto = WebSocketNotificationDto.builder()
-            .notificationId(notification.getNotifId())
-            .type(type)
-            .title(title)
-            .message(message)
-            .payload(payload)
-            .priority(priority)
-            .sentAt(notification.getSentAt())
-            .isRead(false)
-            .build();
-
-        log.info("Sending WebSocket notification to user {} via subPath: {}", userIdStr, subPath);
+    @Transactional
+    public void sendNotification(
+        User recipient,
+        NotificationType type,
+        String title,
+        String message,
+        String payloadJson,
+        Priority priority,
+        DeliveryMethod method,
+        String queue) {
         try {
-            messagingTemplate.convertAndSendToUser(userIdStr, subPath, dto);
-            log.info("WebSocket notification sent successfully to user {}", userIdStr);
+            Notification notification = Notification.builder()
+                .user(recipient)
+                .type(type)
+                .title(title)
+                .message(message)
+                .payload(payloadJson)
+                .priority(priority)
+                .deliveryMethod(method)
+                .isRead(false)
+                .sentAt(LocalDateTime.now())
+                .build();
+            notificationRepository.save(notification);
+            log.info("Notification saved to database for user {}", recipient.getUserId());
+
+            String subPath = "/queue/notifications";
+            if (type == NotificationType.RIDE_REQUEST) {
+                if ("/queue/ride-offers".equals(queue)) {
+                    subPath = "/queue/ride-offers";
+                } else if ("/queue/ride-matching".equals(queue)) {
+                    subPath = "/queue/ride-matching";
+                }
+            }
+
+            switch (method) {
+                case IN_APP -> sendWebSocketNotification(recipient, notification, subPath);
+                case PUSH -> sendPushNotification(recipient, title, message, payloadJson);
+                case EMAIL -> sendEmailNotification(recipient, title, message);
+                case SMS -> sendSmsNotification(recipient, message);
+            }
+
         } catch (Exception e) {
-            log.error("Failed to send WebSocket notification to user {}", userIdStr, e);
+            log.error("Failed to send notification to user {}: {}", recipient.getUserId(), e.getMessage(), e);
         }
     }
+
+    private void sendWebSocketNotification(User recipient, Notification notification, String subPath) {
+        try {
+            WebSocketNotificationDto dto = WebSocketNotificationDto.builder()
+                .notificationId(notification.getNotifId())
+                .type(notification.getType())
+                .title(notification.getTitle())
+                .message(notification.getMessage())
+                .payload(notification.getPayload())
+                .priority(notification.getPriority())
+                .sentAt(notification.getSentAt())
+                .isRead(false)
+                .build();
+
+            messagingTemplate.convertAndSendToUser(
+                recipient.getUserId().toString(),
+                subPath,
+                dto
+            );
+            log.info("WebSocket notification sent to user {} via {}", recipient.getUserId(), subPath);
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification to user {}: {}", recipient.getUserId(), e.getMessage(), e);
+        }
+    }
+
+    private void sendPushNotification(User recipient, String title, String message, String payloadJson) {
+        try {
+            Map<String, String> data = Map.of(
+                "payload", payloadJson != null ? payloadJson : "{}"
+            );
+            fcmService.sendPushNotification(recipient.getUserId(), title, message, data);
+            log.info("Push notification sent to user {}", recipient.getUserId());
+        } catch (Exception e) {
+            log.error("Failed to send push notification to user {}: {}. Falling back to WebSocket notification.",
+                recipient.getUserId(), e.getMessage(), e);
+
+            try {
+                Notification fallbackNotification = Notification.builder()
+                    .user(recipient)
+                    .type(NotificationType.RIDE_REQUEST)
+                    .title(title)
+                    .message(message)
+                    .payload(payloadJson)
+                    .priority(Priority.HIGH)
+                    .deliveryMethod(DeliveryMethod.IN_APP)
+                    .isRead(false)
+                    .sentAt(LocalDateTime.now())
+                    .build();
+                notificationRepository.save(fallbackNotification);
+
+                sendWebSocketNotification(recipient, fallbackNotification, "/queue/notifications");
+                log.info("Fallback WebSocket notification sent to user {}", recipient.getUserId());
+            } catch (Exception fallbackException) {
+                log.error("Fallback notification also failed for user {}: {}",
+                    recipient.getUserId(), fallbackException.getMessage(), fallbackException);
+            }
+        }
+    }
+
+
+    private void sendEmailNotification(User recipient, String title, String message) {
+        // TODO: Implement actual email sending
+        throw new UnsupportedOperationException("Email notification not implemented");
+    }
+
+    private void sendSmsNotification(User recipient, String message) {
+        // TODO: Implement actual SMS sending
+        throw new UnsupportedOperationException("SMS notification not implemented");
+    }
+
 
     @Override
     public Page<NotificationSummaryResponse> getNotificationsForUser(Authentication authentication, Pageable pageable) {

@@ -200,7 +200,6 @@ public class SharedRideServiceImpl implements SharedRideService {
     @Override
     @Transactional
     public SharedRideResponse startRide(StartRideRequest request, Authentication authentication) {
-        //TODO: Add driver current location validation to ensure 100m proximity to start location
         String username = authentication.getName();
         log.info("Driver {} starting ride {}", username, request.rideId());
 
@@ -336,46 +335,47 @@ public class SharedRideServiceImpl implements SharedRideService {
         if (ongoingRequests.isEmpty()) {
             log.warn("Completing ride {} without active requests", rideId);
         }
-
-        // Capture fares from all ONGOING requests
         BigDecimal totalFareCollected = BigDecimal.ZERO;
         BigDecimal platformCommission = BigDecimal.ZERO;
         List<Integer> completedRequestIds = new ArrayList<>();
 
-        for (SharedRideRequest sharedRideRequest : ongoingRequests) {
-            try {
-                // Capture fare
-                WalletCaptureRequest captureRequest = new WalletCaptureRequest();
-                captureRequest.setUserId(sharedRideRequest.getRider().getRiderId());
-                captureRequest.setBookingId(sharedRideRequest.getSharedRideRequestId());
-                captureRequest.setAmount(sharedRideRequest.getFareAmount());
-                captureRequest.setDriverId(driver.getDriverId());
-                captureRequest.setNote("Ride completion - Request #" + sharedRideRequest.getSharedRideRequestId());
+        // Capture fares from all ONGOING requests
+        if (!ongoingRequests.isEmpty()) {
+            for (SharedRideRequest sharedRideRequest : ongoingRequests) {
+                try {
+                    // Capture fare
+                    WalletCaptureRequest captureRequest = new WalletCaptureRequest();
+                    captureRequest.setUserId(sharedRideRequest.getRider().getRiderId());
+                    captureRequest.setBookingId(sharedRideRequest.getSharedRideRequestId());
+                    captureRequest.setAmount(sharedRideRequest.getFareAmount());
+                    captureRequest.setDriverId(driver.getDriverId());
+                    captureRequest.setNote("Ride completion - Request #" + sharedRideRequest.getSharedRideRequestId());
 
-                bookingWalletService.captureFunds(captureRequest);
+                    bookingWalletService.captureFunds(captureRequest);
 
-                totalFareCollected = totalFareCollected.add(sharedRideRequest.getFareAmount());
+                    totalFareCollected = totalFareCollected.add(sharedRideRequest.getFareAmount());
 
-                // Get commission rate from active pricing config
-                PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
-                    .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
-                BigDecimal commissionRate = activePricingConfig.getDefaultCommission();
+                    // Get commission rate from active pricing config
+                    PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
+                        .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+                    BigDecimal commissionRate = activePricingConfig.getDefaultCommission();
 
-                platformCommission = platformCommission.add(sharedRideRequest.getFareAmount().multiply(commissionRate));
+                    platformCommission = platformCommission.add(sharedRideRequest.getFareAmount().multiply(commissionRate));
 
-                // Update request status
-                sharedRideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
-                sharedRideRequest.setActualDropoffTime(LocalDateTime.now());
-                requestRepository.save(sharedRideRequest);
+                    // Update request status
+                    sharedRideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
+                    sharedRideRequest.setActualDropoffTime(LocalDateTime.now());
+                    requestRepository.save(sharedRideRequest);
 
-                completedRequestIds.add(sharedRideRequest.getSharedRideRequestId());
+                    completedRequestIds.add(sharedRideRequest.getSharedRideRequestId());
 
-                log.info("Captured fare for request {} - amount: {}",
-                    sharedRideRequest.getSharedRideRequestId(), sharedRideRequest.getFareAmount());
+                    log.info("Captured fare for request {} - amount: {}",
+                        sharedRideRequest.getSharedRideRequestId(), sharedRideRequest.getFareAmount());
 
-            } catch (Exception e) {
-                log.error("Failed to capture fare for request {}: {}",
-                    sharedRideRequest.getSharedRideRequestId(), e.getMessage(), e);
+                } catch (Exception e) {
+                    log.error("Failed to capture fare for request {}: {}",
+                        sharedRideRequest.getSharedRideRequestId(), e.getMessage(), e);
+                }
             }
         }
 

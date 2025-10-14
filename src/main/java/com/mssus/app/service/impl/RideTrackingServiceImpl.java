@@ -9,6 +9,7 @@ import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.TrackingResponse;
+import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.dto.ride.LocationPoint;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.RideTrack;
@@ -18,7 +19,7 @@ import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.RideTrackRepository;
 import com.mssus.app.repository.SharedRideRepository;
 import com.mssus.app.repository.UserRepository;
-import com.mssus.app.service.RideMatchingService;
+import com.mssus.app.service.RealTimeNotificationService;
 import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.RoutingService;
 import com.mssus.app.util.PolylineDistance;
@@ -27,8 +28,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +44,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
     private final DriverProfileRepository driverRepository;
+    private final RealTimeNotificationService notificationService;
 
     @Override
     @Transactional
@@ -118,6 +122,13 @@ public class RideTrackingServiceImpl implements RideTrackingService {
                 throw BaseDomainException.of("tracking.invalid-speed", "Suspicious speed detected");
             }
         }
+
+        // Ensure timestamps are recent (e.g., last <1min old)
+        if (java.time.Duration.between(points.get(points.size()-1).timestamp(), LocalDateTime.now()).toMinutes() > 1) {
+            log.warn("Potentially stale points: last point {} min old",
+                java.time.Duration.between(points.get(points.size()-1).timestamp(), LocalDateTime.now()).toMinutes());
+            // Not throwing error, just warning
+        }
     }
 
     @Override
@@ -150,4 +161,50 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             return ride.getEstimatedDuration();  // Fallback
         }
     }
+
+    // Get latest position from track (with staleness check)
+    @Override
+    public Optional<LatLng> getLatestPosition(Integer rideId, int maxStaleMinutes) {
+        RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
+            .orElse(null);
+        if (track == null || track.getGpsPoints() == null || track.getGpsPoints().isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Get last point
+        JsonNode lastPoint = track.getGpsPoints().get(track.getGpsPoints().size() - 1);
+        double lat = lastPoint.get("lat").asDouble();
+        double lng = lastPoint.get("lng").asDouble();
+        LocalDateTime timestamp = LocalDateTime.parse(lastPoint.get("timestamp").asText());
+
+        // Staleness check
+        if (Duration.between(timestamp, LocalDateTime.now()).toMinutes() > maxStaleMinutes) {
+            log.warn("Stale position for ride {}: {} min old", rideId,
+                Duration.between(timestamp, LocalDateTime.now()).toMinutes());
+            return Optional.empty();  // Caller falls back
+        }
+
+        log.debug("Latest pos for ride {}: ({}, {}) at {}", rideId, lat, lng, timestamp);
+        return Optional.of(new LatLng(lat, lng));
+    }
+
+    @Override
+    public void startTracking(Integer rideId) {
+        SharedRide ride = rideRepository.findById(rideId)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+
+        RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
+            .orElseGet(() -> {
+                RideTrack newTrack = new RideTrack();
+                newTrack.setSharedRide(ride);
+                newTrack.setGpsPoints(objectMapper.createArrayNode());
+                newTrack.setCreatedAt(LocalDateTime.now());
+                return trackRepository.save(newTrack);
+            });
+
+        notificationService.notifyDriverTrackingStart(ride.getDriver(), rideId);
+
+        log.info("Tracking initiated for ride {} - driver notified to start GPS updates", rideId);
+    }
+
 }

@@ -281,3 +281,215 @@ VALUES
 -- =====================================================
 -- SEED DATA COMPLETED
 -- =====================================================
+
+-- Admin user
+INSERT INTO users (email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified)
+VALUES ('admin@mssus.com',
+        '0900000001',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
+        'System Administrator',
+        'ADMIN',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
+
+-- Ordinary user (John Doe)
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified,
+                   phone_verified)
+VALUES ('john.doe@example.com',
+        '0987654321',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+        'John Doe',
+        'STU123456',
+        'USER',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
+
+-- Rider profile for John Doe
+INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
+SELECT user_id, '0901234567', 'WALLET'
+FROM users
+WHERE email = 'john.doe@example.com';
+
+-- Driver profile for John Doe
+INSERT INTO driver_profiles (driver_id, license_number, status, is_available)
+SELECT user_id, 'DL123456789', 'ACTIVE', true
+FROM users
+WHERE email = 'john.doe@example.com';
+
+-- Driver 1
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified,
+                   phone_verified)
+VALUES ('driver1@example.com',
+        '0987652321',
+        '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru',
+        'Driver One',
+        'SE111111',
+        'USER',
+        'ACTIVE',
+        true,
+        true)
+ON CONFLICT (email) DO NOTHING;
+
+-- Rider profile for Driver 1
+INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method)
+SELECT user_id, '0901234567', 'WALLET'
+FROM users
+WHERE email = 'driver1@example.com';
+
+-- Driver profile for Driver 1
+INSERT INTO driver_profiles (driver_id, license_number, status, is_available)
+SELECT user_id, 'DL123236789', 'ACTIVE', true
+FROM users
+WHERE email = 'driver1@example.com';
+
+-- Locations
+INSERT INTO locations (name, lat, lng, address)
+VALUES ('Tòa S2.02 Vinhomes Grand Park', 10.8386317, 106.8318038, NULL),
+       ('FPT University - HCMC Campus', 10.841480, 106.809844, NULL),
+       ('Tòa S6.02 Vinhomes Grand Park', 10.8426113, 106.8374642, NULL),
+       ('Sảnh C6-C5, Ký túc xá Khu B ĐHQG TP.HCM', 10.8833471, 106.7795158, NULL);
+
+-- Vehicle for John Doe
+INSERT INTO vehicles (driver_id,
+                      plate_number,
+                      model,
+                      color,
+                      year,
+                      capacity,
+                      helmet_count,
+                      insurance_expiry,
+                      last_maintenance,
+                      fuel_type,
+                      status,
+                      verified_at)
+SELECT dp.driver_id,
+       '29A-12345',
+       'Honda Wave Alpha',
+       'Black',
+       2022,
+       1,
+       2,
+       '2025-01-01 00:00:00',
+       '2024-06-01 00:00:00',
+       'GASOLINE',
+       'ACTIVE',
+       '2024-06-10 12:00:00'
+FROM driver_profiles dp
+         JOIN users u ON dp.driver_id = u.user_id
+WHERE u.email = 'john.doe@example.com';
+
+-- Vehicle for Driver 1
+INSERT INTO vehicles (driver_id,
+                      plate_number,
+                      model,
+                      color,
+                      year,
+                      capacity,
+                      helmet_count,
+                      insurance_expiry,
+                      last_maintenance,
+                      fuel_type,
+                      status,
+                      verified_at)
+SELECT dp.driver_id,
+       '29A-12344',
+       'Honda Wave Alpha',
+       'Black',
+       2022,
+       1,
+       2,
+       '2025-01-01 00:00:00',
+       '2024-06-01 00:00:00',
+       'GASOLINE',
+       'ACTIVE',
+       '2024-06-10 12:00:00'
+FROM driver_profiles dp
+         JOIN users u ON dp.driver_id = u.user_id
+WHERE u.email = 'driver1@example.com';
+
+
+INSERT INTO wallets (user_id, shadow_balance, pending_balance, total_topped_up, total_spent, is_active, last_synced_at,
+                     created_at, updated_at)
+SELECT u.user_id,
+       300000, -- shadow_balance
+       0,      -- pending_balance
+       300000, -- total_topped_up
+       0,      -- total_spent
+       true,   -- is_active
+       now(),  -- last_synced_at
+       now(),  -- created_at
+       now()   -- updated_at
+FROM users u
+WHERE u.email = 'john.doe@example.com'
+  AND NOT EXISTS (SELECT 1
+                  FROM wallets w
+                  WHERE w.user_id = u.user_id);
+
+WITH transaction_group AS (SELECT '550e8400-e29b-41d4-a716-446655440001'::uuid AS group_id),
+     system_txn AS (
+         INSERT INTO transactions (
+                                   type,
+                                   group_id,
+                                   direction,
+                                   actor_kind,
+                                   actor_user_id,
+                                   system_wallet,
+                                   amount,
+                                   currency,
+                                   status,
+                                   psp_ref,
+                                   note,
+                                   created_at
+             )
+             SELECT 'TOPUP',
+                    group_id,
+                    'IN',
+                    'SYSTEM',
+                    NULL,
+                    'MASTER',
+                    300000,
+                    'VND',
+                    'SUCCESS',
+                    'PSP-TEST-300K-001',
+                    'PSP Inflow - Test wallet funding',
+                    now()
+             FROM transaction_group
+             RETURNING group_id)
+INSERT
+INTO transactions (type,
+                   group_id,
+                   direction,
+                   actor_kind,
+                   actor_user_id,
+                   rider_user_id,
+                   amount,
+                   currency,
+                   status,
+                   before_avail,
+                   after_avail,
+                   before_pending,
+                   after_pending,
+                   psp_ref,
+                   note,
+                   created_at)
+SELECT 'TOPUP',
+       g.group_id,
+       'IN',
+       'USER',
+       2, -- actor_user_id
+       1, -- rider_user_id
+       300000,
+       'VND',
+       'SUCCESS',
+       0,
+       300000,
+       0,
+       0,
+       'PSP-TEST-300K-001',
+       'Test wallet funding - 300,000 VND top-up',
+       now()
+FROM system_txn g;

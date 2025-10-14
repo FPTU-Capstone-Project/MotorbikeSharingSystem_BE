@@ -69,5 +69,10 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
     List<SharedRide> findCandidateRidesForMatching(
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
+
+    @Query("SELECT r FROM SharedRide r WHERE r.status = 'SCHEDULED' " +
+        "AND r.scheduledTime <= :cutoff")
+    List<SharedRide> findScheduledAndOverdue(LocalDateTime cutoff);
+
 }
 

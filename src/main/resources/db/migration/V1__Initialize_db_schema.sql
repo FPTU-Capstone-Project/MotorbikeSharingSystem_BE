@@ -832,7 +832,7 @@ ALTER TABLE notifications
     ADD CONSTRAINT chk_notification_type
         CHECK (type IN
                ('RIDE_REQUEST', 'RIDE_CONFIRMED', 'RIDE_STARTED', 'RIDE_COMPLETED', 'PAYMENT', 'PROMOTION', 'SYSTEM',
-                'EMERGENCY'));
+                'EMERGENCY', 'RIDE_TRACKING_START'));
 ALTER TABLE notifications
     ADD CONSTRAINT chk_priority
         CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT'));

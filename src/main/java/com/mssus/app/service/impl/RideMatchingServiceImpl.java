@@ -1,5 +1,6 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.ride.LatLng;
@@ -23,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -35,233 +37,327 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private final RoutingService routingService;
     private final RideTrackingService rideTrackingService;
 
-    private static final double EARTH_RADIUS_KM = 6371.0;
-
     @Override
     @Transactional(readOnly = true)
     public List<RideMatchProposalResponse> findMatches(SharedRideRequest request) {
-        //TODO: Find a solution to allow ONGOING rides to be matched
-        // Currently, ongoing rides are excluded from matching to avoid complex detour calculations
+        log.info("Finding matches for request ID: {}", request.getSharedRideRequestId());
 
-        //TODO: Add notification to driver in requestToJoinRide method
-        log.info("Finding matches for request ID: {}, pickup: {}, dropoff: {}, time: {}",
-            request.getSharedRideRequestId(),
-            request.getPickupLocationId(),
-            request.getDropoffLocationId(),
-            request.getPickupTime());
+        // Step 1: Extract and validate locations
+        LocationPair requestLocations = extractRequestLocations(request);
 
-        Location pickupLoc;
-        Location dropoffLoc;
-
-        // Step 1: Get request locations
-        if (request.getPickupLocationId() != null) {
-            pickupLoc = locationRepository.findById(request.getPickupLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "Pickup location not found: " + request.getPickupLocationId()));
-        } else if (request.getPickupLat() != null && request.getPickupLng() != null) {
-            pickupLoc = new Location();
-            pickupLoc.setLat(request.getPickupLat());
-            pickupLoc.setLng(request.getPickupLng());
-            pickupLoc.setName("Pickup Location");
-        } else {
-            throw BaseDomainException.formatted("ride.validation.invalid-location",
-                "Neither pickup location ID nor coordinates provided");
-        }
-
-        if (request.getDropoffLocationId() != null) {
-            dropoffLoc = locationRepository.findById(request.getDropoffLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "Dropoff location not found: " + request.getDropoffLocationId()));
-        } else if (request.getDropoffLat() != null && request.getDropoffLng() != null) {
-            dropoffLoc = new Location();
-            dropoffLoc.setLat(request.getDropoffLat());
-            dropoffLoc.setLng(request.getDropoffLng());
-            dropoffLoc.setName("Dropoff Location");
-        } else {
-            throw BaseDomainException.formatted("ride.validation.invalid-location",
-                "Neither dropoff location ID nor coordinates provided");
-        }
-
-        // Step 2: Calculate time window
-        LocalDateTime requestTime = request.getPickupTime();
-        int timeWindowMinutes = rideConfig.getMatching().getTimeWindowMinutes();
-        LocalDateTime startTime = requestTime.minusMinutes(timeWindowMinutes);
-        LocalDateTime endTime = requestTime.plusMinutes(timeWindowMinutes);
-
-        log.debug("Time window: {} to {}", startTime, endTime);
-
-        // Step 3: Find candidate rides
-        List<SharedRide> candidateRides = rideRepository.findCandidateRidesForMatching(startTime, endTime);
-        log.info("Found {} candidate rides in time window", candidateRides.size());
+        // Step 2: Find candidate rides within time window
+        List<SharedRide> candidateRides = findCandidateRides(request.getPickupTime());
 
         if (candidateRides.isEmpty()) {
             log.info("No candidate rides found for matching");
             return List.of();
         }
 
-        // Step 4: Score and filter candidates
+        // Step 3: Score and filter candidates
+        List<RideMatchProposalResponse> proposals = evaluateCandidates(
+            candidateRides, requestLocations, request);
+
+        // Step 4: Sort and limit results
+        return selectTopProposals(proposals);
+    }
+
+    private LocationPair extractRequestLocations(SharedRideRequest request) {
+        Location pickup = resolveLocation(
+            request.getPickupLocationId(),
+            request.getPickupLat(),
+            request.getPickupLng(),
+            "Pickup Location"
+        );
+
+        Location dropoff = resolveLocation(
+            request.getDropoffLocationId(),
+            request.getDropoffLat(),
+            request.getDropoffLng(),
+            "Dropoff Location"
+        );
+
+        return new LocationPair(pickup, dropoff);
+    }
+
+    private Location resolveLocation(Integer locationId, Double lat, Double lng, String defaultName) {
+        if (locationId != null) {
+            return locationRepository.findById(locationId)
+                .orElseThrow(() -> BaseDomainException.formatted(
+                    "ride.validation.invalid-location",
+                    defaultName + " not found: " + locationId));
+        }
+
+        if (lat != null && lng != null) {
+            Location loc = new Location();
+            loc.setLat(lat);
+            loc.setLng(lng);
+            loc.setName(defaultName);
+            return loc;
+        }
+
+        throw BaseDomainException.formatted(
+            "ride.validation.invalid-location",
+            "Neither location ID nor coordinates provided for " + defaultName);
+    }
+
+    private List<SharedRide> findCandidateRides(LocalDateTime requestTime) {
+        int timeWindowMinutes = rideConfig.getMatching().getTimeWindowMinutes();
+        LocalDateTime startTime = requestTime.minusMinutes(timeWindowMinutes);
+        LocalDateTime endTime = requestTime.plusMinutes(timeWindowMinutes);
+
+        log.debug("Time window: {} to {}", startTime, endTime);
+
+        List<SharedRide> candidates = rideRepository.findCandidateRidesForMatching(startTime, endTime);
+        log.info("Found {} candidate rides in time window", candidates.size());
+
+        return candidates;
+    }
+
+    private List<RideMatchProposalResponse> evaluateCandidates(
+        List<SharedRide> candidateRides,
+        LocationPair requestLocations,
+        SharedRideRequest request) {
+
         List<RideMatchProposalResponse> proposals = new ArrayList<>();
+        MatchingMetrics metrics = new MatchingMetrics();
+
+        for (SharedRide ride : candidateRides) {
+            metrics.incrementProcessed();
+
+            try {
+                evaluateSingleCandidate(ride, requestLocations, request, proposals, metrics);
+            } catch (Exception e) {
+                metrics.incrementErrors();
+                log.error("Error evaluating ride {}: {}", ride.getSharedRideId(), e.getMessage(), e);
+            }
+        }
+
+        logMatchingMetrics(metrics, proposals.size());
+        return proposals;
+    }
+
+    private void evaluateSingleCandidate(
+        SharedRide ride,
+        LocationPair requestLocations,
+        SharedRideRequest request,
+        List<RideMatchProposalResponse> proposals,
+        MatchingMetrics metrics) {
+
+        log.debug("Evaluating ride ID: {}", ride.getSharedRideId());
+
+        // Extract ride locations
+        LocationPair rideLocations = extractRideLocations(ride);
+
+        // Check proximity
+        ProximityCheck proximityCheck = checkProximity(requestLocations, rideLocations);
+        if (!proximityCheck.isValid()) {
+            metrics.incrementRejectedProximity();
+            log.debug("Ride {} rejected - proximity threshold exceeded", ride.getSharedRideId());
+            return;
+        }
+
+        // Calculate detour
+        DetourCalculation detour = calculateDetour(ride, rideLocations, requestLocations, request.getPickupTime());
+
+        // Check driver's detour preference
+        if (!isDetourAcceptable(ride, detour.durationMinutes())) {
+            metrics.incrementRejectedDetour();
+            log.debug("Ride {} rejected - exceeds driver's max detour", ride.getSharedRideId());
+            return;
+        }
+
+        // Calculate match score
+        float matchScore = calculateMatchScore(
+            ride,
+            proximityCheck.pickupDistance(),
+            proximityCheck.dropoffDistance(),
+            request.getPickupTime(),
+            detour.distanceKm()
+        );
+
+        // Build and add proposal
+        RideMatchProposalResponse proposal = buildProposal(
+            ride, requestLocations.pickup(), requestLocations.dropoff(),
+            detour.distanceKm(), detour.durationMinutes(),
+            matchScore, request
+        );
+
+        proposals.add(proposal);
+    }
+
+    private LocationPair extractRideLocations(SharedRide ride) {
+        Location start = resolveRideLocation(
+            ride.getStartLocationId(),
+            ride.getStartLat(),
+            ride.getStartLng(),
+            "Ride Start Location"
+        );
+
+        Location end = resolveRideLocation(
+            ride.getEndLocationId(),
+            ride.getEndLat(),
+            ride.getEndLng(),
+            "Ride End Location"
+        );
+
+        return new LocationPair(start, end);
+    }
+
+    private Location resolveRideLocation(Integer locationId, Double lat, Double lng, String defaultName) {
+        if (locationId != null) {
+            return locationRepository.findById(locationId)
+                .orElseGet(() -> createLocation(lat, lng, defaultName));
+        }
+        return createLocation(lat, lng, defaultName);
+    }
+
+    private Location createLocation(Double lat, Double lng, String name) {
+        Location loc = new Location();
+        loc.setLat(lat);
+        loc.setLng(lng);
+        loc.setName(name);
+        return loc;
+    }
+
+    private ProximityCheck checkProximity(LocationPair request, LocationPair ride) {
+        double pickupDistance = PolylineDistance.haversineMeters(
+            request.pickup().getLat(), request.pickup().getLng(),
+            ride.pickup().getLat(), ride.pickup().getLng()
+        );
+
+        double dropoffDistance = PolylineDistance.haversineMeters(
+            request.dropoff().getLat(), request.dropoff().getLng(),
+            ride.dropoff().getLat(), ride.dropoff().getLng()
+        );
+
         double maxProximityKm = rideConfig.getMatching().getMaxProximityKm();
-        int processedCandidates = 0;
+        boolean valid = pickupDistance <= maxProximityKm && dropoffDistance <= maxProximityKm;
+
+        return new ProximityCheck(valid, pickupDistance, dropoffDistance);
+    }
+
+    private DetourCalculation calculateDetour(
+        SharedRide ride,
+        LocationPair rideLocations,
+        LocationPair requestLocations,
+        LocalDateTime requestTime) {
+
+        try {
+            return calculateDetourViaRouting(ride, rideLocations, requestLocations, requestTime);
+        } catch (Exception e) {
+            log.warn("Routing API failed for ride {}: {}. Using fallback.",
+                ride.getSharedRideId(), e.getMessage());
+            return calculateDetourFallback(rideLocations, requestLocations);
+        }
+    }
+
+    private DetourCalculation calculateDetourViaRouting(
+        SharedRide ride,
+        LocationPair rideLocations,
+        LocationPair requestLocations,
+        LocalDateTime requestTime) {
+
+        LatLng effectiveStart = getEffectiveStartLocation(ride, rideLocations);
+
+        RouteResponse originalRoute = routingService.getRoute(
+            effectiveStart.latitude(), effectiveStart.longitude(),
+            rideLocations.dropoff().getLat(), rideLocations.dropoff().getLng()
+        );
+
+        List<LatLng> waypoints = List.of(
+            effectiveStart,
+            new LatLng(requestLocations.pickup().getLat(), requestLocations.pickup().getLng()),
+            new LatLng(requestLocations.dropoff().getLat(), requestLocations.dropoff().getLng()),
+            new LatLng(rideLocations.dropoff().getLat(), rideLocations.dropoff().getLng())
+        );
+
+        RouteResponse modifiedRoute = routingService.getMultiStopRoute(waypoints, requestTime);
+
+        double detourKm = Math.max(0, modifiedRoute.distance() * 1000 - originalRoute.distance() * 1000);
+        int detourMinutes = (int) Math.max(0, Math.ceil((modifiedRoute.time() - originalRoute.time()) / 60.0));
+
+        return new DetourCalculation(detourKm, detourMinutes);
+    }
+
+    private DetourCalculation calculateDetourFallback(LocationPair ride, LocationPair request) {
+        double pickupProximity = PolylineDistance.haversineMeters(
+            request.pickup().getLat(), request.pickup().getLng(),
+            ride.pickup().getLat(), ride.pickup().getLng()
+        );
+
+        double dropoffProximity = PolylineDistance.haversineMeters(
+            request.dropoff().getLat(), request.dropoff().getLng(),
+            ride.dropoff().getLat(), ride.dropoff().getLng()
+        );
+
+        double avgProximity = (pickupProximity + dropoffProximity) / 2.0;
+        int detourMinutes = (int) Math.ceil(avgProximity / 0.5); // 0.5 km/min avg speed
+
+        return new DetourCalculation(avgProximity, detourMinutes);
+    }
+
+    private LatLng getEffectiveStartLocation(SharedRide ride, LocationPair rideLocations) {
+        if (ride.getStatus() == SharedRideStatus.ONGOING) {
+            return rideTrackingService.getLatestPosition(ride.getSharedRideId(), 5)
+                .orElseGet(() -> new LatLng(ride.getStartLat(), ride.getStartLng()));
+        }
+        return new LatLng(rideLocations.pickup().getLat(), rideLocations.pickup().getLng());
+    }
+
+    private boolean isDetourAcceptable(SharedRide ride, int detourMinutes) {
+        Integer driverMaxDetour = ride.getDriver().getMaxDetourMinutes();
+        return driverMaxDetour == null || detourMinutes <= driverMaxDetour;
+    }
+
+    private List<RideMatchProposalResponse> selectTopProposals(List<RideMatchProposalResponse> proposals) {
+        int maxProposals = rideConfig.getMatching().getMaxProposals();
+
+        List<RideMatchProposalResponse> topProposals = proposals.stream()
+            .sorted(Comparator.comparing(RideMatchProposalResponse::getMatchScore).reversed())
+            .limit(maxProposals)
+            .toList();
+
+        log.info("Returning {} match proposals", topProposals.size());
+        return topProposals;
+    }
+
+    private void logMatchingMetrics(MatchingMetrics metrics, int proposalsCount) {
+        log.debug("Matching summary: {} processed, {} rejected (proximity: {}, detour: {}), {} errors, {} proposals",
+            metrics.processed, metrics.rejectedProximity + metrics.rejectedDetour,
+            metrics.rejectedProximity, metrics.rejectedDetour, metrics.errors, proposalsCount);
+    }
+
+    // Helper records
+    private record LocationPair(Location pickup, Location dropoff) {
+    }
+
+    private record ProximityCheck(boolean isValid, double pickupDistance, double dropoffDistance) {
+    }
+
+    private record DetourCalculation(double distanceKm, int durationMinutes) {
+    }
+
+    private static class MatchingMetrics {
+        int processed = 0;
         int rejectedProximity = 0;
         int rejectedDetour = 0;
         int errors = 0;
 
-        for (SharedRide ride : candidateRides) {
-            processedCandidates++;
-            log.debug("Processing candidate ride ID: {}, scheduled: {}, driver: {}",
-                ride.getSharedRideId(), ride.getScheduledTime(), ride.getDriver().getDriverId());
-
-            try {
-                // Get ride locations
-                Location rideStart;
-                if (ride.getStartLocationId() != null) {
-                    rideStart = locationRepository.findById(ride.getStartLocationId())
-                        .orElseGet(() -> {
-                            Location loc = new Location();
-                            loc.setLat(ride.getStartLat());
-                            loc.setLng(ride.getStartLng());
-                            loc.setName("Ride Start Location");
-                            return loc;
-                        });
-                } else {
-                    rideStart = new Location();
-                    rideStart.setLat(ride.getStartLat());
-                    rideStart.setLng(ride.getStartLng());
-                    rideStart.setName("Ride Start Location");
-                }
-
-                Location rideEnd;
-                if (ride.getEndLocationId() != null) {
-                    rideEnd = locationRepository.findById(ride.getEndLocationId())
-                        .orElseGet(() -> {
-                            Location loc = new Location();
-                            loc.setLat(ride.getEndLat());
-                            loc.setLng(ride.getEndLng());
-                            loc.setName("Ride End Location");
-                            return loc;
-                        });
-                } else {
-                    rideEnd = new Location();
-                    rideEnd.setLat(ride.getEndLat());
-                    rideEnd.setLng(ride.getEndLng());
-                    rideEnd.setName("Ride End Location");
-                }
-
-                log.debug("Ride {} locations: Start ({}, {}), End ({}, {})",
-                    ride.getSharedRideId(), rideStart.getLat(), rideStart.getLng(), rideEnd.getLat(), rideEnd.getLng());
-
-                // Calculate proximity scores
-                double pickupToStartDistance = PolylineDistance.haversineMeters(
-                    pickupLoc.getLat(), pickupLoc.getLng(),
-                    rideStart.getLat(), rideStart.getLng());
-                double dropoffToEndDistance = PolylineDistance.haversineMeters(
-                    dropoffLoc.getLat(), dropoffLoc.getLng(),
-                    rideEnd.getLat(), rideEnd.getLng());
-
-                log.debug("Ride {} proximity: Pickup-to-start {} km, Dropoff-to-end {} km (max: {} km)",
-                    ride.getSharedRideId(), pickupToStartDistance, dropoffToEndDistance, maxProximityKm);
-
-                // Filter by proximity threshold
-                if (pickupToStartDistance > maxProximityKm || dropoffToEndDistance > maxProximityKm) {
-                    rejectedProximity++;
-                    log.debug("Ride {} rejected - proximity threshold exceeded (pickup: {}, dropoff: {})",
-                        ride.getSharedRideId(), pickupToStartDistance, dropoffToEndDistance);
-                    continue;
-                }
-
-                double detourDistanceKm;
-                int detourDurationMinutes;
-
-                try {
-                    // Original route: start -> end
-                    RouteResponse originalRoute = routingService
-                        .getRoute(rideStart.getLat(), rideStart.getLng(), rideEnd.getLat(), rideEnd.getLng());
-
-                    // Modified route: start -> pickup -> dropoff -> end
-                    List<LatLng> waypoints = List.of(
-                        new LatLng(rideStart.getLat(), rideStart.getLng()),
-                        new LatLng(pickupLoc.getLat(), pickupLoc.getLng()),
-                        new LatLng(dropoffLoc.getLat(), dropoffLoc.getLng()),
-                        new LatLng(rideEnd.getLat(), rideEnd.getLng())
-                    );
-
-                    RouteResponse modifiedRoute = routingService
-                        .getMultiStopRoute(waypoints, ride.getScheduledTime());
-
-                    log.debug("Ride {} routes: Original {} km / {} s, Modified {} km / {} s",
-                        ride.getSharedRideId(),
-                        originalRoute.distance(), originalRoute.time(),
-                        modifiedRoute.distance(), modifiedRoute.time());
-
-                    // Calculate detours
-                    detourDistanceKm = modifiedRoute.distance() * 1000 - originalRoute.distance() * 1000;
-                    long durationDiffSeconds = modifiedRoute.time() - originalRoute.time();
-                    detourDurationMinutes = (int) Math.ceil(durationDiffSeconds / 60.0);
-
-                    // Ensure non-negative
-                    if (detourDistanceKm < 0) detourDistanceKm = 0;
-                    if (detourDurationMinutes < 0) detourDurationMinutes = 0;
-
-                    log.debug("Ride {} detour via Goong: {} km / {} min", ride.getSharedRideId(), detourDistanceKm, detourDurationMinutes);
-                } catch (Exception routesEx) {
-                    log.warn("Goong API failed for ride {}: {}. Falling back to heuristic.", ride.getSharedRideId(), routesEx.getMessage());
-                    // Fallback to original heuristic
-                    double avgProximity = (pickupToStartDistance + dropoffToEndDistance) / 2.0;
-                    detourDistanceKm = avgProximity;
-                    double averageSpeedKmPerMin = 0.5;
-                    detourDurationMinutes = (int) Math.ceil(avgProximity / averageSpeedKmPerMin);
-                    log.debug("Ride {} fallback detour: {} km / {} min (avg proximity: {})",
-                        ride.getSharedRideId(), detourDistanceKm, detourDurationMinutes, avgProximity);
-                }
-
-                // Check against driver's max detour preference
-                Integer driverMaxDetour = ride.getDriver().getMaxDetourMinutes();
-                log.debug("Ride {} driver max detour: {} min (calculated: {} min)",
-                    ride.getSharedRideId(), driverMaxDetour, detourDurationMinutes);
-
-                if (driverMaxDetour != null && detourDurationMinutes > driverMaxDetour) {
-                    rejectedDetour++;
-                    log.debug("Ride {} rejected - exceeds driver's max detour preference ({} > {})",
-                        ride.getSharedRideId(), detourDurationMinutes, driverMaxDetour);
-                    continue;
-                }
-
-                // Calculate match score
-                float matchScore = calculateMatchScore(
-                    ride, pickupToStartDistance, dropoffToEndDistance,
-                    requestTime, detourDistanceKm);
-                log.debug("Ride {} match score calculated: {}", ride.getSharedRideId(), matchScore);
-
-                // Build proposal
-                RideMatchProposalResponse proposal = buildProposal(
-                    ride, pickupLoc, dropoffLoc,
-                    detourDistanceKm, detourDurationMinutes,
-                    matchScore, request);
-                log.debug("Ride {} proposal built successfully: score={}, detour={}km/{}min",
-                    ride.getSharedRideId(), matchScore, detourDistanceKm, detourDurationMinutes);
-
-                proposals.add(proposal);
-
-            } catch (Exception e) {
-                errors++;
-                log.error("Error scoring ride {}: {}", ride.getSharedRideId(), e.getMessage(), e);
-                // Continue with next candidate
-            }
+        void incrementProcessed() {
+            processed++;
         }
 
-        log.debug("Processing summary: {} candidates processed, {} rejected (proximity: {}, detour: {}), {} errors, {} proposals added",
-            processedCandidates, rejectedProximity + rejectedDetour, rejectedProximity, rejectedDetour, errors, proposals.size());
+        void incrementRejectedProximity() {
+            rejectedProximity++;
+        }
 
-        // Step 5: Sort by score descending and limit
-        proposals.sort(Comparator.comparing(RideMatchProposalResponse::getMatchScore).reversed());
-        int maxProposals = rideConfig.getMatching().getMaxProposals();
-        List<RideMatchProposalResponse> topProposals = proposals.stream()
-            .limit(maxProposals)
-            .toList();
+        void incrementRejectedDetour() {
+            rejectedDetour++;
+        }
 
-        log.info("Returning {} match proposals (scored and ranked)", topProposals.size());
-        return topProposals;
+        void incrementErrors() {
+            errors++;
+        }
     }
 
 
