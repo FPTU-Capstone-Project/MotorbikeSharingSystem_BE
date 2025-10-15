@@ -472,7 +472,7 @@ ALTER TABLE promotions
 CREATE TABLE shared_ride_requests
 (
     shared_ride_request_id SERIAL PRIMARY KEY,
-    shared_ride_id         INTEGER                               NOT NULL REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
+    shared_ride_id         INTEGER                               REFERENCES shared_rides (shared_ride_id) ON DELETE CASCADE,
     rider_id               INTEGER                               NOT NULL REFERENCES rider_profiles (rider_id) ON DELETE CASCADE,
     pickup_location_id     INTEGER REFERENCES locations (location_id),
     dropoff_location_id    INTEGER REFERENCES locations (location_id),
