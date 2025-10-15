@@ -1,7 +1,6 @@
 -- V999__Seed_data.sql
 -- Mock data for Motorbike Sharing System
 -- This data is completely different from V1_Initialize data
-SET session_replication_role = 'replica';
 
 -- Truncate tables in reverse order of dependencies
 TRUNCATE TABLE verifications CASCADE;
