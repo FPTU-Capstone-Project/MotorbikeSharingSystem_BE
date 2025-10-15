@@ -18,6 +18,7 @@ import com.mssus.app.service.RideMatchingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.time.Duration;
 import java.time.Instant;
+import com.mssus.app.service.RideRequestCreatedEvent;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +34,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * Coordinates the ride matching workflow after a rider submits an AI booking request.
  *
@@ -83,6 +86,12 @@ public class RideMatchingCoordinator {
     }
 
     private final ConcurrentHashMap<Integer, MatchingSession> sessions = new ConcurrentHashMap<>();
+
+    @TransactionalEventListener(fallbackExecution = true)
+    public void onRideRequestCreated(RideRequestCreatedEvent event) {
+        log.info("Received RideRequestCreatedEvent for request ID: {}", event.getRequestId());
+        initiateMatching(event.getRequestId());
+    }
 
     @Async("matchingTaskExecutor")
     public void initiateMatching(Integer requestId) {

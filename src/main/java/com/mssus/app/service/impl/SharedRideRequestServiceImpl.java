@@ -59,6 +59,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final RideMatchingService matchingService;
     private final RideConfigurationProperties rideConfig;
     private final RideMatchingCoordinator matchingCoordinator;
+    private final ApplicationEventPublisherService eventPublisherService;
 
     @Override
     @Transactional
@@ -152,11 +153,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         log.info("AI booking request created - ID: {}, rider: {}, fare: {}, status: {}",
             savedRequest.getSharedRideRequestId(), rider.getRiderId(),
             fareAmount, savedRequest.getStatus());
-
-        // TODO: Trigger notification service for potential drivers (placeholder for MVP)
-        // notificationService.notifyDriversOfNewRequest(savedRequest);
-
-        matchingCoordinator.initiateMatching(savedRequest.getSharedRideRequestId());
+        
+        // Publish an event to trigger matching after the transaction commits
+        eventPublisherService.publishRideRequestCreatedEvent(savedRequest.getSharedRideRequestId());
 
         return buildRequestResponse(savedRequest);
     }
