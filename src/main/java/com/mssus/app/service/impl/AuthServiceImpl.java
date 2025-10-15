@@ -4,10 +4,12 @@ import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.*;
 import com.mssus.app.dto.response.*;
+import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.entity.*;
 import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
 import com.mssus.app.service.AuthService;
+import com.mssus.app.service.EmailService;
 import com.mssus.app.service.RefreshTokenService;
 
 import com.mssus.app.util.Constants;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -38,17 +41,14 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenService refreshTokenService;
+    private final EmailService emailService;
 
-    @Value("${app.file.upload-dir:uploads}")
-    private String uploadDir;
 
-    public static Map<String, Object> userContext = new ConcurrentHashMap<>(); //TODO: improve context persistence later
+    public static Map<String, Object> userContext = new ConcurrentHashMap<>();
 
     @Override
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
-        log.info("Registering new user with email: {}", request.getEmail());
-
         if (userRepository.existsByEmailAndStatusNot(request.getEmail(), UserStatus.EMAIL_VERIFYING)) {
             throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s already registered", request.getEmail());
         }
@@ -77,7 +77,6 @@ public class AuthServiceImpl implements AuthService {
         user = userRepository.save(user);
         createRiderProfile(user);
 
-        createWallet(user);
         Map<String, Object> claims = buildTokenClaims(user, null);
         String token = jwtService.generateToken(user.getEmail(), claims);
 
@@ -180,8 +179,8 @@ public class AuthServiceImpl implements AuthService {
             throw BaseDomainException.of("auth.unauthorized.account-suspended");
         }
 
-        if (UserStatus.PENDING.equals(user.getStatus())) {
-            throw BaseDomainException.of("auth.unauthorized.account-pending");
+        if (UserStatus.DELETED.equals(user.getStatus())) {
+            throw BaseDomainException.of("auth.unauthorized.account-deleted");
         }
 
         if (UserStatus.EMAIL_VERIFYING.equals(user.getStatus())) {
@@ -198,17 +197,26 @@ public class AuthServiceImpl implements AuthService {
                 : userRepository.findByPhone(ValidationUtil.normalizePhone(identifier)).orElse(null);
 
         if (user == null) {
-            // Don't reveal if user exists
             return MessageResponse.of("OTP sent to your registered contact");
         }
 
-        // Generate and store OTP
         String otp = OtpUtil.generateOtp();
         String otpKey = user.getEmail() + ":" + Constants.OTP_FORGOT_PASSWORD;
         OtpUtil.storeOtp(otpKey, otp, OtpFor.FORGOT_PASSWORD);
 
-        // TODO: Send OTP via email/SMS service
-        log.info("OTP generated for password reset: {} (dev mode)", otp);
+        Map<String, Object> templateData = Map.of(
+                "fullName", user.getFullName(),
+                "otp", otp
+        );
+        String templateName = "emails/otp-password-reset";
+        String email = user.getEmail();
+        String subject = "Password Reset OTP";
+        emailService.sendEmail(email, subject, templateName, templateData, EmailPriority.HIGH, Long.valueOf(user.getUserId()), "")
+                .thenAccept(result -> log.info("Password reset OTP email sent to: {}", email))
+                .exceptionally(ex -> {
+                    log.error("Failed to send password reset OTP email to {}: {}", email, ex.getMessage());
+                    return null;
+                });
 
         return MessageResponse.of("OTP sent to your registered contact");
     }
@@ -220,22 +228,11 @@ public class AuthServiceImpl implements AuthService {
                 .totalRides(0)
                 .totalSpent(BigDecimal.ZERO)
                 .preferredPaymentMethod(PaymentMethod.WALLET)
+                .createdAt(LocalDateTime.now())
+                .emergencyContact("113")
                 .build();
 
         riderProfileRepository.save(riderProfile);
-    }
-
-    private void createWallet(User user) {
-        Wallet wallet = Wallet.builder()
-                .user(user)
-                .shadowBalance(BigDecimal.ZERO)
-                .pendingBalance(BigDecimal.ZERO)
-                .totalToppedUp(BigDecimal.ZERO)
-                .totalSpent(BigDecimal.ZERO)
-                .isActive(true)
-                .build();
-
-        walletRepository.save(wallet);
     }
 
     @Override

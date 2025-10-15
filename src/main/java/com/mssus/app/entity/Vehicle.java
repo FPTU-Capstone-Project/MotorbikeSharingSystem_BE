@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Vehicle {
+public class  Vehicle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

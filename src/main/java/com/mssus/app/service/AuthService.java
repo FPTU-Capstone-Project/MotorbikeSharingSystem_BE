@@ -19,8 +19,7 @@ public interface AuthService {
     TokenRefreshResponse refreshToken(TokenRefreshRequest request);
 
     MessageResponse forgotPassword(ForgotPasswordRequest request);
-    
-    // User context management methods
+
     Map<String, Object> getUserContext(Integer userId);
     
     void setUserContext(Integer userId, Map<String, Object> context);
