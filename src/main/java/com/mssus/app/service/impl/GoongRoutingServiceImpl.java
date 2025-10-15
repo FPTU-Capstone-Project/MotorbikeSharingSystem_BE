@@ -13,6 +13,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,7 +30,7 @@ public class GoongRoutingServiceImpl implements RoutingService {
 
     @Override
     public RouteResponse getRoute(double fromLat, double fromLon, double toLat, double toLon) {
-        String url = String.format("%s?origin=%f,%f&destination=%f,%f&vehicle=bike&api_key=%s",
+        String url = String.format(Locale.US, "%s?origin=%f,%f&destination=%f,%f&vehicle=bike&api_key=%s",
             GOONG_URL, fromLat, fromLon, toLat, toLon, API_KEY);
 
         ResponseEntity<GoongResponse> resp = restTemplate.getForEntity(url, GoongResponse.class);
