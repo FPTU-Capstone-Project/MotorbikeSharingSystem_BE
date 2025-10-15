@@ -18,6 +18,7 @@ import com.mssus.app.service.RideMatchingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
@@ -85,12 +86,16 @@ public class RideMatchingCoordinator {
         this.bookingWalletService = bookingWalletService;
     }
 
+    @Autowired
+    @Lazy
+    private RideMatchingCoordinator self;
+
     private final ConcurrentHashMap<Integer, MatchingSession> sessions = new ConcurrentHashMap<>();
 
     @TransactionalEventListener(fallbackExecution = true)
     public void onRideRequestCreated(RideRequestCreatedEvent event) {
         log.info("Received RideRequestCreatedEvent for request ID: {}", event.getRequestId());
-        initiateMatching(event.getRequestId());
+        self.initiateMatching(event.getRequestId());
     }
 
     @Async("matchingTaskExecutor")

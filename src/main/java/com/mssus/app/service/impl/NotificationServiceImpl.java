@@ -39,7 +39,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final FcmService fcmService;
 
     @Override
-    @Transactional
+    @Transactional(dontRollbackOn = BaseDomainException.class)
     public void sendNotification(
         User recipient,
         NotificationType type,
@@ -49,39 +49,35 @@ public class NotificationServiceImpl implements NotificationService {
         Priority priority,
         DeliveryMethod method,
         String queue) {
-        try {
-            Notification notification = Notification.builder()
-                .user(recipient)
-                .type(type)
-                .title(title)
-                .message(message)
-                .payload(payloadJson)
-                .priority(priority)
-                .deliveryMethod(method)
-                .isRead(false)
-                .sentAt(LocalDateTime.now())
-                .build();
-            notificationRepository.save(notification);
-            log.info("Notification saved to database for user {}", recipient.getUserId());
+        Notification notification = Notification.builder()
+            .user(recipient)
+            .type(type)
+            .title(title)
+            .message(message)
+            .payload(payloadJson)
+            .priority(priority)
+            .deliveryMethod(method)
+            .isRead(false)
+            .sentAt(LocalDateTime.now())
+            .build();
+        // Save the notification first. It's now part of the transaction.
+        notificationRepository.save(notification);
+        log.info("Notification (method: {}) saved to database for user {}", method, recipient.getUserId());
 
-            String subPath = "/queue/notifications";
-            if (type == NotificationType.RIDE_REQUEST) {
-                if ("/queue/ride-offers".equals(queue)) {
-                    subPath = "/queue/ride-offers";
-                } else if ("/queue/ride-matching".equals(queue)) {
-                    subPath = "/queue/ride-matching";
-                }
+        String subPath = "/queue/notifications";
+        if (type == NotificationType.RIDE_REQUEST) {
+            if ("/queue/ride-offers".equals(queue)) {
+                subPath = "/queue/ride-offers";
+            } else if ("/queue/ride-matching".equals(queue)) {
+                subPath = "/queue/ride-matching";
             }
+        }
 
-            switch (method) {
-                case IN_APP -> sendWebSocketNotification(recipient, notification, subPath);
-                case PUSH -> sendPushNotification(recipient, title, message, payloadJson);
-                case EMAIL -> sendEmailNotification(recipient, title, message);
-                case SMS -> sendSmsNotification(recipient, message);
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to send notification to user {}: {}", recipient.getUserId(), e.getMessage(), e);
+        switch (method) {
+            case IN_APP -> sendWebSocketNotification(recipient, notification, subPath);
+            case PUSH -> sendPushNotification(recipient, notification, subPath);
+            case EMAIL -> sendEmailNotification(recipient, title, message);
+            case SMS -> sendSmsNotification(recipient, message);
         }
     }
 
@@ -109,37 +105,22 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
-    private void sendPushNotification(User recipient, String title, String message, String payloadJson) {
+    private void sendPushNotification(User recipient, Notification notification, String webSocketFallbackPath) {
         try {
             Map<String, String> data = Map.of(
-                "payload", payloadJson != null ? payloadJson : "{}"
+                "payload", notification.getPayload() != null ? notification.getPayload() : "{}"
             );
-            fcmService.sendPushNotification(recipient.getUserId(), title, message, data);
+            fcmService.sendPushNotification(recipient.getUserId(), notification.getTitle(), notification.getMessage(), data);
             log.info("Push notification sent to user {}", recipient.getUserId());
-        } catch (Exception e) {
+        } catch (BaseDomainException e) {
             log.error("Failed to send push notification to user {}: {}. Falling back to WebSocket notification.",
                 recipient.getUserId(), e.getMessage(), e);
 
-            try {
-                Notification fallbackNotification = Notification.builder()
-                    .user(recipient)
-                    .type(NotificationType.RIDE_REQUEST)
-                    .title(title)
-                    .message(message)
-                    .payload(payloadJson)
-                    .priority(Priority.HIGH)
-                    .deliveryMethod(DeliveryMethod.IN_APP)
-                    .isRead(false)
-                    .sentAt(LocalDateTime.now())
-                    .build();
-                notificationRepository.save(fallbackNotification);
+            notification.setDeliveryMethod(DeliveryMethod.IN_APP);
+            notificationRepository.save(notification);
 
-                sendWebSocketNotification(recipient, fallbackNotification, "/queue/notifications");
-                log.info("Fallback WebSocket notification sent to user {}", recipient.getUserId());
-            } catch (Exception fallbackException) {
-                log.error("Fallback notification also failed for user {}: {}",
-                    recipient.getUserId(), fallbackException.getMessage(), fallbackException);
-            }
+            sendWebSocketNotification(recipient, notification, webSocketFallbackPath);
+            log.info("Fallback WebSocket notification sent to user {}", recipient.getUserId());
         }
     }
 
