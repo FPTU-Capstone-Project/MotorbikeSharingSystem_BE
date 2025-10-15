@@ -14,8 +14,6 @@ TRUNCATE TABLE driver_profiles CASCADE;
 TRUNCATE TABLE rider_profiles CASCADE;
 TRUNCATE TABLE users CASCADE;
 
--- Re-enable triggers
-SET session_replication_role = 'origin';
 
 -- Reset sequences to start from 1
 ALTER SEQUENCE users_user_id_seq RESTART WITH 1;
