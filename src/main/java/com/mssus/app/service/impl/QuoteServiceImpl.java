@@ -96,13 +96,12 @@ public class QuoteServiceImpl implements QuoteService {
         double centerLng = fptuLoc.getLng();
         double maxRadiusKm = 25.0; //TODO: Configurable via rideConfig.getServiceArea().getRadiusKm()
 
-        double pickupDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng());
-        double dropoffDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng());
+        double pickupDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng()) / 1000.0;
+        double dropoffDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng()) / 1000.0;
 
         if (pickupDistKm > maxRadiusKm || dropoffDistKm > maxRadiusKm) {
-            throw BaseDomainException.formatted("ride.validation.service-area-violation",
-                "Pickup (%.2f km) or dropoff (%.2f km) outside 25 km service area from FPT University",
-                pickupDistKm, dropoffDistKm);
+            throw BaseDomainException.of("ride.validation.service-area-violation",
+                "Pickup " + pickupDistKm +"km or dropoff " + dropoffDistKm + "km outside 25 km service area from FPT University");
         }
 
         var route = routingService.getRoute(
