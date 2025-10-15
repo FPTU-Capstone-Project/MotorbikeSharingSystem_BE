@@ -39,7 +39,7 @@ public class RegisterRequest {
     @Schema(description = "Plaintext password; will be hashed before storage")
     private String password;
 
-    @Pattern(regexp = "^(rider|driver)$", message = "Role must be either 'rider' or 'driver'")
+    @Pattern(regexp = "^(rider)$", message = "Role must be either 'rider'")
     @Schema(description = "Initial role for the account", example = "rider", defaultValue = "rider")
     @Builder.Default
     private String role = "rider";
