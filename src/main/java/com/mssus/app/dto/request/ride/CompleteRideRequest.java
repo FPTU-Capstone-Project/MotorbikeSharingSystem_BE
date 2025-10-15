@@ -10,6 +10,5 @@ public record CompleteRideRequest(
     @NotNull(message = "Ride ID is required")
     @Positive(message = "Ride ID must be positive")
     @Schema(description = "Unique identifier of the ride to be started", example = "123", required = true)
-    Integer rideId,
-    LatLng currentDriverLocation
+    Integer rideId
     ) {}

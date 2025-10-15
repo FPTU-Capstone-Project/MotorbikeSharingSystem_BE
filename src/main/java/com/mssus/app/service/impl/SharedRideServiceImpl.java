@@ -11,6 +11,7 @@ import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
+import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.entity.*;
 import com.mssus.app.mapper.SharedRideMapper;
 import com.mssus.app.repository.*;
@@ -49,6 +50,7 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final PricingConfigRepository pricingConfigRepository;
     private final RideTrackRepository trackRepository;
     private final RideTrackingService rideTrackingService;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -207,10 +209,8 @@ public class SharedRideServiceImpl implements SharedRideService {
         SharedRide ride = rideRepository.findByIdForUpdate(request.rideId())
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", request.rideId()));
 
-        if (request.currentDriverLocation() == null) {
-            throw BaseDomainException.of("ride.validation.missing-current-location",
-                "Driver current location is required to start ride");
-        }
+        LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
+            .orElse(new LatLng(ride.getStartLat(), ride.getStartLng())); // Fallback to start loc
 
         // Validate driver ownership
         User user = userRepository.findByEmail(username)
@@ -238,10 +238,10 @@ public class SharedRideServiceImpl implements SharedRideService {
         }
 
         double distanceFromDriverCurrentLocToRiderPickup = PolylineDistance.haversineMeters(
-                request.currentDriverLocation().latitude(),
-                request.currentDriverLocation().longitude(),
-                confirmedRequests.stream().findFirst().get().getPickupLat(),
-                confirmedRequests.stream().findFirst().get().getPickupLng());
+            driverCurrentLoc.latitude(),
+            driverCurrentLoc.longitude(),
+            confirmedRequests.stream().findFirst().get().getPickupLat(),
+            confirmedRequests.stream().findFirst().get().getPickupLng());
 
         if (distanceFromDriverCurrentLocToRiderPickup > 0.1) {
             throw BaseDomainException.of("ride.validation.too-far-from-pickup",
@@ -280,10 +280,8 @@ public class SharedRideServiceImpl implements SharedRideService {
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
-        if (request.currentDriverLocation() == null) {
-            throw BaseDomainException.of("ride.validation.missing-current-location",
-                "Driver current location is required to start ride");
-        }
+        LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
+            .orElse(new LatLng(ride.getStartLat(), ride.getStartLng()));
 
         // Validate driver ownership
         User user = userRepository.findByEmail(username)
@@ -299,6 +297,14 @@ public class SharedRideServiceImpl implements SharedRideService {
         if (ride.getStatus() != SharedRideStatus.ONGOING) {
             throw BaseDomainException.of("ride.validation.invalid-state",
                 Map.of("currentState", ride.getStatus()));
+        }
+
+        if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
+            driverCurrentLoc.longitude(),
+            ride.getEndLat(), ride.getEndLng()) > 0.1) {
+            log.warn("Driver {} is too far from the dropoff location to complete ride {}",
+                driver.getDriverId(), rideId);
+            // For MVP, just log a warning. In production, consider rejecting completion.
         }
 
         // Compute actual duration from timestamps

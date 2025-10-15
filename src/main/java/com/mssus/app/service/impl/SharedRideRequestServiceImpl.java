@@ -59,8 +59,6 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final RideMatchingService matchingService;
     private final RideConfigurationProperties rideConfig;
     private final RideMatchingCoordinator matchingCoordinator;
-    private final ObjectMapper objectMapper;
-    private final NotificationService notificationService;
 
     @Override
     @Transactional
