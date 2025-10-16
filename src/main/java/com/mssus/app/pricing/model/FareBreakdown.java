@@ -1,18 +1,16 @@
 package com.mssus.app.pricing.model;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 public record FareBreakdown(
-    String pricingVersion,
+    Instant pricingVersion,
     long distanceMeters,
-    long durationSeconds,
-    MoneyVnd baseFlag,
-    MoneyVnd perKmComponent,
-    MoneyVnd perMinComponent,
-    MoneyVnd surcharge,
+    MoneyVnd base2KmVnd,
+    MoneyVnd after2KmPerKmVnd,
     MoneyVnd discount,
     MoneyVnd subtotal,
     MoneyVnd total,
-    BigDecimal commissionRate   // e.g., 0.10
+    BigDecimal commissionRate
 ) {}
 

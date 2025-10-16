@@ -14,6 +14,8 @@ public interface LocationRepository extends JpaRepository<Location, Integer> {
 
     List<Location> findByNameContainingIgnoreCase(String name);
 
+    Optional<Location> findByLatAndLng(Double lat, Double lng);
+
     @Query("SELECT l FROM Location l " +
            "WHERE l.lat BETWEEN :minLat AND :maxLat " +
            "AND l.lng BETWEEN :minLng AND :maxLng")

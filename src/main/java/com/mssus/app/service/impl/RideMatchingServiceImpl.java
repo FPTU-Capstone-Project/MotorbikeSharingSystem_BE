@@ -188,9 +188,11 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         // Build and add proposal
         RideMatchProposalResponse proposal = buildProposal(
-            ride, requestLocations.pickup(), requestLocations.dropoff(),
-            detour.distanceKm(), detour.durationMinutes(),
-            matchScore, request
+            ride,
+            detour.distanceKm(),
+            detour.durationMinutes(),
+            matchScore,
+            request
         );
 
         proposals.add(proposal);
@@ -361,7 +363,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         boolean hasAvailableSeats,
         boolean withinDetourLimit,
         float finalScore
-    ) {}
+    ) {
+    }
 
     private static class MatchingMetrics {
         int processed = 0;
@@ -418,7 +421,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         return (float) (totalScore * 100.0);
     }
 
-    private RideMatchProposalResponse buildProposal(SharedRide ride, Location pickupLoc, Location dropoffLoc,
+    private RideMatchProposalResponse buildProposal(SharedRide ride,
                                                     double detourKm, int detourMinutes, float matchScore,
                                                     SharedRideRequest request) {
 
@@ -428,9 +431,9 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             int estimatedTripMinutes = ride.getEstimatedDuration() != null ?
                 ride.getEstimatedDuration() : (int) (estimatedDistanceKm * 2); // ~30 km/h average
 
-            // Calculate fare using ride's pricing
-            BigDecimal estimatedFare = ride.getBaseFare()
-                .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
+            BigDecimal totalFare = request.getTotalFare();
+            BigDecimal earnedAmount = totalFare
+                .subtract(totalFare.multiply(ride.getPricingConfig().getSystemCommissionRate()));
 
             // Calculate estimated times
             // Assume detour happens at beginning, then straight to pickup
@@ -446,7 +449,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                 .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
                 .scheduledTime(ride.getScheduledTime())
                 .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
-                .estimatedFare(estimatedFare)
+                .totalFare(totalFare)
+                .earnedAmount(earnedAmount)
                 .estimatedDuration(estimatedTripMinutes)
                 .estimatedDistance((float) estimatedDistanceKm)
                 .detourDistance((float) detourKm)
@@ -460,8 +464,9 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             log.error("Error building proposal for ride {}: {}", ride.getSharedRideId(), e.getMessage(), e);
             // Fallback: use ride's base pricing
             double estimatedDistanceKm = ride.getEstimatedDistance() != null ? ride.getEstimatedDistance() : 10.0;
-            BigDecimal estimatedFare = ride.getBaseFare()
-                .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
+            BigDecimal totalFare = request.getTotalFare();
+            BigDecimal earnedAmount = totalFare
+                .subtract(totalFare.multiply(ride.getPricingConfig().getSystemCommissionRate()));
 
             LocalDateTime estimatedPickupTime = ride.getScheduledTime().plusMinutes(detourMinutes);
             int estimatedTripMinutes = ride.getEstimatedDuration() != null ? ride.getEstimatedDuration() : 30;
@@ -476,7 +481,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                 .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
                 .scheduledTime(ride.getScheduledTime())
                 .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
-                .estimatedFare(estimatedFare)
+                .totalFare(totalFare)
+                .earnedAmount(earnedAmount)
                 .estimatedDuration(estimatedTripMinutes)
                 .estimatedDistance((float) estimatedDistanceKm)
                 .detourDistance((float) detourKm)

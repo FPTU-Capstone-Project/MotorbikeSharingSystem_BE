@@ -19,5 +19,7 @@ public interface PricingConfigRepository extends JpaRepository<PricingConfig, St
     """)
     Optional<PricingConfig> findActive(@Param("now") Instant now);
 
-    Optional<PricingConfig> findByVersion(String version);
+    Optional<PricingConfig> findByVersion(Instant version);
+
+    PricingConfig findByPricingConfigId(Integer pricingConfigId);
 }

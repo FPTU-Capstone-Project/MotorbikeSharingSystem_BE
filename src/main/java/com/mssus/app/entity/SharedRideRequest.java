@@ -28,8 +28,7 @@ public class SharedRideRequest {
     @ManyToOne
     @JoinColumn(name = "shared_ride_id", nullable = true)
     private SharedRide sharedRide;
-    
-    // NEW: Type of request flow (AI_BOOKING or JOIN_RIDE)
+
     @Column(name = "request_kind", length = 20, nullable = false)
     @Enumerated(EnumType.STRING)
     private RequestKind requestKind;
@@ -60,23 +59,25 @@ public class SharedRideRequest {
     @Enumerated(EnumType.STRING)
     private SharedRideRequestStatus status;
 
-    @Column(name = "fare_amount", nullable = false, precision = 19, scale = 2)
-    private BigDecimal fareAmount;
+    @ManyToOne
+    @JoinColumn(name = "promotion_id")
+    private Promotion promotion;
 
-    @Column(name = "original_fare", precision = 19, scale = 2)
-    private BigDecimal originalFare;
+    @ManyToOne
+    @JoinColumn(name = "pricing_config_id", nullable = false)
+    private PricingConfig pricingConfig;
 
-    @Column(name = "discount_amount", precision = 19, scale = 2)
+    @Column(name = "subtotal_fare", nullable = false, precision = 19, scale = 2)
+    private BigDecimal subtotalFare;
+
+    @Column(name = "discount_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal discountAmount;
+
+    @Column(name = "total_fare", nullable = false, precision = 19, scale = 2)
+    private BigDecimal totalFare;
 
     @Column(name = "pickup_time", nullable = false)
     private LocalDateTime pickupTime;
-
-    @Column(name = "max_wait_time")
-    private Integer maxWaitTime;
-
-    @Column(name = "coverage_time_step")
-    private Integer coverageTimeStep;
 
     @Column(name = "special_requests", columnDefinition = "TEXT")
     private String specialRequests;

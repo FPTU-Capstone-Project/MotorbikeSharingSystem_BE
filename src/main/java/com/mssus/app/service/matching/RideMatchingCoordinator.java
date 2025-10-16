@@ -255,12 +255,12 @@ public class RideMatchingCoordinator {
                 WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
                 releaseRequest.setUserId(request.getRider().getRiderId());
                 releaseRequest.setBookingId(request.getSharedRideRequestId());
-                releaseRequest.setAmount(request.getFareAmount());
+                releaseRequest.setAmount(request.getTotalFare());
                 releaseRequest.setNote("Join request failed - #" + request.getSharedRideRequestId());
 
                 bookingWalletService.releaseFunds(releaseRequest);
                 log.info("Wallet hold released for failed join request {} - amount: {}",
-                    request.getSharedRideRequestId(), request.getFareAmount());
+                    request.getSharedRideRequestId(), request.getTotalFare());
             } catch (Exception e) {
                 log.error("Failed to release wallet hold for join request {}: {}",
                     request.getSharedRideRequestId(), e.getMessage(), e);
@@ -458,13 +458,13 @@ public class RideMatchingCoordinator {
                     WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
                     releaseRequest.setUserId(request.getRider().getRiderId());
                     releaseRequest.setBookingId(requestId);
-                    releaseRequest.setAmount(request.getFareAmount());
+                    releaseRequest.setAmount(request.getTotalFare());
                     releaseRequest.setNote("Request matching timeout - #" + requestId);
 
                     bookingWalletService.releaseFunds(releaseRequest);
 
                     log.info("Wallet hold released for rejected request {} - amount: {}",
-                        requestId, request.getFareAmount());
+                        requestId, request.getTotalFare());
 
                 } catch (Exception e) {
                     log.error("Failed to release wallet hold for request {}: {}",

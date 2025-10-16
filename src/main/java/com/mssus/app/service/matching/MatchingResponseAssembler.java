@@ -41,7 +41,7 @@ public class MatchingResponseAssembler {
             .dropoffLat(request.getDropoffLat())
             .dropoffLng(request.getDropoffLng())
             .pickupTime(request.getPickupTime())
-            .fareAmount(request.getFareAmount())
+            .totalFare(request.getTotalFare())
             .matchScore(proposal.getMatchScore())
             .proposalRank(rank)
             .offerExpiresAt(ZonedDateTime.ofInstant(expiresAt, ZoneId.systemDefault()))
@@ -62,7 +62,7 @@ public class MatchingResponseAssembler {
             .vehiclePlate(proposal.getVehiclePlate())
             .estimatedPickupTime(proposal.getEstimatedPickupTime())
             .estimatedDropoffTime(proposal.getEstimatedDropoffTime())
-            .estimatedFare(proposal.getEstimatedFare())
+            .totalFare(request.getTotalFare())
             .build();
     }
 
@@ -93,7 +93,7 @@ public class MatchingResponseAssembler {
             .dropoffLat(request.getDropoffLat())
             .dropoffLng(request.getDropoffLng())
             .pickupTime(request.getPickupTime())
-            .fareAmount(request.getFareAmount())
+            .totalFare(request.getTotalFare())
             .matchScore(null) // No match score for direct join requests
             .proposalRank(1) // Always rank 1 for join requests
             .offerExpiresAt(deadline.atZone(java.time.ZoneId.systemDefault()))

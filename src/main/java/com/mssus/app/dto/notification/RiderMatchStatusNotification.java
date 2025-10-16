@@ -25,6 +25,6 @@ public class RiderMatchStatusNotification {
     String vehiclePlate;
     LocalDateTime estimatedPickupTime;
     LocalDateTime estimatedDropoffTime;
-    BigDecimal estimatedFare;
+    BigDecimal totalFare;
 }
 

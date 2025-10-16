@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
 @Entity
@@ -19,25 +20,16 @@ public class PricingConfig {
     private Integer pricingConfigId;
 
     @Column(name = "version", nullable = false)
-    private String version;
+    private Instant version;
 
-    @Column(name = "base_flag_vnd", nullable = false)
-    private Long baseFlagVnd;
+    @Column(name = "base_2km_vnd", nullable = false, precision = 18, scale = 2)
+    private BigDecimal base2KmVnd;
 
-    @Column(name = "per_km_vnd", nullable = false)
-    private Long perKmVnd;
+    @Column(name = "after_2Km_per_km_vnd", nullable = false, precision = 18, scale = 2)
+    private BigDecimal after2KmPerKmVnd;
 
-    @Column(name = "per_min_vnd", nullable = false)
-    private Long perMinVnd;
-
-    @Column(name = "min_fare_vnd", nullable = false)
-    private Long minFareVnd;
-
-    @Column(name = "peak_surcharge_vnd", nullable = false)
-    private Long peakSurchargeVnd;
-
-    @Column(name = "default_commission", nullable = false, precision = 5, scale = 4)
-    private BigDecimal defaultCommission;
+    @Column(name = "system_commission_rate", nullable = false, precision = 5, scale = 4)
+    private BigDecimal systemCommissionRate;
 
     @Column(name = "valid_from", nullable = false)
     private Instant validFrom;

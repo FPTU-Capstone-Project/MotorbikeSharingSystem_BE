@@ -30,6 +30,8 @@ public class QuoteServiceImpl implements QuoteService {
     private final PricingService pricingService;
     private final LocationRepository locationRepository;
 
+    private static final double LOCATION_TOLERANCE = 0.001;
+
     @Override
     public Quote generateQuote(QuoteRequest request, int userId) {
         Location pickupLoc;
@@ -37,10 +39,13 @@ public class QuoteServiceImpl implements QuoteService {
         boolean isPickupALocation = false;
         boolean isDropoffALocation = false;
 
-        Location fptuLoc = locationRepository.findByNameContainingIgnoreCase("FPT University - HCMC Campus")
-            .stream().findFirst()
+        Location fptuLoc = locationRepository.findByLatAndLng(10.841480, 106.809844)
             .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
                 "FPT University location not found"));
+
+        Location schLoc = locationRepository.findByLatAndLng(10.8753395, 106.8000331)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+                "Student Culture House location not found"));
 
         if (request.pickupLocationId() != null) {
             pickupLoc = locationRepository.findById(request.pickupLocationId())
@@ -77,20 +82,7 @@ public class QuoteServiceImpl implements QuoteService {
                 "Pickup and dropoff locations cannot be the same");
         }
 
-        //Check if 1 of 2 pickup or dropoff is FPTU
-        double pickupLatDiff = Math.abs(fptuLoc.getLat() - pickupLoc.getLat());
-        double pickupLngDiff = Math.abs(fptuLoc.getLng() - pickupLoc.getLng());
-        double dropoffLatDiff = Math.abs(fptuLoc.getLat() - dropoffLoc.getLat());
-        double dropoffLngDiff = Math.abs(fptuLoc.getLng() - dropoffLoc.getLng());
-        double tolerance = 0.001;
-
-        boolean pickupIsFptu = pickupLatDiff <= tolerance && pickupLngDiff <= tolerance;
-        boolean dropoffIsFptu = dropoffLatDiff <= tolerance && dropoffLngDiff <= tolerance;
-
-        if (!pickupIsFptu && !dropoffIsFptu) {
-            throw BaseDomainException.of("ride.validation.invalid-location",
-                "Either pickup or dropoff location must be FPT University");
-        }
+        validateRequiredLocations(pickupLoc, dropoffLoc, fptuLoc, schLoc);
 
         double centerLat = fptuLoc.getLat();
         double centerLng = fptuLoc.getLng();
@@ -113,7 +105,7 @@ public class QuoteServiceImpl implements QuoteService {
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"))
             .getPricingConfigId();
 
-        var fareBreakdown = pricingService.quote(new PriceInput(route.distance(), route.time(), Optional.empty(), null));
+        var fareBreakdown = pricingService.quote(new PriceInput(route.distance(), null, userId));
         var quote = new Quote(
             UUID.randomUUID(),
             userId,
@@ -135,6 +127,24 @@ public class QuoteServiceImpl implements QuoteService {
         quoteCache.save(quote);
 
         return quote;
+    }
+
+    private boolean isLocationNearTarget(Location source, Location target) {
+        double latDiff = Math.abs(target.getLat() - source.getLat());
+        double lngDiff = Math.abs(target.getLng() - source.getLng());
+        return latDiff <= LOCATION_TOLERANCE && lngDiff <= LOCATION_TOLERANCE;
+    }
+
+    private void validateRequiredLocations(Location pickupLoc, Location dropoffLoc, Location fptuLoc, Location schLoc) {
+        boolean pickupIsFptu = isLocationNearTarget(pickupLoc, fptuLoc);
+        boolean dropoffIsFptu = isLocationNearTarget(dropoffLoc, fptuLoc);
+        boolean pickupIsSch = isLocationNearTarget(pickupLoc, schLoc);
+        boolean dropoffIsSch = isLocationNearTarget(dropoffLoc, schLoc);
+
+        if (!pickupIsFptu && !dropoffIsFptu && !pickupIsSch && !dropoffIsSch) {
+            throw BaseDomainException.of("ride.validation.invalid-location",
+                "Either pickup or dropoff location must be FPT University or Student Culture House");
+        }
     }
 
     @Override
