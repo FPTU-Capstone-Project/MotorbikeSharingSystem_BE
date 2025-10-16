@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -174,6 +175,16 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             request.getPickupTime(),
             detour.distanceKm()
         );
+
+        // Extract features and generate explanation
+        MatchFeatures features = extractMatchFeatures(
+            ride, requestLocations, request,
+            proximityCheck.pickupDistance(), proximityCheck.dropoffDistance(),
+            detour, matchScore
+        );
+
+        String explanation = explainMatch(features);
+        log.info("Match found - Ride {}: {}", ride.getSharedRideId(), explanation);
 
         // Build and add proposal
         RideMatchProposalResponse proposal = buildProposal(
@@ -337,6 +348,21 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private record DetourCalculation(double distanceKm, int durationMinutes) {
     }
 
+    public record MatchFeatures(
+        double proximityScore,
+        double timeAlignmentScore,
+        double driverRatingScore,
+        double detourScore,
+        double pickupDistanceKm,
+        double dropoffDistanceKm,
+        double detourKm,
+        int detourMinutes,
+        long timeGapMinutes,
+        boolean hasAvailableSeats,
+        boolean withinDetourLimit,
+        float finalScore
+    ) {}
+
     private static class MatchingMetrics {
         int processed = 0;
         int rejectedProximity = 0;
@@ -395,12 +421,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private RideMatchProposalResponse buildProposal(SharedRide ride, Location pickupLoc, Location dropoffLoc,
                                                     double detourKm, int detourMinutes, float matchScore,
                                                     SharedRideRequest request) {
-        // Use QuoteService to generate quote for rider's route (pickup to dropoff)
-//        QuoteRequest quoteRequest = new QuoteRequest(
-//            new LatLng(pickupLoc.getLat(), pickupLoc.getLng()),
-//            new LatLng(dropoffLoc.getLat(), dropoffLoc.getLng()),
-//
-//        );
 
         try {
             double estimatedDistanceKm = ride.getEstimatedDistance() != null ?
@@ -409,7 +429,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                 ride.getEstimatedDuration() : (int) (estimatedDistanceKm * 2); // ~30 km/h average
 
             // Calculate fare using ride's pricing
-            java.math.BigDecimal estimatedFare = ride.getBaseFare()
+            BigDecimal estimatedFare = ride.getBaseFare()
                 .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
 
             // Calculate estimated times
@@ -440,7 +460,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             log.error("Error building proposal for ride {}: {}", ride.getSharedRideId(), e.getMessage(), e);
             // Fallback: use ride's base pricing
             double estimatedDistanceKm = ride.getEstimatedDistance() != null ? ride.getEstimatedDistance() : 10.0;
-            java.math.BigDecimal estimatedFare = ride.getBaseFare()
+            BigDecimal estimatedFare = ride.getBaseFare()
                 .add(ride.getPerKmRate().multiply(java.math.BigDecimal.valueOf(estimatedDistanceKm)));
 
             LocalDateTime estimatedPickupTime = ride.getScheduledTime().plusMinutes(detourMinutes);
@@ -467,5 +487,118 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                 .build();
         }
     }
+
+    public MatchFeatures extractMatchFeatures(SharedRide ride, LocationPair requestLocations,
+                                              SharedRideRequest request, double pickupDistance,
+                                              double dropoffDistance, DetourCalculation detour,
+                                              float matchScore) {
+        var scoring = rideConfig.getMatching().getScoring();
+
+        double avgProximity = (pickupDistance + dropoffDistance) / 2.0;
+        double maxProximityKm = rideConfig.getMatching().getMaxProximityKm();
+        double proximityScore = Math.max(0, 1.0 - (avgProximity / maxProximityKm));
+
+        long timeDiffMinutes = Math.abs(java.time.Duration.between(ride.getScheduledTime(), request.getPickupTime()).toMinutes());
+        int timeWindowMinutes = rideConfig.getMatching().getTimeWindowMinutes();
+        double timeScore = Math.max(0, 1.0 - ((double) timeDiffMinutes / timeWindowMinutes));
+
+        double ratingScore = ride.getDriver().getRatingAvg() / 5.0;
+
+        double maxDetourKm = rideConfig.getMatching().getMaxDetourKm();
+        double detourScore = Math.max(0, 1.0 - (detour.distanceKm() / maxDetourKm));
+
+        boolean hasSeats = (ride.getMaxPassengers() - ride.getCurrentPassengers()) > 0;
+        boolean withinDetourLimit = isDetourAcceptable(ride, detour.durationMinutes());
+
+        return new MatchFeatures(
+            proximityScore,
+            timeScore,
+            ratingScore,
+            detourScore,
+            pickupDistance / 1000.0,
+            dropoffDistance / 1000.0,
+            detour.distanceKm(),
+            detour.durationMinutes(),
+            timeDiffMinutes,
+            hasSeats,
+            withinDetourLimit,
+            matchScore
+        );
+    }
+
+    public String explainMatch(MatchFeatures features) {
+        List<String> positives = new ArrayList<>();
+        List<String> concerns = new ArrayList<>();
+
+        if (features.pickupDistanceKm() < 0.5) {
+            positives.add("pickup very close");
+        } else if (features.pickupDistanceKm() < 1.0) {
+            positives.add("pickup nearby");
+        } else if (features.pickupDistanceKm() > 2.0) {
+            concerns.add("pickup far (" + String.format("%.1f km", features.pickupDistanceKm()) + ")");
+        }
+
+        if (features.dropoffDistanceKm() < 0.5) {
+            positives.add("dropoff very close");
+        } else if (features.dropoffDistanceKm() < 1.0) {
+            positives.add("dropoff nearby");
+        } else if (features.dropoffDistanceKm() > 2.0) {
+            concerns.add("dropoff far (" + String.format("%.1f km", features.dropoffDistanceKm()) + ")");
+        }
+
+        if (features.timeGapMinutes() <= 5) {
+            positives.add("perfect timing");
+        } else if (features.timeGapMinutes() <= 15) {
+            positives.add("good timing");
+        } else if (features.timeGapMinutes() > 30) {
+            concerns.add("time gap " + features.timeGapMinutes() + " min");
+        }
+
+        if (features.detourMinutes() <= 3) {
+            positives.add("minimal detour");
+        } else if (features.detourMinutes() <= 8) {
+            positives.add("low detour");
+        } else if (features.detourMinutes() > 15) {
+            concerns.add("high detour (" + features.detourMinutes() + " min)");
+        }
+
+        if (features.driverRatingScore() >= 0.9) { // 4.5+ stars
+            positives.add("highly rated driver");
+        } else if (features.driverRatingScore() >= 0.8) { // 4.0+ stars
+            positives.add("good driver rating");
+        } else if (features.driverRatingScore() < 0.6) { // Below 3.0 stars
+            concerns.add("low driver rating");
+        }
+
+        if (!features.hasAvailableSeats()) {
+            concerns.add("no available seats");
+        }
+
+        if (!features.withinDetourLimit()) {
+            concerns.add("exceeds driver's detour preference");
+        }
+
+        StringBuilder explanation = new StringBuilder();
+
+        if (!positives.isEmpty()) {
+            explanation.append("✓ ").append(String.join(", ", positives));
+        }
+
+        if (!concerns.isEmpty()) {
+            if (!explanation.isEmpty()) {
+                explanation.append(" | ");
+            }
+            explanation.append("⚠ ").append(String.join(", ", concerns));
+        }
+
+        if (explanation.isEmpty()) {
+            explanation.append("Standard match");
+        }
+
+        explanation.append(String.format(" (score: %.1f)", features.finalScore()));
+
+        return explanation.toString();
+    }
+
 }
 

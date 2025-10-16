@@ -50,7 +50,6 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final PricingConfigRepository pricingConfigRepository;
     private final RideTrackRepository trackRepository;
     private final RideTrackingService rideTrackingService;
-    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -189,8 +188,7 @@ public class SharedRideServiceImpl implements SharedRideService {
         LocalDateTime start = startTime != null ? LocalDateTime.parse(startTime) : LocalDateTime.now();
         LocalDateTime end = endTime != null ? LocalDateTime.parse(endTime) : start.plusHours(2);
 
-        Page<SharedRide> ridePage = rideRepository.findAvailableRides(
-            SharedRideStatus.SCHEDULED, start, end, pageable);
+        Page<SharedRide> ridePage = rideRepository.findAvailableRides(start, end, pageable);
 
         return ridePage.map(ride -> {
             Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);

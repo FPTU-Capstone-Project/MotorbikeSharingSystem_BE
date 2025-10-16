@@ -655,23 +655,35 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request) {
         SharedRideRequestResponse response = requestMapper.toResponse(request);
-        Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-        Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
 
-        if (pickupLoc != null) {
-            response.setPickupLocationName(pickupLoc.getName());
-            response.setPickupLat(pickupLoc.getLat());
-            response.setPickupLng(pickupLoc.getLng());
+        if (request.getPickupLocationId() != null) {
+            Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
+            if (pickupLoc != null) {
+                response.setPickupLocationName(pickupLoc.getName());
+                response.setPickupLat(pickupLoc.getLat());
+                response.setPickupLng(pickupLoc.getLng());
+            } else {
+                response.setPickupLocationName("Unknown Location");
+                response.setPickupLat(request.getPickupLat());
+                response.setPickupLng(request.getPickupLng());
+            }
         } else {
             response.setPickupLocationName("Custom Pickup Location");
             response.setPickupLat(request.getPickupLat());
             response.setPickupLng(request.getPickupLng());
         }
 
-        if (dropoffLoc != null) {
-            response.setDropoffLocationName(dropoffLoc.getName());
-            response.setDropoffLat(dropoffLoc.getLat());
-            response.setDropoffLng(dropoffLoc.getLng());
+        if (request.getDropoffLocationId() != null) {
+            Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
+            if (dropoffLoc != null) {
+                response.setDropoffLocationName(dropoffLoc.getName());
+                response.setDropoffLat(dropoffLoc.getLat());
+                response.setDropoffLng(dropoffLoc.getLng());
+            } else {
+                response.setDropoffLocationName("Unknown Location");
+                response.setDropoffLat(request.getDropoffLat());
+                response.setDropoffLng(request.getDropoffLng());
+            }
         } else {
             response.setDropoffLocationName("Custom Dropoff Location");
             response.setDropoffLat(request.getDropoffLat());
@@ -680,4 +692,5 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
         return response;
     }
+
 }
