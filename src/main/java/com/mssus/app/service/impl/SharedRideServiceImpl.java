@@ -3,6 +3,7 @@ package com.mssus.app.service.impl;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.exception.BaseDomainException;
+import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
 import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
@@ -10,6 +11,7 @@ import com.mssus.app.dto.request.wallet.WalletCaptureRequest;
 import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
+import com.mssus.app.dto.response.ride.RideRequestCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
 import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.entity.*;
@@ -55,8 +57,6 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final PricingConfigRepository pricingConfigRepository;
     private final RideTrackRepository trackRepository;
     private final RideTrackingService rideTrackingService;
-    private final PricingService pricingService;
-    private final PricingConfigMapper pricingConfigMapper;
 
 
     @Override
@@ -110,6 +110,9 @@ public class SharedRideServiceImpl implements SharedRideService {
             endLng = request.endLatLng().longitude();
         }
 
+        PricingConfig pricingConfig = pricingConfigRepository.findActive(Instant.now())
+            .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+
         // Validate route via RoutingService (using extracted coords)
         // TODO: For MVP, log validation only. In production, reject invalid routes.
         try {
@@ -125,6 +128,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             ride.setStartLng(startLng);
             ride.setEndLat(endLat);
             ride.setEndLng(endLng);
+            ride.setPricingConfig(pricingConfig);
             ride.setStartLocationId(request.startLocationId());
             ride.setEndLocationId(request.endLocationId());
             ride.setStatus(SharedRideStatus.SCHEDULED);
@@ -274,6 +278,122 @@ public class SharedRideServiceImpl implements SharedRideService {
 
     @Override
     @Transactional
+    public RideRequestCompletionResponse completeRideRequestOfRide(CompleteRideReqRequest request, Authentication authentication) {
+        Integer rideId = request.rideId();
+        String username = authentication.getName();
+        log.info("Driver {} completing ride request {}", username, request.rideRequestId());
+
+        // Get ride with pessimistic lock
+        SharedRide ride = rideRepository.findByIdForUpdate(rideId)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+        SharedRideRequest rideRequest = requestRepository.findById(request.rideRequestId())
+            .orElseThrow(() -> BaseDomainException.formatted("ride-request.not-found.resource", request.rideRequestId()));
+
+        LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
+            .orElse(new LatLng(ride.getStartLat(), ride.getStartLng()));
+
+        // Validate driver ownership
+        User user = userRepository.findByEmail(username)
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+        DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+
+        if (!ride.getDriver().getDriverId().equals(driver.getDriverId())) {
+            throw BaseDomainException.of("ride.unauthorized.not-owner");
+        }
+
+        if (ride.getStatus() != SharedRideStatus.ONGOING) {
+            throw BaseDomainException.of("ride.validation.invalid-state",
+                Map.of("currentState", ride.getStatus()));
+        }
+
+        if (rideRequest.getStatus() != SharedRideRequestStatus.ONGOING) {
+            throw BaseDomainException.of("ride-request.validation.invalid-state",
+                Map.of("currentState", rideRequest.getStatus()));
+        }
+
+        if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
+            driverCurrentLoc.longitude(),
+            rideRequest.getDropoffLat(), rideRequest.getDropoffLng()) > 100) {
+            log.warn("Driver {} is too far from the request's dropoff location to complete request{}",
+                driver.getDriverId(), rideRequest.getSharedRideRequestId());
+
+            throw BaseDomainException.of("ride.validation.too-far-from-dropoff");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        Integer actualDuration = (int) java.time.Duration.between(ride.getStartedAt(), now).toMinutes();
+        log.debug("Computed actual duration for ride {}: {} min (from {} to {})",
+            rideId, actualDuration, ride.getStartedAt(), now);
+
+        Float actualDistance;
+        try {
+            RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId).orElse(null);
+            if (track != null && track.getGpsPoints() != null && track.getGpsPoints().size() > 1) {
+                actualDistance = (float) rideTrackingService.computeDistanceFromPoints(track.getGpsPoints());
+                log.debug("Computed actual distance for ride {} from GPS: {} km", rideId, actualDistance);
+            } else {
+                // Fallback to routing query
+                RouteResponse actualRoute = routingService.getRoute(
+                    ride.getStartLat(), ride.getStartLng(),
+                    ride.getEndLat(), ride.getEndLng());
+                actualDistance = (float) (actualRoute.distance() / 1000.0);
+                log.debug("Computed actual distance for ride {} via routing fallback: {} km", rideId, actualDistance);
+            }
+        } catch (Exception e) {
+            log.warn("Distance computation failed for ride {}: {}. Falling back to estimated.", rideId, e.getMessage());
+            actualDistance = ride.getEstimatedDistance();
+        }
+
+        BigDecimal fareCollected = BigDecimal.ZERO;
+        BigDecimal platformCommission = BigDecimal.ZERO;
+        PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
+            .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+
+        try {
+            WalletCaptureRequest captureRequest = new WalletCaptureRequest();
+            captureRequest.setUserId(rideRequest.getRider().getRiderId());
+            captureRequest.setBookingId(rideRequest.getSharedRideRequestId());
+            captureRequest.setAmount(rideRequest.getTotalFare());
+            captureRequest.setDriverId(driver.getDriverId());
+            captureRequest.setNote("Ride completion - Request #" + rideRequest.getSharedRideRequestId());
+
+            bookingWalletService.captureFunds(captureRequest);
+
+            fareCollected = fareCollected.add(rideRequest.getTotalFare());
+
+            BigDecimal commissionRate = activePricingConfig.getSystemCommissionRate();
+            BigDecimal requestCommission = rideRequest.getTotalFare().multiply(commissionRate);
+            platformCommission = platformCommission.add(requestCommission);
+
+
+            // Update request status
+            rideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
+            rideRequest.setActualDropoffTime(LocalDateTime.now());
+            requestRepository.save(rideRequest);
+
+            log.info("Captured fare for request {} - amount: {}",
+                rideRequest.getSharedRideRequestId(), rideRequest.getTotalFare());
+
+        } catch (Exception e) {
+            log.error("Failed to capture fare for request {}: {}",
+                rideRequest.getSharedRideRequestId(), e.getMessage(), e);
+        }
+
+        BigDecimal driverEarnings = fareCollected.subtract(platformCommission);
+
+        return RideRequestCompletionResponse.builder()
+            .sharedRideRequestId(rideRequest.getSharedRideRequestId())
+            .sharedRideId(rideId)
+            .driverEarningsOfRequest(driverEarnings)
+            .platformCommission(platformCommission)
+            .requestActualDistance(actualDistance)
+            .requestActualDuration(actualDuration)
+            .build();
+    }
+
+    @Override
+    @Transactional
     public RideCompletionResponse completeRide(CompleteRideRequest request,
                                                Authentication authentication) {
         Integer rideId = request.rideId();
@@ -305,8 +425,8 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
             driverCurrentLoc.longitude(),
-            ride.getEndLat(), ride.getEndLng()) > 0.1) {
-            log.warn("Driver {} is too far from the dropoff location to complete ride {}",
+            ride.getEndLat(), ride.getEndLng()) > 100) {
+            log.warn("Driver {} is too far from the end location to complete ride {}",
                 driver.getDriverId(), rideId);
             // TODO: consider rejecting completion.
         }
@@ -338,13 +458,17 @@ public class SharedRideServiceImpl implements SharedRideService {
         }
 
         // Get all active (CONFIRMED or ONGOING) requests
-        List<SharedRideRequest> ongoingRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
+        List<SharedRideRequest> rideRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
             rideId,
-            SharedRideRequestStatus.ONGOING);
+            SharedRideRequestStatus.COMPLETED);
 
-        if (ongoingRequests.isEmpty()) {
-            log.warn("Completing ride {} without active requests", rideId);
+        List<SharedRideRequest> ongoingRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
+            rideId, SharedRideRequestStatus.ONGOING);
+
+        if (!ongoingRequests.isEmpty()) {
+            throw BaseDomainException.of("ride.validation.incomplete-requests");
         }
+
         BigDecimal totalFareCollected = BigDecimal.ZERO;
         BigDecimal platformCommission = BigDecimal.ZERO;
         List<Integer> completedRequestIds = new ArrayList<>();
@@ -352,45 +476,16 @@ public class SharedRideServiceImpl implements SharedRideService {
         PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
 
-        // Capture fares from all ONGOING requests
-        if (!ongoingRequests.isEmpty()) {
-            for (SharedRideRequest sharedRideRequest : ongoingRequests) {
-                try {
-                    // Capture fare
-                    WalletCaptureRequest captureRequest = new WalletCaptureRequest();
-                    captureRequest.setUserId(sharedRideRequest.getRider().getRiderId());
-                    captureRequest.setBookingId(sharedRideRequest.getSharedRideRequestId());
-                    captureRequest.setAmount(sharedRideRequest.getTotalFare());
-                    captureRequest.setDriverId(driver.getDriverId());
-                    captureRequest.setNote("Ride completion - Request #" + sharedRideRequest.getSharedRideRequestId());
+        for (SharedRideRequest completedRequest : rideRequests) {
+            totalFareCollected = totalFareCollected.add(completedRequest.getTotalFare());
 
-                    bookingWalletService.captureFunds(captureRequest);
+            BigDecimal commissionRate = activePricingConfig.getSystemCommissionRate();
+            BigDecimal requestCommission = completedRequest.getTotalFare().multiply(commissionRate);
+            platformCommission = platformCommission.add(requestCommission);
 
-                    totalFareCollected = totalFareCollected.add(sharedRideRequest.getTotalFare());
-
-                    BigDecimal commissionRate = activePricingConfig.getSystemCommissionRate();
-                    BigDecimal requestCommission = sharedRideRequest.getTotalFare().multiply(commissionRate);
-                    platformCommission = platformCommission.add(requestCommission);
-
-
-                    // Update request status
-                    sharedRideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
-                    sharedRideRequest.setActualDropoffTime(LocalDateTime.now());
-                    requestRepository.save(sharedRideRequest);
-
-                    completedRequestIds.add(sharedRideRequest.getSharedRideRequestId());
-
-                    log.info("Captured fare for request {} - amount: {}",
-                        sharedRideRequest.getSharedRideRequestId(), sharedRideRequest.getTotalFare());
-
-                } catch (Exception e) {
-                    log.error("Failed to capture fare for request {}: {}",
-                        sharedRideRequest.getSharedRideRequestId(), e.getMessage(), e);
-                }
-            }
+            completedRequestIds.add(completedRequest.getSharedRideRequestId());
         }
 
-        // Update ride status and metrics
         ride.setStatus(SharedRideStatus.COMPLETED);
         ride.setCompletedAt(LocalDateTime.now());
         ride.setActualDistance(actualDistance);
@@ -408,7 +503,6 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         return RideCompletionResponse.builder()
             .sharedRideId(rideId)
-            .status("COMPLETED")
             .actualDistance(actualDistance)
             .actualDuration(actualDuration)
             .totalFareCollected(totalFareCollected)

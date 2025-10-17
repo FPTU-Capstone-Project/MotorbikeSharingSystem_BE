@@ -498,6 +498,36 @@ errors:
     owner: ride-team
     remediation: "Provide your current location"
 
+  - id: ride-request.validation.invalid-state
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Yêu cầu chuyến đi đang ở trạng thái không hợp lệ cho thao tác này: {currentState}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "This operation can only be performed on ride requests in specific states"
+
+  - id: ride.validation.too-far-from-dropoff
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Vị trí hiện tại của bạn quá xa điểm thả khách đã chỉ định"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Move closer to the dropoff location to proceed"
+
+  - id: ride.validation.incomplete-requests
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Không thể bắt đầu chuyến đi vì có yêu cầu chia sẻ chuyến đi chưa hoàn thành"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Ensure all ride requests are completed before starting the ride"
+
   # Ride Operation Errors
   - id: ride.operation.wallet-hold-failed
     httpStatus: 402

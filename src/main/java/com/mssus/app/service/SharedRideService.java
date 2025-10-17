@@ -1,9 +1,11 @@
 package com.mssus.app.service;
 
+import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
 import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
+import com.mssus.app.dto.response.ride.RideRequestCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +21,8 @@ public interface SharedRideService {
     Page<SharedRideResponse> browseAvailableRides(String startTime, String endTime, Pageable pageable);
 
     SharedRideResponse startRide(StartRideRequest request, Authentication authentication);
+
+    RideRequestCompletionResponse completeRideRequestOfRide(CompleteRideReqRequest request, Authentication authentication);
 
     RideCompletionResponse completeRide(CompleteRideRequest request, Authentication authentication);
 

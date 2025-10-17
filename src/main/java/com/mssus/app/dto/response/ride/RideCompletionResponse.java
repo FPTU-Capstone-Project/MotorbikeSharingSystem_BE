@@ -30,9 +30,6 @@ public class RideCompletionResponse {
     @Schema(description = "Ride ID", example = "300")
     private Integer sharedRideId;
 
-    @Schema(description = "Ride status (should be COMPLETED)", example = "COMPLETED")
-    private String status;
-
     @JsonProperty("actual_distance")
     @Schema(description = "Actual distance traveled (km)", example = "8.7")
     private Float actualDistance;
