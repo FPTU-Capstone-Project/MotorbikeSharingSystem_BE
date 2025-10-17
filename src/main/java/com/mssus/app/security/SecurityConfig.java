@@ -112,8 +112,7 @@ public class SecurityConfig {
 
         // Endpoints specific to riders (currently none identified)
         public static final String[] RIDER_PATHS = {
-                // No rider-specific endpoints found in current controllers
-                // Add here when ride booking/management endpoints are created
+                "/api/v1/me/rider-verifications"
         };
 
         // Endpoints specific to drivers
@@ -185,8 +184,7 @@ public class SecurityConfig {
 //
 //                        // Private endpoints - any authenticated user
 //                        .requestMatchers(SecurityEndpoints.PRIVATE_PATHS).authenticated()
-//
-//                        // All other requests require authentication
+
                         .anyRequest().permitAll()
                 )
                 .authenticationProvider(authenticationProvider())

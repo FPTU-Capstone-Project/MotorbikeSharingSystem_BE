@@ -20,4 +20,12 @@ public interface WalletRepository extends JpaRepository<Wallet, Integer> {
 
     Optional<Wallet> findByUser_UserId(Integer userId);
 
+    @Modifying
+    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance + :delta, w.updatedAt = CURRENT_TIMESTAMP WHERE w.user.userId = :userId")
+    int addToAvailable(@Param("userId") Integer userId, @Param("delta") BigDecimal delta);
+
+    @Modifying
+    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance + :delta, w.updatedAt = CURRENT_TIMESTAMP WHERE w.user.userId = :userId")
+    int addToPending(@Param("userId") Integer userId, @Param("delta") BigDecimal delta);
+
 }

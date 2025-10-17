@@ -3,6 +3,7 @@ package com.mssus.app.service;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.wallet.TransactionResponse;
 import com.mssus.app.entity.Transaction;
+import org.springframework.security.core.Authentication;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
@@ -42,4 +43,9 @@ public interface TransactionService {
     BigDecimal calculateCommission(BigDecimal amount, BigDecimal commissionRate);
 
     PageResponse<TransactionResponse> getAllTransactions(Pageable pageable);
+
+    PageResponse<TransactionResponse> getUserHistoryTransactions(Authentication authentication,
+                                                                Pageable pageable,
+                                                                String type,
+                                                                String status);
 }

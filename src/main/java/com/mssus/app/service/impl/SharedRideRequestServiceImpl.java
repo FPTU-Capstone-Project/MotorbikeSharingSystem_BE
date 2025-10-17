@@ -1,6 +1,7 @@
 package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.RequestKind;
+import com.mssus.app.common.enums.RiderProfileStatus;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
@@ -76,6 +77,11 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         if (activeProfile == null || !activeProfile.equals("rider")) {
             throw BaseDomainException.of("ride.unauthorized.invalid-profile",
                 "Active profile is not rider");
+        }
+
+        // Enforce rider ACTIVE status
+        if (rider.getStatus() != RiderProfileStatus.ACTIVE) {
+            throw BaseDomainException.of("rider.profile.not-active", "Rider profile not active");
         }
 
         // Get and validate quote
@@ -164,6 +170,11 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         RiderProfile rider = riderRepository.findByUserUserId(user.getUserId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.rider-profile"));
+
+        // Enforce rider ACTIVE status
+        if (rider.getStatus() != com.mssus.app.common.enums.RiderProfileStatus.ACTIVE) {
+            throw BaseDomainException.of("rider.profile.not-active", "Rider profile not active");
+        }
 
         // Get quote and validate
         Quote quote = quoteService.getQuote(request.quoteId());

@@ -275,9 +275,12 @@ public class VerificationServiceImpl implements VerificationService {
 
         if (typeStr == VerificationType.STUDENT_ID && user.getRiderProfile() != null) {
             RiderProfile rider = user.getRiderProfile();
-            rider.setActivatedAt(LocalDateTime.now());
-            rider.setStatus(RiderProfileStatus.ACTIVE);
-            riderProfileRepository.save(rider);
+            if (rider.getStatus() != RiderProfileStatus.ACTIVE) {
+                rider.setActivatedAt(LocalDateTime.now());
+                rider.setStatus(RiderProfileStatus.ACTIVE);
+                riderProfileRepository.save(rider);
+                try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send rider activation email for user {}: {}", user.getUserId(), e.getMessage()); }
+            }
         } else if ((isDriverVerification(typeStr))
                 && user.getDriverProfile() != null) {
             if (typeStr == VerificationType.VEHICLE_REGISTRATION) {
@@ -325,6 +328,7 @@ public class VerificationServiceImpl implements VerificationService {
                 rider.setActivatedAt(LocalDateTime.now());
                 riderProfileRepository.save(rider);
                 log.info("Rider profile activated for user: {}", user.getUserId());
+                try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send rider activation email for user {}: {}", user.getUserId(), e.getMessage()); }
             }
         } else if (isDriverVerification(type) && user.getDriverProfile() != null) {
             checkAndActivateDriverProfile(user);

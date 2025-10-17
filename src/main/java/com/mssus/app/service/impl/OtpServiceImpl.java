@@ -1,18 +1,20 @@
 package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.OtpFor;
+import com.mssus.app.common.enums.PaymentMethod;
 import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.dto.request.GetOtpRequest;
 import com.mssus.app.dto.request.OtpRequest;
 import com.mssus.app.dto.response.OtpResponse;
 import com.mssus.app.dto.response.notification.EmailPriority;
+import com.mssus.app.common.enums.RiderProfileStatus;
+import com.mssus.app.entity.RiderProfile;
 import com.mssus.app.entity.User;
 import com.mssus.app.repository.UserRepository;
+import com.mssus.app.repository.RiderProfileRepository;
 import com.mssus.app.service.EmailService;
 import com.mssus.app.service.OtpService;
-import com.mssus.app.util.Constants;
 import com.mssus.app.util.OtpUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OtpServiceImpl implements OtpService {
     private final UserRepository userRepository;
+    private final RiderProfileRepository riderProfileRepository;
     private final EmailService emailService;
 
     @Override
@@ -128,17 +131,69 @@ public class OtpServiceImpl implements OtpService {
         if (userRepository.existsByEmailAndStatus(user.getEmail(), UserStatus.EMAIL_VERIFYING)) {
             user.setStatus(UserStatus.PENDING);
             user.setEmailVerified(true);
+
+            if (Boolean.TRUE.equals(user.getPhoneVerified())) {
+                user.setStatus(UserStatus.ACTIVE);
+                user.setTokenVersion(user.getTokenVersion() + 1);
+                try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send user activation email: {}", e.getMessage()); }
+            }
             userRepository.save(user);
             log.info("User email verified and status updated to PENDING: {}", user.getEmail());
+
+
+            if (Boolean.TRUE.equals(user.getPhoneVerified())) {
+                riderProfileRepository.findByUserUserId(user.getUserId())
+                    .or(() -> {
+                        RiderProfile rp = RiderProfile.builder()
+                            .user(user)
+                            .status(RiderProfileStatus.PENDING)
+                            .totalRides(0)
+                            .totalSpent(java.math.BigDecimal.ZERO)
+                            .preferredPaymentMethod(PaymentMethod.WALLET)
+                            .createdAt(java.time.LocalDateTime.now())
+                            .emergencyContact("113")
+                            .build();
+                        riderProfileRepository.save(rp);
+                        log.info("Rider profile created in PENDING for userId={}", user.getUserId());
+                        return java.util.Optional.of(rp);
+                    })
+                    .ifPresent(rp -> {});
+            }
         } else {
             log.warn("User email verification attempted but user not in EMAIL_VERIFYING state: {}", user.getEmail());
+            try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send user activation email: {}", e.getMessage()); }
         }
     }
 
     private void processPhoneVerification(User user) {
         user.setPhoneVerified(true);
+
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            user.setStatus(UserStatus.ACTIVE);
+            user.setTokenVersion(user.getTokenVersion() + 1);
+        }
         userRepository.save(user);
         log.info("User phone verified: {}", user.getPhone());
+
+        
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            riderProfileRepository.findByUserUserId(user.getUserId())
+                .or(() -> {
+                    RiderProfile rp = RiderProfile.builder()
+                        .user(user)
+                        .status(RiderProfileStatus.PENDING)
+                        .totalRides(0)
+                        .totalSpent(java.math.BigDecimal.ZERO)
+                        .preferredPaymentMethod(com.mssus.app.common.enums.PaymentMethod.WALLET)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .emergencyContact("113")
+                        .build();
+                    riderProfileRepository.save(rp);
+                    log.info("Rider profile created in PENDING for userId={}", user.getUserId());
+                    return java.util.Optional.of(rp);
+                })
+                .ifPresent(rp -> {});
+        }
     }
 
     private void processPasswordReset(User user) {

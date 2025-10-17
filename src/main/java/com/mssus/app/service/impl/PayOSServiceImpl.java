@@ -2,6 +2,8 @@ package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mssus.app.entity.IdempotencyKey;
+import com.mssus.app.repository.IdempotencyKeyRepository;
 import com.mssus.app.service.PayOSService;
 import com.mssus.app.service.TransactionService;
 import com.twilio.rest.api.v2010.account.call.PaymentCreator;
@@ -25,6 +27,7 @@ public class PayOSServiceImpl implements PayOSService {
 
     private final TransactionService transactionService;
     private final ObjectMapper objectMapper;
+    private final IdempotencyKeyRepository idempotencyKeyRepository;
     @Value("${payos.client-id}")
     private String clientId;
 
@@ -43,9 +46,10 @@ public class PayOSServiceImpl implements PayOSService {
     private PayOS payOS;
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
 
-    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper) {
+    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper, IdempotencyKeyRepository idempotencyKeyRepository) {
        this.transactionService = transactionService;
         this.objectMapper = objectMapper;
+        this.idempotencyKeyRepository = idempotencyKeyRepository;
     }
 
     @PostConstruct
@@ -78,9 +82,23 @@ public class PayOSServiceImpl implements PayOSService {
                     .cancelUrl(cancelUrl)
                     .build();
 
+            // Idempotency guard: ensure we haven't already created this orderCode
+            String keyHash = String.valueOf(orderCode);
+            if (idempotencyKeyRepository.findByKeyHash(keyHash).isPresent()) {
+                throw new IllegalStateException("Duplicate orderCode detected");
+            }
+
             CheckoutResponseData response = payOS.createPaymentLink(data);
 
             transactionService.initTopup(userId, amount, orderCode.toString(), description);
+
+            // record idempotency key after success
+            IdempotencyKey idem = IdempotencyKey.builder()
+                    .keyHash(keyHash)
+                    .reference(orderCode.toString())
+                    .createdAt(java.time.LocalDateTime.now())
+                    .build();
+            idempotencyKeyRepository.save(idem);
 
             log.info("Created top-up payment link for user {} with amount {} and orderCode {}",
                     userId, amount, orderCode);

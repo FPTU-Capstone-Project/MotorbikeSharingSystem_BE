@@ -39,6 +39,11 @@ public enum TransactionType {
     PAYOUT,
 
     /**
+     * Promotional credit granted to user (e.g., voucher, compensation). Mirrors SYSTEM.PROMO out and USER in.
+     */
+    PROMO_CREDIT,
+
+    /**
      * Used for corrections, compensation, or technical reversals of failed transactions (e.g., reversing a failed payout debit).
      * Affects the user's shadow_balance (increase or decrease).
      */

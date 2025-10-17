@@ -32,6 +32,7 @@ ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP;
 ALTER TABLE rider_profiles ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP;
 ALTER TABLE rider_profiles ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP;
 ALTER TABLE rider_profiles ADD CONSTRAINT chk_status CHECK (status IN ('ACTIVE', 'PENDING','SUSPENDED','REJECTED'));
+ALTER TABLE wallets ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
 
 -- =====================================================
 -- 0. ADMIN USER (Must be first!)

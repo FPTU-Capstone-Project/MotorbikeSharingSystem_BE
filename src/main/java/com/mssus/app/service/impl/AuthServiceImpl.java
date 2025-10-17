@@ -17,15 +17,12 @@ import com.mssus.app.util.OtpUtil;
 import com.mssus.app.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,7 +33,6 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final RiderProfileRepository riderProfileRepository;
-    private final WalletRepository walletRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -75,7 +71,6 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         user = userRepository.save(user);
-        createRiderProfile(user);
 
         Map<String, Object> claims = buildTokenClaims(user, null);
         String token = jwtService.generateToken(user.getEmail(), claims);
@@ -220,21 +215,6 @@ public class AuthServiceImpl implements AuthService {
 
         return MessageResponse.of("OTP sent to your registered contact");
     }
-
-    private void createRiderProfile(User user) {
-        RiderProfile riderProfile = RiderProfile.builder()
-                .user(user)
-                .status(RiderProfileStatus.PENDING)
-                .totalRides(0)
-                .totalSpent(BigDecimal.ZERO)
-                .preferredPaymentMethod(PaymentMethod.WALLET)
-                .createdAt(LocalDateTime.now())
-                .emergencyContact("113")
-                .build();
-
-        riderProfileRepository.save(riderProfile);
-    }
-
     @Override
     public Map<String, Object> getUserContext(Integer userId) {
         Object context = userContext.get(userId.toString());
@@ -255,10 +235,11 @@ public class AuthServiceImpl implements AuthService {
         claims.put("iss", "mssus.api");
         claims.put("sub", "user-" + user.getUserId());
         claims.put("email", user.getEmail());
+        claims.put("userId", user.getUserId());
 
         List<String> profiles = getUserProfiles(user);
         claims.put("profiles", profiles);
-        claims.put("active_profile", activeProfile);
+        claims.put("active_profile", activeProfile == null ? null : activeProfile.toUpperCase());
 
         Map<String, String> profileStatus = buildProfileStatus(user);
         claims.put("profile_status", profileStatus);

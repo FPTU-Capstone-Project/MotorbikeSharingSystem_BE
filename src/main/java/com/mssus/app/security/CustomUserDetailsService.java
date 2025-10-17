@@ -29,7 +29,6 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        // Username can be either email or phone
         User user = userRepository.findByEmailOrPhone(username, username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email or phone: " + username));
 
@@ -45,7 +44,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         List<GrantedAuthority> authorities = getAuthorities(user);
         
         return org.springframework.security.core.userdetails.User.builder()
-                .username(user.getEmail()) // Use email as username for Spring Security
+                .username(user.getEmail())
                 .password(user.getPasswordHash())
                 .authorities(authorities)
                 .accountExpired(false)
