@@ -19,7 +19,7 @@ public interface VehicleService {
 
     PageResponse<VehicleResponse> getAllVehicles(Pageable pageable);
 
-    PageResponse<VehicleResponse> getVehiclesByDriverId(Integer driverId, Pageable pageable);
+    PageResponse<VehicleResponse> getVehiclesByDriverId(String driver, Pageable pageable);
 
     PageResponse<VehicleResponse> getVehiclesByStatus(String status, Pageable pageable);
 }

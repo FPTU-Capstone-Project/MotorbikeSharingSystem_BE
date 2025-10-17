@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -113,14 +114,14 @@ public class VehicleController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/driver/{driverId}")
+    @GetMapping("/driver")
     @Operation(summary = "Get vehicles by driver ID with pagination")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Driver vehicles retrieved successfully",
                     content = @Content(schema = @Schema(implementation = PageResponse.class)))
     })
     public ResponseEntity<PageResponse<VehicleResponse>> getVehiclesByDriverId(
-            @Parameter(description = "Driver ID") @PathVariable Integer driverId,
+            Authentication authentication,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -128,7 +129,7 @@ public class VehicleController {
 
         Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
-
+        String driverId = authentication.getName();
         PageResponse<VehicleResponse> response = vehicleService.getVehiclesByDriverId(driverId, pageable);
         return ResponseEntity.ok(response);
     }

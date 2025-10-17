@@ -2,17 +2,20 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.FuelType;
 import com.mssus.app.common.enums.VehicleStatus;
+import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.CreateVehicleRequest;
 import com.mssus.app.dto.request.UpdateVehicleRequest;
 import com.mssus.app.dto.response.MessageResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.VehicleResponse;
 import com.mssus.app.entity.DriverProfile;
+import com.mssus.app.entity.User;
 import com.mssus.app.entity.Vehicle;
 import com.mssus.app.common.exception.ConflictException;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.mapper.VehicleMapper;
 import com.mssus.app.repository.DriverProfileRepository;
+import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.VehicleRepository;
 import com.mssus.app.service.VehicleService;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,7 @@ public class VehicleServiceImpl implements VehicleService {
     private final VehicleRepository vehicleRepository;
     private final DriverProfileRepository driverProfileRepository;
     private final VehicleMapper vehicleMapper;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -116,7 +121,9 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<VehicleResponse> getVehiclesByDriverId(Integer driverId, Pageable pageable) {
+    public PageResponse<VehicleResponse> getVehiclesByDriverId(String driver, Pageable pageable) {
+        User users = userRepository.findByEmail(driver).orElseThrow(() -> new NotFoundException("User not found with email: " + driver));
+        Integer driverId = users.getDriverProfile().getDriverId();
         Page<Vehicle> vehiclePage = vehicleRepository.findByDriverDriverId(driverId, pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
                 .map(vehicleMapper::mapToVehicleResponse)
