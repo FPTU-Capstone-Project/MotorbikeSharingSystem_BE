@@ -1,9 +1,13 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.DriverProfileStatus;
 import com.mssus.app.common.enums.UserStatus;
+import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.RefreshToken;
 import com.mssus.app.entity.User;
+import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.RefreshTokenRepository;
+import com.mssus.app.repository.RiderProfileRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.security.JwtService;
 import com.mssus.app.service.RefreshTokenService;
@@ -23,6 +27,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final DriverProfileRepository driverProfileRepository;
     
     @Override
     @Transactional
@@ -96,8 +101,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 refreshTokenRepository.delete(refreshToken);
                 userRepository.findByEmail(refreshToken.getUser().getEmail()).ifPresent(user -> {
                     user.incrementTokenVersion();
+                    if (user.getDriverProfile() != null) {
+                        DriverProfile driverProfile = user.getDriverProfile();
+                        driverProfile.setStatus(DriverProfileStatus.INACTIVE);
+                        driverProfileRepository.save(driverProfile);
+                    }
                     userRepository.save(user);
-                }); //TODO: Replace with UserService method later
+                });
                 log.info("Deleted refresh token for user: {}", refreshToken.getUser().getEmail());
             } else {
                 log.warn("Attempted to delete non-existent refresh token");

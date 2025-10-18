@@ -59,6 +59,11 @@ No existing flows were removed. JOIN_RIDE and other ride management features con
 6. **Cancellation**:
    - When riders cancel a pending AI booking, `SharedRideRequestService.cancelRequest` asks the coordinator to stop matching and clear timers.
 
+7. **Broadcast fallback** *(new)*:
+   - When sequential offers are exhausted but the overall 15 minute matching window still has time remaining, the coordinator switches the request status to `BROADCASTING` and pushes a real-time offer to every eligible active driver who is not engaged in an `ONGOING` ride.
+   - Drivers get a 30 second response window (configurable via `app.ride.broadcast.response-window-seconds`). The first driver to accept triggers `SharedRideRequestService.acceptBroadcast`, which creates a new shared ride and confirms the rider.
+   - If no driver accepts before the broadcast window closes, the coordinator treats the request as expired, releasing wallet holds and notifying the rider through the existing no-match flow.
+
 ---
 
 ## 3. Concurrency & Async Concepts (Beginner Friendly)
@@ -324,3 +329,184 @@ New field: `driverResponseSeconds`. This is read from `app.ride.matching.driver-
 - **Synchronized block** – ensures only one thread can execute a piece of code at a time (used inside `MatchingSession` to protect mutable fields).
 
 If any of these terms feel unfamiliar, remember: they are just tools to coordinate access to shared data when multiple threads are involved. The coordinator hides most of the complexity; you typically only interact via its public methods.
+
+---
+
+## Appendix B - Broadcast Fallback Technical Notes
+
+This appendix captures the post-MVP broadcast mechanism that kicks in when the ranked matching queue is exhausted. Use it as a checklist during audits or future refactors.
+
+### B.1 Trigger Criteria and Guard Rails
+
+- Broadcast is only attempted for `RequestKind.BOOKING` requests that remain `PENDING` after sequential offers.
+- The session must still be within the global `requestAcceptTimeout` window (15 minutes by default). `MatchingSession.remainingMatchingTime()` is consulted before entering broadcast mode.
+- The configured window `app.ride.broadcast.response-window-seconds` (default 30) is clamped to the remaining timeout so we never exceed the original SLA.
+- Matching stops immediately if the rider cancels or the request moves to a terminal status.
+
+### B.2 Eligibility Query
+
+`DriverProfileRepository.findBroadcastEligibleDrivers(List<Integer> excludedIds)` looks for:
+
+| Predicate | Purpose |
+|-----------|---------|
+| `status = ACTIVE` | Respect existing driver activation workflow. |
+| Driver id not in `excludedIds` | Avoid notifying drivers who already declined/timed out during ranked matching. |
+| No `SharedRide` in `ONGOING` | Prevent double booking. |
+
+This query intentionally ignores seat capacity and polygons; those checks remain in the original scoring pipeline. Future work could add geo filters here if needed.
+
+### B.3 Notification Payload Changes
+
+`DriverRideOfferNotification` gained:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `broadcast` | `Boolean` | Distinguishes broadcast alerts from ranked offers (clients show different UI). |
+| `responseWindowSeconds` | `Integer` | Countdown the driver should honour. |
+
+`MatchingResponseAssembler.toDriverBroadcastOffer(...)` sets `broadcast = true`, omits `rideId` (new ride is created later), and stamps the shared deadline.
+
+### B.4 Coordinator Flow
+
+Broadcast logic lives in `RideMatchingCoordinator`:
+
+1. `handleNoCandidates` calls `tryStartBroadcast(...)`. If criteria pass, the request status flips to `BROADCASTING`, notifications are sent to all eligible drivers, and a timeout task is scheduled via `matchingScheduler`.
+2. Each `MatchingSession` tracks broadcast state (`Phase.BROADCASTING`, notified driver ids, deadline, timeout future).
+3. The first driver to respond runs through `beginBroadcastAcceptance(requestId, driverId)`, which atomically lock-ins the winner and moves the phase to `AWAITING_CONFIRMATION`.
+4. If the scheduled timeout fires before any acceptance, `handleBroadcastTimeout` marks the session expired and reuses the normal expiry path (wallet release + rider notification).
+
+### B.5 Service-Level Acceptance
+
+`SharedRideRequestServiceImpl.acceptBroadcast(...)` performs:
+
+| Step | Reason |
+|------|--------|
+| Validate driver profile (`ACTIVE`) and ownership of the chosen vehicle | Prevent cross-account claims. |
+| Double-check request still `BROADCASTING` | Guards against stale clients. |
+| Create a new `SharedRide` seeded with pickup/drop-off from the request | Broadcast has no pre-existing ride. |
+| Clamp passenger capacity (`vehicle.capacity` or driver default, minimum 1) | Ensures consistent booking math. |
+| Update the request to `CONFIRMED`, associate the new ride, stamp `estimatedPickupTime` | Mirrors classic acceptance semantics. |
+| Build an ad-hoc `RideMatchProposalResponse` and call `completeBroadcastAcceptance` | Allows the coordinator to finish the workflow and notify the rider. |
+
+On any failure, `failBroadcastAcceptance` clears the lock so another driver can still claim within the remaining window.
+
+### B.6 Status & Timer Interactions
+
+- `SharedRideRequestStatus.BROADCASTING` is used only during the fallback window. It collapses back to `PENDING` (failure) or advances to `CONFIRMED` (success).
+- `MatchingSession.markExpiredFromBroadcast()` ensures any outstanding timeout future is cancelled before the request transitions to `EXPIRED`.
+- Caller initiated cancellations route through `matchingCoordinator.cancelMatching(...)`, which now also stops broadcast timers.
+
+### B.7 API Surface
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/ride-requests/{id}/broadcast/accept` | `POST` | Driver accepts the broadcast. Body: `{ "vehicleId": ... }`. |
+
+The request DTO is `BroadcastAcceptRequest`. Any existing client using the sequential accept endpoint is unaffected; the mobile app only calls this when the payload indicates `broadcast = true`.
+
+### B.8 Observability and Logging Notes
+
+- Every broadcast attempt logs the number of drivers notified and whether a timeout occurred.
+- Acceptance success/failure includes the request id, driver id, and new ride id (when applicable). These breadcrumbs are critical when diagnosing race conditions or disputes.
+- Metrics (not yet wired) should increment counters for `broadcast.started`, `broadcast.accepted`, and `broadcast.timeout` once the monitoring story is in place.
+
+Keep this appendix alongside Appendix A so future contributors can trace both the baseline matching flow and the broadcast extension without spelunking into the code.
+
+---
+
+## Appendix C - Ride Lifecycle Automation
+
+### C.1 Configuration Surface
+
+Automation is driven by `app.ride.autoLifecycle.*` (defined in `RideConfigurationProperties.AutoLifecycle`):
+
+| Property | Default | Purpose |
+|----------|---------|---------|
+| `enabled` | `true` | master switch for the worker |
+| `scan-interval-ms` | `60000` | polling frequency for stale rides/requests |
+| `ride-auto-start-leeway` | `PT5M` | grace window after `scheduled_time` before auto-start |
+| `ride-auto-complete-leeway` | `PT15M` | max age of `startedAt` before auto-complete |
+| `request-pickup-timeout` | `PT5M` | max wait in `CONFIRMED` before request auto-start |
+| `request-dropoff-timeout` | `PT15M` | max time in `ONGOING` before request auto-complete |
+
+All values live in `application.properties`; adjust per deployment without code changes.
+
+### C.2 Repositories & Queries
+
+- `SharedRideRepository.findScheduledForAutoStart(cutoff)` → rides still `SCHEDULED` past the leeway window.  
+- `SharedRideRepository.findOngoingForAutoCompletion(cutoff)` → rides `ONGOING` longer than allowed.  
+- `SharedRideRequestRepository.findConfirmedForAutoStart(cutoff)` → requests stuck in `CONFIRMED`.  
+- `SharedRideRequestRepository.findOngoingForAutoCompletion(cutoff)` → requests stuck in `ONGOING`.  
+- `SharedRideRequestRepository.existsBySharedRideSharedRideIdAndStatusIn(...)` → guard to block ride auto-completion while any request remains active.
+
+### C.3 `RideLifecycleWorker`
+
+Located under `com.mssus.app.worker`, scheduled with the configured fixed delay. It runs four passes per scan:
+
+1. **Auto-start rides**  
+   - Locks each ride, ensures confirmed passengers exist, calls `rideRepository.save` to flip status, and kicks off `RideTrackingService.startTracking`.  
+   - Logs the ride id, original scheduled time, and passenger count.
+
+2. **Auto-start ride requests**  
+   - Promotes stale `CONFIRMED` requests to `ONGOING`, stamping `actualPickupTime`.  
+   - Keeps the change lightweight—no notification yet, but logs rider/ride identifiers.
+
+3. **Auto-complete ride requests**  
+   - Calls existing `SharedRideService.completeRideRequestOfRide`, passing a synthetic `Authentication` built from the driver user.  
+   - Reuses wallet capture / commission logic; errors are caught and logged with request + ride ids.
+
+4. **Auto-complete rides**  
+   - Skips rides still holding `CONFIRMED/ONGOING` requests.  
+  - Invokes `SharedRideService.completeRide` under the same synthetic auth, with debug logging of failure causes.
+
+An `AtomicBoolean` gate avoids overlapping executions if a scan takes longer than the interval.
+
+### C.4 Authentication Strategy
+
+Automation reuses service-layer guards by forging a `UsernamePasswordAuthenticationToken`:
+
+- Principal: driver’s email.  
+- Authorities: `ROLE_DRIVER` and `ROLE_SYSTEM_AUTOMATION` sentinel.  
+- Allows existing `@PreAuthorize("hasRole('DRIVER')")` checks to pass without changing controller/service APIs.
+
+### C.5 Logging & Observability
+
+- Key log lines are `info` when actions succeed and `warn` with context when they fail (ride/request id, timestamps).  
+- Additional `debug` entries include exception stack traces for troubleshooting.  
+- Consider surfacing metrics in future (`ride.autostart.count`, `ride.autocomplete.failures`, etc.).
+- Drivers and riders receive real-time websocket + persisted notifications for each automated transition (`*_AUTO_*` notification types), ensuring transparency even when no manual action occurred.
+
+### C.6 Safety Guards & Extensibility
+
+- Manual flows remain authoritative—automation only nudges rides stuck past configurable thresholds.  
+- If desired, disable automation via `app.ride.autoLifecycle.enabled=false` or widen leeway durations.  
+- Future extensions: push notifications when automation intervenes, partial refunds for auto-completed requests, or GPS distance checks before auto-completion (hook into `RideTrackingService.computeDistanceFromPoints`).
+
+
+### TODO: Enhance automation ride lifecycle worker service to check driver telemetry via RideTrackingService and decide between auto-start, auto-cancel, or escalation
+
+1. Configuration knobs
+   Add two more properties under app.ride.autoLifecycle:
+   pickup-proximity-threshold-meters (e.g. 120 m default)
+   pickup-proximity-grace-minutes (e.g. 3–5 minutes)
+   These let ops tune how strict the geo check is versus the existing time-based auto-start.
+2. Repository signal
+   Extend SharedRideRequestRepository with a query that returns CONFIRMED requests whose pickupTime is already within the grace window and where the ride is ONGOING. No change to existing indexes.
+3. Watchdog pass inside RideLifecycleWorker
+   Add a new loop before the current auto-start block:
+   For each candidate request, pull the driver's latest position using rideTrackingService.getLatestPosition(rideId, maxStaleMinutes) (reuse the 3‑minute cache).
+   Run a Haversine check (PolylineDistance.haversineMeters) against the request pickup coordinates.
+   Branch:
+   Within threshold → treat as "driver arrived", fall back to today's auto-start path (mark request ONGOING, notify)
+   Outside threshold but still inside the grace minutes → just log and possibly send a reminder notification ("Driver is not near rider yet")
+   Outside threshold beyond grace → auto-cancel the request: set status EXPIRED (or a new NO_SHOW if you prefer), release wallet hold, notify rider (and optionally re-enqueue for matching/broadcast). Also emit a driver notification warning about potential penalties; future enhancements could flag repeated offenses.
+   This logic means the existing unconditional auto-start never runs if the proximity check fails; instead we either wait longer or cancel.
+4. Notifications & audit trail
+   Reuse notifyRideRequestTransition but add new NotificationType values (REQUEST_AUTO_NO_SHOW, REQUEST_AUTO_REMINDER) so both rider and driver see why the request changed state. Log the computed distance and driver coordinates to help debug.
+5. Ecosystem impact
+   Manual controls still work; if the driver eventually presses "start", we bypass the watchdog
+   The worker's timing currently runs every minute; that's fine for the new proximity loop
+   Since we're consuming tracking data, ensure the tracking service is started when the ride goes ONGOING (we already call rideTrackingService.startTracking). Consider adding a fallback (if no GPS points were recorded, treat as "far")
+   Wire in optional escalation: after an auto-cancel, publish a domain event so matching can re-broadcast or alert support
+
+Document changes to thresholds or enforcement logic here to keep audit trails clear.

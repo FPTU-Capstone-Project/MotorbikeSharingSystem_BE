@@ -1,6 +1,7 @@
 package com.mssus.app.service;
 
 import com.mssus.app.dto.ride.AcceptRequestDto;
+import com.mssus.app.dto.ride.BroadcastAcceptRequest;
 import com.mssus.app.dto.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
@@ -30,5 +31,7 @@ public interface SharedRideRequestService {
     SharedRideRequestResponse rejectRequest(Integer requestId, String reason, Authentication authentication);
 
     SharedRideRequestResponse cancelRequest(Integer requestId, Authentication authentication);
+
+    SharedRideRequestResponse acceptBroadcast(Integer requestId, BroadcastAcceptRequest request, Authentication authentication);
 }
 

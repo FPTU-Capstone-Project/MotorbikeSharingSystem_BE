@@ -41,9 +41,20 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, In
 
     @Modifying
     @Query("UPDATE DriverProfile d SET d.isAvailable = :available WHERE d.driverId = :driverId")
-    void updateAvailability(@Param("driverId") Integer driverId, @Param("available") Boolean available);
+   void updateAvailability(@Param("driverId") Integer driverId, @Param("available") Boolean available);
 
     org.springframework.data.domain.Page<DriverProfile> findByStatus(DriverProfileStatus status, Pageable pageable);
 
     Long countByStatus(DriverProfileStatus status);
+
+    @Query("""
+        SELECT d FROM DriverProfile d
+        WHERE d.status = com.mssus.app.common.enums.DriverProfileStatus.ACTIVE
+          AND (:excludedIds IS NULL OR d.driverId NOT IN :excludedIds)
+          AND NOT EXISTS (
+              SELECT 1 FROM SharedRide r
+              WHERE r.driver = d AND r.status = com.mssus.app.common.enums.SharedRideStatus.ONGOING
+          )
+    """)
+    List<DriverProfile> findBroadcastEligibleDrivers(@Param("excludedIds") List<Integer> excludedIds);
 }

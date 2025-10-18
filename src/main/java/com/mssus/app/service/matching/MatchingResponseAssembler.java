@@ -25,7 +25,8 @@ public class MatchingResponseAssembler {
                                                      Location dropoff,
                                                      @NonNull RideMatchProposalResponse proposal,
                                                      int rank,
-                                                     Instant expiresAt) {
+                                                     Instant expiresAt,
+                                                     int responseWindowSeconds) {
 
         return DriverRideOfferNotification.builder()
             .requestId(request.getSharedRideRequestId())
@@ -45,6 +46,36 @@ public class MatchingResponseAssembler {
             .matchScore(proposal.getMatchScore())
             .proposalRank(rank)
             .offerExpiresAt(ZonedDateTime.ofInstant(expiresAt, ZoneId.systemDefault()))
+            .broadcast(Boolean.FALSE)
+            .responseWindowSeconds(responseWindowSeconds)
+            .build();
+    }
+    public DriverRideOfferNotification toDriverBroadcastOffer(@NonNull SharedRideRequest request,
+                                                              @NonNull DriverProfile driver,
+                                                              Location pickup,
+                                                              Location dropoff,
+                                                              Instant expiresAt,
+                                                              int responseWindowSeconds) {
+        return DriverRideOfferNotification.builder()
+            .requestId(request.getSharedRideRequestId())
+            .rideId(null)
+            .driverId(driver.getDriverId())
+            .driverName(driver.getUser().getFullName())
+            .riderId(request.getRider().getRiderId())
+            .riderName(request.getRider().getUser().getFullName())
+            .pickupLocationName(pickup != null ? pickup.getName() : null)
+            .dropoffLocationName(dropoff != null ? dropoff.getName() : null)
+            .pickupLat(request.getPickupLat())
+            .pickupLng(request.getPickupLng())
+            .dropoffLat(request.getDropoffLat())
+            .dropoffLng(request.getDropoffLng())
+            .pickupTime(request.getPickupTime())
+            .totalFare(request.getTotalFare())
+            .matchScore(null)
+            .proposalRank(null)
+            .offerExpiresAt(ZonedDateTime.ofInstant(expiresAt, ZoneId.systemDefault()))
+            .broadcast(Boolean.TRUE)
+            .responseWindowSeconds(responseWindowSeconds)
             .build();
     }
 
@@ -109,4 +140,19 @@ public class MatchingResponseAssembler {
             .build();
     }
 
+    public RiderMatchStatusNotification toRiderLifecycleUpdate(SharedRideRequest request,
+                                                               String status,
+                                                               String message) {
+        return RiderMatchStatusNotification.builder()
+            .requestId(request.getSharedRideRequestId())
+            .status(status)
+            .message(message)
+            .rideId(request.getSharedRide() != null ? request.getSharedRide().getSharedRideId() : null)
+            .driverId(request.getSharedRide() != null ? request.getSharedRide().getDriver().getDriverId() : null)
+            .driverName(request.getSharedRide() != null ? request.getSharedRide().getDriver().getUser().getFullName() : null)
+            .totalFare(request.getTotalFare())
+            .build();
+    }
+
 }
+

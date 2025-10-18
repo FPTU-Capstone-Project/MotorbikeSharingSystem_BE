@@ -83,7 +83,7 @@ public class RealTimeNotificationServiceImpl implements RealTimeNotificationServ
                 "Ride matching update",
                 payload.getMessage(),
                 toJson(payload),
-                Priority.NORMAL,
+                Priority.MEDIUM,
                 DeliveryMethod.PUSH,
                 RIDER_QUEUE);
             log.info("Database notification saved for user {}", riderUser.getUserId());

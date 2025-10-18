@@ -32,6 +32,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final RiderProfileRepository riderProfileRepository;
+    private final DriverProfileRepository driverProfileRepository;
     private final WalletRepository walletRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -113,9 +114,9 @@ public class AuthServiceImpl implements AuthService {
             throw BaseDomainException.of("user.validation.invalid-email");
         }
 
-//        if (!user.hasProfile(request.getTargetProfile()) && !UserType.ADMIN.equals(user.getUserType())) {
-//            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
-//        }
+        if (!user.hasProfile(request.getTargetProfile().toUpperCase()) && !UserType.ADMIN.equals(user.getUserType())) {
+            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
+        }
 
         validateUserBeforeGrantingToken(user);
 
@@ -127,7 +128,30 @@ public class AuthServiceImpl implements AuthService {
         // Generate tokens
         Map<String, Object> claims = buildTokenClaims(user, UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile());
 
-        //Persist context for refresh token use
+        var currentProfile = request.getTargetProfile();
+
+        if (!UserType.ADMIN.equals(user.getUserType())) {
+            if ("rider".equalsIgnoreCase(currentProfile)) {
+                if (user.getRiderProfile() != null) {
+                    user.getRiderProfile().setStatus(RiderProfileStatus.ACTIVE);
+                    riderProfileRepository.save(user.getRiderProfile());
+                }
+                if (user.getDriverProfile() != null) {
+                    user.getDriverProfile().setStatus(DriverProfileStatus.INACTIVE);
+                    driverProfileRepository.save(user.getDriverProfile());
+                }
+            } else if ("driver".equalsIgnoreCase(currentProfile)) {
+                if (user.getDriverProfile() != null) {
+                    user.getDriverProfile().setStatus(DriverProfileStatus.ACTIVE);
+                    driverProfileRepository.save(user.getDriverProfile());
+                }
+                if (user.getRiderProfile() != null) {
+                    user.getRiderProfile().setStatus(RiderProfileStatus.INACTIVE);
+                    riderProfileRepository.save(user.getRiderProfile());
+                }
+            }
+        }
+
         userContext.put(user.getUserId().toString(), claims);
 
         String accessToken = jwtService.generateToken(user.getEmail(), claims);

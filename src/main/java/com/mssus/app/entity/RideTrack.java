@@ -29,8 +29,14 @@ public class RideTrack {
     @Column(name = "gps_points", nullable = false, columnDefinition = "jsonb")
     private JsonNode gpsPoints;  // Array: [{"lat": 10.84, "lng": 106.81, "timestamp": "2025-10-13T13:00:00"}]
 
+    @Column(name = "is_tracking")
+    private Boolean isTracking = true;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "stopped_at")
+    private LocalDateTime stoppedAt;
 
 
     public void addGpsPoints(List<LocationPoint> points) {

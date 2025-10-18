@@ -63,4 +63,19 @@ public interface SharedRideRequestRepository extends JpaRepository<SharedRideReq
             @Param("requestId") Integer requestId,
             @Param("sharedRideId") Integer sharedRideId,
             @Param("status") SharedRideRequestStatus status);
+
+    @Query("SELECT r FROM SharedRideRequest r " +
+        "WHERE r.status = 'CONFIRMED' " +
+        "AND r.pickupTime IS NOT NULL " +
+        "AND r.pickupTime <= :cutoff")
+    List<SharedRideRequest> findConfirmedForAutoStart(@Param("cutoff") LocalDateTime cutoff);
+
+    @Query("SELECT r FROM SharedRideRequest r " +
+        "WHERE r.status = 'ONGOING' " +
+        "AND r.actualPickupTime IS NOT NULL " +
+        "AND r.actualPickupTime <= :cutoff")
+    List<SharedRideRequest> findOngoingForAutoCompletion(@Param("cutoff") LocalDateTime cutoff);
+
+    boolean existsBySharedRideSharedRideIdAndStatusIn(Integer sharedRideId,
+                                                      List<SharedRideRequestStatus> statuses);
 }

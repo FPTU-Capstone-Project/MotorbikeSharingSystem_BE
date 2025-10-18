@@ -1,15 +1,21 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.DeliveryMethod;
+import com.mssus.app.common.enums.NotificationType;
+import com.mssus.app.common.enums.Priority;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.dto.request.wallet.*;
 import com.mssus.app.dto.response.wallet.BalanceCheckResponse;
 import com.mssus.app.dto.response.wallet.WalletOperationResponse;
 import com.mssus.app.entity.Transaction;
+import com.mssus.app.entity.User;
 import com.mssus.app.entity.Wallet;
 import com.mssus.app.repository.TransactionRepository;
+import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
 import com.mssus.app.service.BookingWalletService;
+import com.mssus.app.service.NotificationService;
 import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +36,9 @@ public class BookingWalletServiceImpl implements BookingWalletService {
     private final WalletService walletService;
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
+
 
     @Override
     @Transactional
@@ -63,7 +72,15 @@ public class BookingWalletServiceImpl implements BookingWalletService {
 
             log.info("Successfully held funds - txnId: {}, userId: {}, amount: {}",
                     holdTransaction.getTxnId(), request.getUserId(), request.getAmount());
-
+            User user = userRepository.findById(request.getUserId()).orElseThrow(() -> new NotFoundException("User not found"));
+            notificationService.sendNotification(user,
+                    NotificationType.WALLET_HOLD,
+                    "Funds on Hold",
+                    String.format("%,.2f has been held for booking #%d", request.getAmount(), request.getBookingId()),
+                    null,
+                    Priority.MEDIUM,
+                    DeliveryMethod.IN_APP,
+                    null);
             return WalletOperationResponse.builder()
                     .success(true)
                     .transactionId(holdTransaction.getTxnId())
@@ -116,7 +133,15 @@ public class BookingWalletServiceImpl implements BookingWalletService {
 
             log.info("Successfully captured funds - txnId: {}, bookingId: {}, amount: {}",
                     captureTransaction.getTxnId(), request.getBookingId(), request.getAmount());
-
+            User user = userRepository.findById(request.getUserId()).orElseThrow(() -> new NotFoundException("User not found"));
+            notificationService.sendNotification(user,
+                    NotificationType.WALLET_CAPTURE,
+                    "Payment Successful",
+                    String.format("Payment of %,.2f for booking #%d was successful", request.getAmount(), request.getBookingId()),
+                    null,
+                    Priority.MEDIUM,
+                    DeliveryMethod.IN_APP,
+                    null);
             return WalletOperationResponse.builder()
                     .success(true)
                     .transactionId(captureTransaction.getTxnId())
@@ -157,7 +182,15 @@ public class BookingWalletServiceImpl implements BookingWalletService {
 
             log.info("Successfully released funds - txnId: {}, bookingId: {}, amount: {}",
                     releaseTransaction.getTxnId(), request.getBookingId(), request.getAmount());
-
+            User user = userRepository.findById(request.getUserId()).orElseThrow(() -> new NotFoundException("User not found"));
+            notificationService.sendNotification(user,
+                    NotificationType.WALLET_RELEASE,
+                    "Funds Released",
+                    String.format("Held amount of %,.2f for booking #%d has been released", request.getAmount(), request.getBookingId()),
+                    null,
+                    Priority.MEDIUM,
+                    DeliveryMethod.IN_APP,
+                    null);
             return WalletOperationResponse.builder()
                     .success(true)
                     .transactionId(releaseTransaction.getTxnId())
@@ -208,7 +241,15 @@ public class BookingWalletServiceImpl implements BookingWalletService {
 
             log.info("Successfully refunded user - txnId: {}, bookingId: {}, amount: {}",
                     refundTransaction.getTxnId(), request.getBookingId(), request.getAmount());
-
+            User user = userRepository.findById(request.getUserId()).orElseThrow(() -> new NotFoundException("User not found"));
+            notificationService.sendNotification(user,
+                    NotificationType.WALLET_REFUND,
+                    "Refund Processed",
+                    String.format("A refund of %,.2f for booking #%d has been processed", request.getAmount(), request.getBookingId()),
+                    null,
+                    Priority.MEDIUM,
+                    DeliveryMethod.IN_APP,
+                    null);
             return WalletOperationResponse.builder()
                     .success(true)
                     .transactionId(refundTransaction.getTxnId())

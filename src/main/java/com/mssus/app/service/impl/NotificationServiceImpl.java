@@ -60,7 +60,6 @@ public class NotificationServiceImpl implements NotificationService {
             .isRead(false)
             .sentAt(LocalDateTime.now())
             .build();
-        // Save the notification first. It's now part of the transaction.
         notificationRepository.save(notification);
         log.info("Notification (method: {}) saved to database for user {}", method, recipient.getUserId());
 

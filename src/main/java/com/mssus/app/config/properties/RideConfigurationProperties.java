@@ -33,6 +33,16 @@ public class RideConfigurationProperties {
      * Cancellation fee configuration.
      */
     private Cancellation cancellation = new Cancellation();
+
+    /**
+     * Broadcast fallback configuration.
+     */
+    private Broadcast broadcast = new Broadcast();
+
+    /**
+     * Automatic lifecycle enforcement configuration.
+     */
+    private AutoLifecycle autoLifecycle = new AutoLifecycle();
     
     /**
      * Matching algorithm configuration.
@@ -139,6 +149,60 @@ public class RideConfigurationProperties {
          * Default: 2 minutes
          */
         private Integer gracePeriodMinutes = 2;
+    }
+
+    /**
+     * Broadcast fallback configuration.
+     */
+    @Data
+    public static class Broadcast {
+        /**
+         * Response window (seconds) for drivers during broadcast fallback.
+         * Default: 30 seconds.
+         */
+        private Integer responseWindowSeconds = 30;
+    }
+
+    /**
+     * Automatic lifecycle enforcement settings.
+     */
+    @Data
+    public static class AutoLifecycle {
+        /**
+         * Enable/disable lifecycle automation.
+         * Default: true.
+         */
+        private boolean enabled = true;
+
+        /**
+         * How often the lifecycle worker scans the system (milliseconds).
+         * Default: 60_000 (1 minute).
+         */
+        private Long scanIntervalMs = 60_000L;
+
+        /**
+         * Grace period after scheduledTime before a ride is auto-started (minutes).
+         * Default: 5 minutes.
+         */
+        private Duration rideAutoStartLeeway = Duration.ofMinutes(5);
+
+        /**
+         * Grace period after ride startedAt before auto-completing the ride (minutes).
+         * Default: 15 minutes.
+         */
+        private Duration rideAutoCompleteLeeway = Duration.ofMinutes(15);
+
+        /**
+         * Maximum time a confirmed request can wait for pickup before auto-start (minutes).
+         * Default: 5 minutes.
+         */
+        private Duration requestPickupTimeout = Duration.ofMinutes(5);
+
+        /**
+         * Maximum time an ongoing request can remain active before auto-completion (minutes).
+         * Default: 15 minutes.
+         */
+        private Duration requestDropoffTimeout = Duration.ofMinutes(15);
     }
 }
 

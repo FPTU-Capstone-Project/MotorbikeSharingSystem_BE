@@ -15,15 +15,21 @@ public class FcmTokenController {
     private final FcmService fcmService;
 
     @PostMapping("/register")
-    public ResponseEntity<Void> registerToken(@RequestBody FcmTokenRequest request,
-                                              Authentication authentication) {
+    public ResponseEntity<FcmTokenResponse> registerToken(@RequestBody FcmTokenRequest request,
+                                                          Authentication authentication) {
         fcmService.registerToken(authentication, request.token(), request.deviceType());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(new FcmTokenResponse(true, "FCM token registered successfully"));
     }
 
     @DeleteMapping("/deactivate")
-    public ResponseEntity<Void> deactivateToken(@RequestParam String token) {
+    public ResponseEntity<FcmTokenResponse> deactivateToken(@RequestParam String token) {
         fcmService.deactivateToken(token);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(new FcmTokenResponse(true, "FCM token deactivated successfully"));
     }
+
+
+    public record FcmTokenResponse(
+        boolean success,
+        String message
+    ) {}
 }

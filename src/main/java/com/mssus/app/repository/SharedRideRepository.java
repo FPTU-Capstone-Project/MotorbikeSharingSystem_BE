@@ -63,6 +63,8 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
         @Param("actualDistance") Float actualDistance,
         @Param("actualDuration") Integer actualDuration);
 
+    boolean existsByDriverDriverIdAndStatus(Integer driverId, SharedRideStatus status);
+
     @Query("SELECT r FROM SharedRide r " +
         "WHERE r.status = 'SCHEDULED' OR r.status = 'ONGOING'" +
         "AND r.currentPassengers < r.maxPassengers " +
@@ -74,6 +76,14 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
     @Query("SELECT r FROM SharedRide r WHERE r.status = 'SCHEDULED' " +
         "AND r.scheduledTime <= :cutoff")
     List<SharedRide> findScheduledAndOverdue(LocalDateTime cutoff);
+
+    @Query("SELECT r FROM SharedRide r " +
+        "WHERE r.status = 'SCHEDULED' AND r.scheduledTime <= :cutoff")
+    List<SharedRide> findScheduledForAutoStart(@Param("cutoff") LocalDateTime cutoff);
+
+    @Query("SELECT r FROM SharedRide r " +
+        "WHERE r.status = 'ONGOING' AND r.startedAt IS NOT NULL AND r.startedAt <= :cutoff")
+    List<SharedRide> findOngoingForAutoCompletion(@Param("cutoff") LocalDateTime cutoff);
 
 }
 

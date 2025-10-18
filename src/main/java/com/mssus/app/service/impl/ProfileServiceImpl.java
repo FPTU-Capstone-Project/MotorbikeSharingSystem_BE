@@ -157,6 +157,28 @@ public class ProfileServiceImpl implements ProfileService {
 
         authService.validateUserBeforeGrantingToken(user);
 
+        var currentProfile = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+                .filter(Map.class::isInstance)
+                .map(obj -> (Map<String, Object>) obj)
+                .map(claims -> (String) claims.get("active_profile"))
+                .orElse(null);
+
+        if (currentProfile != null && !targetProfile.equalsIgnoreCase(currentProfile)) {
+            if ("rider".equals(currentProfile)) {
+                user.getRiderProfile().setStatus(RiderProfileStatus.INACTIVE);
+            } else if ("driver".equals(currentProfile)) {
+                user.getDriverProfile().setStatus(DriverProfileStatus.INACTIVE);
+            }
+        }
+
+        if ("rider".equalsIgnoreCase(targetProfile)) {
+            user.getRiderProfile().setStatus(RiderProfileStatus.ACTIVE);
+        } else if ("driver".equalsIgnoreCase(targetProfile)) {
+            user.getDriverProfile().setStatus(DriverProfileStatus.ACTIVE);
+        }
+
+        userRepository.save(user);
+
         Map<String, Object> claims = authService.buildTokenClaims(user, request.getTargetProfile());
 
         AuthServiceImpl.userContext.put(user.getUserId().toString(), claims);

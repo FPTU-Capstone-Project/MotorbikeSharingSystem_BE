@@ -1,6 +1,7 @@
 package com.mssus.app.controller;
 
 import com.mssus.app.dto.ride.AcceptRequestDto;
+import com.mssus.app.dto.ride.BroadcastAcceptRequest;
 import com.mssus.app.dto.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.response.ErrorResponse;
@@ -269,6 +270,31 @@ public class SharedRideRequestController {
             Authentication authentication) {
         log.info("Driver {} rejecting request {} - reason: {}", authentication.getName(), requestId, reason);
         SharedRideRequestResponse response = requestService.rejectRequest(requestId, reason, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{requestId}/broadcast/accept")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(
+        summary = "Accept a broadcasted ride request (Driver)",
+        description = "Claim a broadcasted AI booking request and create a new shared ride."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Broadcast request accepted successfully",
+            content = @Content(schema = @Schema(implementation = SharedRideRequestResponse.class))),
+        @ApiResponse(responseCode = "403", description = "Not an active driver",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Request or vehicle not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "409", description = "Broadcast window closed or already claimed",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<SharedRideRequestResponse> acceptBroadcastRequest(
+        @Parameter(description = "Request ID") @PathVariable Integer requestId,
+        @Valid @RequestBody BroadcastAcceptRequest request,
+        Authentication authentication) {
+        log.info("Driver {} accepting broadcast request {} with vehicle {}", authentication.getName(), requestId, request.vehicleId());
+        SharedRideRequestResponse response = requestService.acceptBroadcast(requestId, request, authentication);
         return ResponseEntity.ok(response);
     }
 

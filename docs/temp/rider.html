@@ -12,7 +12,7 @@
 <script>
     const BASE = "http://localhost:8080";
     const JWT =
-        "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwMDEyOTEyLCJleHAiOjI3NjAwMTI5MTJ9.ZQJUfWkqIz5cwN3HIod8HNwBnJVQlNKvGUB7OqqHQgY";
+        "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwNzk0OTI1LCJleHAiOjE3NjA3OTg1MjV9.xlsfaPN1gDwRnx00blUGKB8-nfF5cqy9fs_NqlOCJbs";
     const log = (m) => (document.getElementById("log").textContent += m + "\n");
 
     let stomp;
@@ -20,7 +20,7 @@
     document.getElementById("connect").onclick = () => {
         const sock = new SockJS(
             BASE +
-            "/ws?token=eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwMDEyOTEyLCJleHAiOjI3NjAwMTI5MTJ9.ZQJUfWkqIz5cwN3HIod8HNwBnJVQlNKvGUB7OqqHQgY"
+            "/ws?token=" + encodeURIComponent(JWT)
         );
         stomp = Stomp.over(sock);
         stomp.connect(
@@ -42,6 +42,7 @@
     document.getElementById("connect-native").onclick = () => {
         const ws = new WebSocket(
             "ws://localhost:8080/ws-native?token=" + encodeURIComponent(JWT)
+            // "ws://localhost:8080/ws-native"
         );
         stomp = Stomp.over(ws);
         stomp.connect(
@@ -64,7 +65,7 @@
         // ASSUMPTION: You already have a quoteId and optional pickup/dropoff IDs/time.
         // Fill these with your test values:
         const body = {
-            quoteId: "7e4bcb7a-4a1b-429e-b5b4-d192becfb27f", // <- put a real quoteId
+            quoteId: "17eaf914-315b-40d1-b487-a9077e9699da", // <- put a real quoteId
             // pickupLocationId: 10,         // optional if quote stores coords
             // dropoffLocationId: 11,        // optional if quote stores coords
             // desiredPickupTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // +1 day and 5 min

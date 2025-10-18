@@ -27,15 +27,22 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.time.Duration;
 import java.time.Instant;
+
 import com.mssus.app.service.RideRequestCreatedEvent;
+
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Set;
 
 import org.springframework.transaction.event.TransactionalEventListener;
+
 /**
  * Coordinates the ride matching workflow after a rider submits an AI booking request.
  *
@@ -61,6 +68,7 @@ public class RideMatchingCoordinator {
     private final MatchingResponseAssembler responseAssembler;
     private final ThreadPoolTaskExecutor matchingExecutor;
     private final BookingWalletService bookingWalletService;
+    private final ScheduledExecutorService matchingScheduler;
 
     public RideMatchingCoordinator(
         SharedRideRequestRepository requestRepository,
@@ -72,6 +80,7 @@ public class RideMatchingCoordinator {
         DriverDecisionGateway decisionGateway,
         MatchingResponseAssembler responseAssembler,
         @Qualifier("matchingTaskExecutor") ThreadPoolTaskExecutor matchingExecutor,
+        @Qualifier("matchingScheduler") ScheduledExecutorService matchingScheduler,
         BookingWalletService bookingWalletService) {
 
         this.requestRepository = requestRepository;
@@ -84,6 +93,7 @@ public class RideMatchingCoordinator {
         this.responseAssembler = responseAssembler;
         this.matchingExecutor = matchingExecutor;
         this.bookingWalletService = bookingWalletService;
+        this.matchingScheduler = matchingScheduler;
     }
 
     @Autowired
@@ -345,11 +355,50 @@ public class RideMatchingCoordinator {
         scheduleNext(session);
     }
 
+    public boolean beginBroadcastAcceptance(Integer requestId, Integer driverId) {
+        MatchingSession session = sessions.get(requestId);
+        if (session == null) {
+            return false;
+        }
+
+        synchronized (session) {
+            return session.markAwaitingBroadcastConfirmation(driverId);
+        }
+    }
+
+    public void completeBroadcastAcceptance(Integer requestId, RideMatchProposalResponse proposal) {
+        MatchingSession session = sessions.remove(requestId);
+        if (session != null) {
+            session.markBroadcastCompleted();
+        }
+
+        requestRepository.findById(requestId).ifPresent(req -> {
+            if (req.getStatus() == SharedRideRequestStatus.CONFIRMED && proposal != null) {
+                notificationService.notifyRiderStatus(
+                    req.getRider().getUser(),
+                    responseAssembler.toRiderMatchSuccess(req, proposal));
+            }
+        });
+    }
+
+    public void failBroadcastAcceptance(Integer requestId, String reason) {
+        MatchingSession session = sessions.get(requestId);
+        if (session == null) {
+            return;
+        }
+
+        synchronized (session) {
+            session.markBroadcastFailed();
+        }
+        log.warn("Broadcast acceptance failed for request {} - {}", requestId, reason);
+    }
+
     public void cancelMatching(Integer requestId) {
         MatchingSession session = sessions.remove(requestId);
         decisionGateway.cancelOffer(requestId);
         if (session != null) {
             session.markCancelled();
+            session.cancelBroadcast();
         }
     }
 
@@ -413,9 +462,11 @@ public class RideMatchingCoordinator {
             session.dropoffLocation(),
             proposal,
             session.currentRank(),
-            offerDeadline);
+            offerDeadline,
+            (int) responseWindow.toSeconds());
 
         notificationService.notifyDriverOffer(driver, driverPayload);
+        session.recordNotifiedDriver(driver.getDriverId());
 
         decisionGateway.registerOffer(
             request.getSharedRideRequestId(),
@@ -440,58 +491,179 @@ public class RideMatchingCoordinator {
     }
 
     private void handleNoCandidates(MatchingSession session, SharedRideRequest request) {
+        if (session.isBroadcasting()) {
+            log.debug("Broadcast already active for request {}", request.getSharedRideRequestId());
+            return;
+        }
+        boolean broadcastStarted = tryStartBroadcast(session, request);
+        if (broadcastStarted) {
+            return;
+        }
         if (session.markExpired()) {
-            decisionGateway.cancelOffer(request.getSharedRideRequestId());
-            sessions.remove(request.getSharedRideRequestId());
+            expireRequest(session, request);
+        }
+    }
 
-            if (request.getStatus() == SharedRideRequestStatus.PENDING) {
-                request.setStatus(SharedRideRequestStatus.EXPIRED);
-                requestRepository.save(request);
+    private void expireRequest(MatchingSession session, SharedRideRequest request) {
+        decisionGateway.cancelOffer(request.getSharedRideRequestId());
+        sessions.remove(request.getSharedRideRequestId());
+        session.cancelBroadcast();
 
-                // Add debug logging
-                log.info("Sending no-match notification to rider {} for request {}",
-                    request.getRider().getUser().getUserId(), request.getSharedRideRequestId());
+        if (request.getStatus() == SharedRideRequestStatus.PENDING ||
+            request.getStatus() == SharedRideRequestStatus.BROADCASTING) {
+            request.setStatus(SharedRideRequestStatus.EXPIRED);
+            requestRepository.save(request);
 
-                int requestId = request.getSharedRideRequestId();
+            log.info("Sending no-match notification to rider {} for request {}",
+                request.getRider().getUser().getUserId(), request.getSharedRideRequestId());
 
-                try {
-                    WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
-                    releaseRequest.setUserId(request.getRider().getRiderId());
-                    releaseRequest.setBookingId(requestId);
-                    releaseRequest.setAmount(request.getTotalFare());
-                    releaseRequest.setNote("Request matching timeout - #" + requestId);
+            int requestId = request.getSharedRideRequestId();
 
-                    bookingWalletService.releaseFunds(releaseRequest);
+            try {
+                WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
+                releaseRequest.setUserId(request.getRider().getRiderId());
+                releaseRequest.setBookingId(requestId);
+                releaseRequest.setAmount(request.getTotalFare());
+                releaseRequest.setNote("Request matching timeout - #" + requestId);
 
-                    log.info("Wallet hold released for rejected request {} - amount: {}",
-                        requestId, request.getTotalFare());
+                bookingWalletService.releaseFunds(releaseRequest);
 
-                } catch (Exception e) {
-                    log.error("Failed to release wallet hold for request {}: {}",
-                        requestId, e.getMessage(), e);
-                    // Continue with rejection even if release fails
-                }
+                log.info("Wallet hold released for rejected request {} - amount: {}",
+                    requestId, request.getTotalFare());
 
-                try {
-                    notificationService.notifyRiderStatus(
-                        request.getRider().getUser(),
-                        responseAssembler.toRiderNoMatch(request));
-                    log.info("No-match notification sent successfully");
-                } catch (Exception e) {
-                    log.error("Failed to send no-match notification", e);
-                }
+            } catch (Exception e) {
+                log.error("Failed to release wallet hold for request {}: {}",
+                    requestId, e.getMessage(), e);
+                // Continue with rejection even if release fails
             }
 
-            log.info("Request {} expired - no available drivers", request.getSharedRideRequestId());
+            try {
+                notificationService.notifyRiderStatus(
+                    request.getRider().getUser(),
+                    responseAssembler.toRiderNoMatch(request));
+                log.info("No-match notification sent successfully");
+            } catch (Exception e) {
+                log.error("Failed to send no-match notification", e);
+            }
         }
+
+        log.info("Request {} expired - no available drivers", request.getSharedRideRequestId());
+    }
+
+    private boolean tryStartBroadcast(MatchingSession session, SharedRideRequest request) {
+        Integer windowSeconds = rideConfig.getBroadcast().getResponseWindowSeconds();
+        if (windowSeconds == null || windowSeconds <= 0) {
+            return false;
+        }
+        if (session.isBroadcasting() || session.isTerminal()) {
+            return false;
+        }
+        if (request.getStatus() != SharedRideRequestStatus.PENDING) {
+            return false;
+        }
+
+        Duration remaining = session.remainingMatchingTime();
+        if (remaining.isNegative() || remaining.isZero()) {
+            return false;
+        }
+
+        Duration broadcastWindow = Duration.ofSeconds(windowSeconds);
+        Duration effectiveWindow = broadcastWindow.compareTo(remaining) < 0 ? broadcastWindow : remaining;
+        if (effectiveWindow.isNegative() || effectiveWindow.isZero()) {
+            return false;
+        }
+
+        Set<Integer> excludedDrivers = session.notifiedDriversSnapshot();
+        List<DriverProfile> candidates = findBroadcastCandidates(excludedDrivers);
+        if (candidates.isEmpty()) {
+            log.info("Broadcast fallback skipped - no eligible drivers for request {}", request.getSharedRideRequestId());
+            return false;
+        }
+
+        Instant deadline = Instant.now().plus(effectiveWindow);
+        boolean entered;
+        synchronized (session) {
+            entered = session.enterBroadcast(deadline);
+        }
+        if (!entered) {
+            return session.isBroadcasting();
+        }
+
+        request.setStatus(SharedRideRequestStatus.BROADCASTING);
+        requestRepository.save(request);
+
+        sendBroadcastOffers(session, request, candidates, deadline, (int) effectiveWindow.toSeconds());
+        return true;
+    }
+
+    private List<DriverProfile> findBroadcastCandidates(Set<Integer> excludedDrivers) {
+        List<Integer> excluded = excludedDrivers == null || excludedDrivers.isEmpty()
+            ? null
+            : new ArrayList<>(excludedDrivers);
+        return driverRepository.findBroadcastEligibleDrivers(excluded);
+    }
+
+    private void sendBroadcastOffers(MatchingSession session,
+                                     SharedRideRequest request,
+                                     List<DriverProfile> candidates,
+                                     Instant deadline,
+                                     int responseWindowSeconds) {
+        log.info("Broadcasting ride request {} to {} drivers", request.getSharedRideRequestId(), candidates.size());
+        for (DriverProfile driver : candidates) {
+            DriverRideOfferNotification payload = responseAssembler.toDriverBroadcastOffer(
+                request,
+                driver,
+                session.pickupLocation(),
+                session.dropoffLocation(),
+                deadline,
+                responseWindowSeconds);
+            notificationService.notifyDriverOffer(driver, payload);
+            session.recordNotifiedDriver(driver.getDriverId());
+        }
+
+        ScheduledFuture<?> timeoutFuture = matchingScheduler.schedule(
+            () -> handleBroadcastTimeout(request.getSharedRideRequestId()),
+            responseWindowSeconds,
+            TimeUnit.SECONDS);
+        session.attachBroadcastTimeout(timeoutFuture);
+    }
+
+    private void handleBroadcastTimeout(int requestId) {
+        matchingExecutor.execute(() -> {
+            MatchingSession session = sessions.get(requestId);
+            if (session == null) {
+                return;
+            }
+
+            Optional<SharedRideRequest> maybeRequest = requestRepository.findById(requestId);
+            if (maybeRequest.isEmpty()) {
+                cancelSession(session);
+                return;
+            }
+            SharedRideRequest request = maybeRequest.get();
+
+            boolean expired;
+            synchronized (session) {
+                expired = session.markExpiredFromBroadcast();
+            }
+
+            if (!expired) {
+                return;
+            }
+
+            log.info("Broadcast timeout for request {}", requestId);
+            expireRequest(session, request);
+        });
     }
 
     private Optional<SharedRideRequest> fetchActiveRequest(int requestId) {
         return requestRepository.findById(requestId)
-            .filter(req -> req.getStatus() == SharedRideRequestStatus.PENDING);
+            .filter(req -> req.getStatus() == SharedRideRequestStatus.PENDING
+                || req.getStatus() == SharedRideRequestStatus.BROADCASTING);
     }
 
     private void cancelSession(MatchingSession session) {
+        session.cancelBroadcast();
         session.markCancelled();
         sessions.remove(session.requestId());
         decisionGateway.cancelOffer(session.requestId());
@@ -505,9 +677,11 @@ public class RideMatchingCoordinator {
         private final Instant expiresAt;
         private final AtomicReference<Phase> phase = new AtomicReference<>(Phase.MATCHING);
         private final AtomicInteger rankCounter = new AtomicInteger(0);
+        private final Set<Integer> notifiedDrivers = ConcurrentHashMap.newKeySet();
         private RideMatchProposalResponse currentCandidate;
         private int currentRank;
         private final JoinRequestSession joinSession;
+        private BroadcastContext broadcastContext;
 
         private MatchingSession(int requestId,
                                 CandidateSelector selector,
@@ -560,6 +734,27 @@ public class RideMatchingCoordinator {
             return true;
         }
 
+        synchronized boolean markAwaitingBroadcastConfirmation(int driverId) {
+            if (phase.get() != Phase.BROADCASTING || broadcastContext == null) {
+                return false;
+            }
+            boolean claimed = broadcastContext.acceptedDriverId.compareAndSet(null, driverId);
+            if (!claimed) {
+                return false;
+            }
+            phase.set(Phase.AWAITING_CONFIRMATION);
+            return true;
+        }
+
+        synchronized void releaseBroadcastLock() {
+            if (broadcastContext != null) {
+                broadcastContext.acceptedDriverId.set(null);
+            }
+            if (phase.get() == Phase.AWAITING_CONFIRMATION) {
+                phase.set(Phase.BROADCASTING);
+            }
+        }
+
         synchronized void resumeMatching() {
             if (phase.get() != Phase.CANCELLED && phase.get() != Phase.EXPIRED && phase.get() != Phase.COMPLETED) {
                 phase.set(Phase.MATCHING);
@@ -568,14 +763,6 @@ public class RideMatchingCoordinator {
 
         synchronized void markCompleted() {
             phase.set(Phase.COMPLETED);
-        }
-
-        synchronized boolean markExpired() {
-            if (phase.compareAndSet(Phase.MATCHING, Phase.EXPIRED)
-                || phase.compareAndSet(Phase.AWAITING_CONFIRMATION, Phase.EXPIRED)) {
-                return true;
-            }
-            return false;
         }
 
         synchronized void markCancelled() {
@@ -587,12 +774,20 @@ public class RideMatchingCoordinator {
             return current == Phase.CANCELLED || current == Phase.EXPIRED || current == Phase.COMPLETED;
         }
 
+        boolean isBroadcasting() {
+            return phase.get() == Phase.BROADCASTING;
+        }
+
         boolean isMatchingPhase() {
             return phase.get() == Phase.MATCHING;
         }
 
         boolean isExpired() {
             return Instant.now().isAfter(expiresAt);
+        }
+
+        Duration remainingMatchingTime() {
+            return Duration.between(Instant.now(), expiresAt);
         }
 
         int requestId() {
@@ -619,12 +814,130 @@ public class RideMatchingCoordinator {
             return selector.size();
         }
 
+        synchronized boolean enterBroadcast(Instant deadline) {
+            if (broadcastContext != null) {
+                return false;
+            }
+            broadcastContext = new BroadcastContext(deadline);
+            phase.set(Phase.BROADCASTING);
+            return true;
+        }
+
+        synchronized void attachBroadcastTimeout(ScheduledFuture<?> timeoutFuture) {
+            if (broadcastContext != null) {
+                broadcastContext.setTimeoutFuture(timeoutFuture);
+            }
+        }
+
+        synchronized void cancelBroadcast() {
+            if (broadcastContext != null) {
+                broadcastContext.cancelTimeout();
+                broadcastContext = null;
+            }
+            if (phase.get() == Phase.BROADCASTING) {
+                phase.set(Phase.MATCHING);
+            }
+        }
+
+        synchronized Instant broadcastDeadline() {
+            return broadcastContext != null ? broadcastContext.deadline() : null;
+        }
+
+        synchronized void markBroadcastCompleted() {
+            if (broadcastContext != null) {
+                broadcastContext.cancelTimeout();
+            }
+            phase.set(Phase.COMPLETED);
+        }
+
+        synchronized void clearBroadcast() {
+            if (broadcastContext != null) {
+                broadcastContext.cancelTimeout();
+            }
+            broadcastContext = null;
+            if (phase.get() == Phase.BROADCASTING) {
+                phase.set(Phase.MATCHING);
+            }
+        }
+
+        synchronized boolean markExpired() {
+            boolean transitioned = false;
+            if (phase.compareAndSet(Phase.MATCHING, Phase.EXPIRED)) {
+                transitioned = true;
+            } else if (phase.compareAndSet(Phase.AWAITING_CONFIRMATION, Phase.EXPIRED)) {
+                transitioned = true;
+            } else if (phase.compareAndSet(Phase.BROADCASTING, Phase.EXPIRED)) {
+                transitioned = true;
+            }
+            if (transitioned && broadcastContext != null) {
+                broadcastContext.cancelTimeout();
+            }
+            return transitioned;
+        }
+
+        synchronized boolean markExpiredFromBroadcast() {
+            if (phase.compareAndSet(Phase.BROADCASTING, Phase.EXPIRED) ||
+                phase.compareAndSet(Phase.AWAITING_CONFIRMATION, Phase.EXPIRED)) {
+                if (broadcastContext != null) {
+                    broadcastContext.cancelTimeout();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        synchronized void markBroadcastFailed() {
+            if (broadcastContext != null) {
+                broadcastContext.acceptedDriverId.set(null);
+            }
+            if (phase.get() == Phase.AWAITING_CONFIRMATION) {
+                phase.set(Phase.BROADCASTING);
+            }
+        }
+
+        void recordNotifiedDriver(int driverId) {
+            notifiedDrivers.add(driverId);
+        }
+
+        Set<Integer> notifiedDriversSnapshot() {
+            return Set.copyOf(notifiedDrivers);
+        }
+
+        private static final class BroadcastContext {
+            private final Instant deadline;
+            private final AtomicReference<Integer> acceptedDriverId = new AtomicReference<>(null);
+            private ScheduledFuture<?> timeoutFuture;
+
+            BroadcastContext(Instant deadline) {
+                this.deadline = deadline;
+            }
+
+            Instant deadline() {
+                return deadline;
+            }
+
+            void setTimeoutFuture(ScheduledFuture<?> timeoutFuture) {
+                this.timeoutFuture = timeoutFuture;
+            }
+
+            void cancelTimeout() {
+                if (timeoutFuture != null) {
+                    timeoutFuture.cancel(false);
+                }
+            }
+
+            AtomicReference<Integer> acceptedDriverId() {
+                return acceptedDriverId;
+            }
+        }
+
         private enum Phase {
             MATCHING,
             AWAITING_CONFIRMATION,
             COMPLETED,
             EXPIRED,
-            CANCELLED
+            CANCELLED,
+            BROADCASTING
         }
     }
 }

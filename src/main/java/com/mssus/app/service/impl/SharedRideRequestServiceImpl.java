@@ -1,7 +1,9 @@
 package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mssus.app.common.enums.DeliveryMethod;
 import com.mssus.app.common.enums.NotificationType;
+import com.mssus.app.common.enums.DriverProfileStatus;
 import com.mssus.app.common.enums.Priority;
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
@@ -9,6 +11,7 @@ import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.ride.AcceptRequestDto;
+import com.mssus.app.dto.ride.BroadcastAcceptRequest;
 import com.mssus.app.dto.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.request.wallet.WalletHoldRequest;
@@ -50,6 +53,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
     private final SharedRideRequestRepository requestRepository;
     private final SharedRideRepository rideRepository;
+    private final VehicleRepository vehicleRepository;
     private final RiderProfileRepository riderRepository;
     private final DriverProfileRepository driverRepository;
     private final LocationRepository locationRepository;
@@ -62,6 +66,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final RideMatchingCoordinator matchingCoordinator;
     private final ApplicationEventPublisherService eventPublisherService;
     private final PricingConfigRepository pricingConfigRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -156,6 +161,14 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
         // Publish an event to trigger matching after the transaction commits
         eventPublisherService.publishRideRequestCreatedEvent(savedRequest.getSharedRideRequestId());
+        notificationService.sendNotification(user,
+                NotificationType.BOOKING_REQUEST_CREATED,
+                "Booking Request Created",
+                "Your booking request has been created successfully.",
+                null,
+                Priority.MEDIUM,
+                DeliveryMethod.IN_APP,
+                null);
 
         return buildRequestResponse(savedRequest);
     }
@@ -244,6 +257,14 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             savedRequest.getSharedRideRequestId(), rider.getRiderId(), rideId, fareAmount, savedRequest.getStatus());
 
         matchingCoordinator.initiateRideJoining(savedRequest.getSharedRideRequestId());
+        notificationService.sendNotification(user,
+                NotificationType.JOIN_RIDE_REQUEST_CREATED,
+                "Join Ride Request Created",
+                "Your request to join the ride has been created successfully.",
+                null,
+                Priority.MEDIUM,
+                DeliveryMethod.IN_APP,
+                null);
 
         return buildRequestResponse(savedRequest);
     }
@@ -255,6 +276,131 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.request", requestId));
 
         return buildRequestResponse(request);
+    }
+
+    @Override
+    @Transactional
+    public SharedRideRequestResponse acceptBroadcast(Integer requestId,
+                                                     BroadcastAcceptRequest request,
+                                                     Authentication authentication) {
+        String username = authentication.getName();
+        log.info("Driver {} accepting broadcast request {} with vehicle {}", username, requestId, request.vehicleId());
+
+        User user = userRepository.findByEmail(username)
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+        DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+
+        if (driver.getStatus() != DriverProfileStatus.ACTIVE) {
+            throw BaseDomainException.of("ride.validation.invalid-state",
+                "Driver profile is not active");
+        }
+
+        SharedRideRequest rideRequest = requestRepository.findById(requestId)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.request", requestId));
+
+        if (rideRequest.getRequestKind() != RequestKind.BOOKING) {
+            throw BaseDomainException.of("ride.validation.request-invalid-state",
+                "Broadcast acceptance is only available for booking requests");
+        }
+
+        if (rideRequest.getStatus() != SharedRideRequestStatus.BROADCASTING) {
+            throw BaseDomainException.of("ride.validation.request-invalid-state",
+                Map.of("currentState", rideRequest.getStatus()));
+        }
+
+        boolean locked = matchingCoordinator.beginBroadcastAcceptance(requestId, driver.getDriverId());
+        if (!locked) {
+            throw BaseDomainException.of("ride.validation.request-invalid-state",
+                "Broadcast offer is no longer available or already processed");
+        }
+
+        try {
+            Vehicle vehicle = vehicleRepository.findById(request.vehicleId())
+                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+                    "Vehicle not found with ID: " + request.vehicleId()));
+
+            if (!vehicle.getDriver().getDriverId().equals(driver.getDriverId())) {
+                throw BaseDomainException.of("ride.unauthorized.not-owner",
+                    "You don't own this vehicle");
+            }
+
+            if (rideRepository.existsByDriverDriverIdAndStatus(driver.getDriverId(), SharedRideStatus.ONGOING)) {
+                throw BaseDomainException.of("ride.validation.invalid-state",
+                    "Driver currently has an ongoing ride");
+            }
+
+            LocalDateTime now = LocalDateTime.now(ZoneId.of(appTimezone));
+            LocalDateTime pickupTime = rideRequest.getPickupTime() == null ? now : rideRequest.getPickupTime();
+            LocalDateTime scheduledTime = pickupTime.isAfter(now) ? pickupTime : now;
+
+            Integer startLocationId = ensureLocationExists(
+                rideRequest.getPickupLocationId(),
+                rideRequest.getPickupLat(),
+                rideRequest.getPickupLng(),
+                "Broadcast Pickup Location");
+
+            Integer endLocationId = ensureLocationExists(
+                rideRequest.getDropoffLocationId(),
+                rideRequest.getDropoffLat(),
+                rideRequest.getDropoffLng(),
+                "Broadcast Dropoff Location");
+
+            SharedRide newRide = new SharedRide();
+            newRide.setDriver(driver);
+            newRide.setVehicle(vehicle);
+            newRide.setStatus(SharedRideStatus.SCHEDULED);  //TODO: Thoroughly consider this should be SCHEDULE or ONGOING
+            int capacity = vehicle.getCapacity() != null
+                ? vehicle.getCapacity()
+                : Optional.ofNullable(driver.getMaxPassengers()).orElse(1);
+            if (capacity <= 0) {
+                capacity = 1;
+            }
+            newRide.setMaxPassengers(capacity);
+            newRide.setCurrentPassengers(1);
+            newRide.setPricingConfig(rideRequest.getPricingConfig());
+            newRide.setScheduledTime(scheduledTime);
+            newRide.setStartLocationId(startLocationId);
+            newRide.setEndLocationId(endLocationId);
+            newRide.setStartLat(rideRequest.getPickupLat());
+            newRide.setStartLng(rideRequest.getPickupLng());
+            newRide.setEndLat(rideRequest.getDropoffLat());
+            newRide.setEndLng(rideRequest.getDropoffLng());
+            newRide.setCreatedAt(LocalDateTime.now());
+
+            SharedRide savedRide = rideRepository.save(newRide);
+
+            rideRequest.setSharedRide(savedRide);
+            rideRequest.setStatus(SharedRideRequestStatus.CONFIRMED);
+            rideRequest.setEstimatedPickupTime(scheduledTime);
+            requestRepository.save(rideRequest);
+
+            RideMatchProposalResponse proposal = RideMatchProposalResponse.builder()
+                .sharedRideId(savedRide.getSharedRideId())
+                .driverId(driver.getDriverId())
+                .driverName(driver.getUser().getFullName())
+                .driverRating(driver.getRatingAvg())
+                .vehicleModel(vehicle.getModel())
+                .vehiclePlate(vehicle.getPlateNumber())
+                .scheduledTime(savedRide.getScheduledTime())
+                .availableSeats(Math.max(0,
+                    (savedRide.getMaxPassengers() == null ? 0 : savedRide.getMaxPassengers())
+                        - savedRide.getCurrentPassengers()))
+                .totalFare(rideRequest.getTotalFare())
+                .estimatedPickupTime(rideRequest.getPickupTime())
+                .estimatedDropoffTime(rideRequest.getEstimatedDropoffTime())
+                .build();
+
+            matchingCoordinator.completeBroadcastAcceptance(requestId, proposal);
+
+            log.info("Broadcast request {} accepted by driver {} - new ride {}",
+                requestId, driver.getDriverId(), savedRide.getSharedRideId());
+
+            return buildRequestResponse(rideRequest);
+        } catch (RuntimeException ex) {
+            matchingCoordinator.failBroadcastAcceptance(requestId, ex.getMessage());
+            throw ex;
+        }
     }
 
     @Override
@@ -632,6 +778,23 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         // }
 
         return buildRequestResponse(request);
+    }
+
+    private Integer ensureLocationExists(Integer locationId, Double lat, Double lng, String label) {
+        if (locationId != null) {
+            return locationId;
+        }
+        if (lat == null || lng == null) {
+            throw BaseDomainException.of("ride.validation.invalid-location",
+                label + " coordinates are missing");
+        }
+
+        Location location = new Location();
+        location.setName(label);
+        location.setLat(lat);
+        location.setLng(lng);
+        locationRepository.save(location);
+        return location.getLocationId();
     }
 
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request) {

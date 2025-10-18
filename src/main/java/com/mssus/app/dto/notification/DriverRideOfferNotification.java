@@ -32,4 +32,6 @@ public class DriverRideOfferNotification {
     Float matchScore;
     Integer proposalRank;
     ZonedDateTime offerExpiresAt;
+    Boolean broadcast;
+    Integer responseWindowSeconds;
 }
