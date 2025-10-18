@@ -420,4 +420,29 @@ public class ProfileServiceImpl implements ProfileService {
                         .build())
                 .build();
     }
+
+    @Override
+    @Transactional
+    public void setDriverStatus(String username, boolean isActive) {
+        User user = userRepository.findByEmailWithProfiles(username)
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not found: " + username));
+
+        if (user.getDriverProfile() == null) {
+            throw ValidationException.of("User does not have a driver profile");
+        }
+
+        DriverProfile driverProfile = user.getDriverProfile();
+
+        DriverProfileStatus newStatus = isActive ? DriverProfileStatus.ACTIVE : DriverProfileStatus.INACTIVE;
+        DriverProfileStatus currentStatus = driverProfile.getStatus();
+
+        if (currentStatus != newStatus) {
+            driverProfile.setStatus(newStatus);
+            driverProfileRepository.save(driverProfile);
+
+            log.info("Driver status updated for user {} from {} to {}",
+                user.getUserId(), currentStatus, newStatus);
+        }
+    }
+
 }
