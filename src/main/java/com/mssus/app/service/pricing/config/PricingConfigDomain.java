@@ -1,10 +1,9 @@
-package com.mssus.app.pricing.config;
+package com.mssus.app.service.pricing.config;
 
-import com.mssus.app.pricing.model.MoneyVnd;
+import com.mssus.app.service.pricing.model.MoneyVnd;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
 
 public record PricingConfigDomain(
     Integer pricingConfigId,

@@ -1,5 +1,6 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.ActorKind;
 import com.mssus.app.common.enums.TransactionDirection;
 import com.mssus.app.common.enums.TransactionStatus;
 import com.mssus.app.common.enums.TransactionType;
@@ -54,20 +55,37 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     public void increasePendingBalance(Integer userId, BigDecimal amount) {
-        Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
-
-        wallet.setPendingBalance(wallet.getPendingBalance().add(amount));
-        walletRepository.save(wallet);
+        int updatedRows = walletRepository.increasePendingBalance(userId, amount);
+        if (updatedRows == 0) {
+            throw new NotFoundException("Wallet not found for user or update failed: " + userId);
+        }
     }
 
     @Override
     public void decreasePendingBalance(Integer userId, BigDecimal amount) {
-        Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+        int updatedRows = walletRepository.decreasePendingBalance(userId, amount);
+        if (updatedRows == 0) {
+            throw new ValidationException("Failed to decrease pending balance for user: " + userId + ". Wallet not found or insufficient pending balance.");
+        }
+    }
 
-        wallet.setPendingBalance(wallet.getPendingBalance().subtract(amount));
-        walletRepository.save(wallet);
+    @Override
+    @Transactional
+    public void increaseShadowBalance(Integer userId, BigDecimal amount) {
+        int updatedRows = walletRepository.increaseShadowBalance(userId, amount);
+        if (updatedRows == 0) {
+            throw new NotFoundException("Wallet not found for user or update failed: " + userId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void decreaseShadowBalance(Integer userId, BigDecimal amount) {
+        int updatedRows = walletRepository.decreaseShadowBalance(userId, amount);
+        if (updatedRows == 0) {
+            // This can also mean insufficient shadow balance
+            throw new ValidationException("Failed to decrease shadow balance for user: " + userId + ". Wallet not found or insufficient shadow balance.");
+        }
     }
 
     @Override
@@ -346,4 +364,132 @@ public class WalletServiceImpl implements WalletService {
 
         return hasFunds;
     }
+
+    @Override
+    @Transactional
+    public void reconcileWalletBalance(Integer userId) {
+        if (userId == null) {
+            throw new ValidationException("User ID cannot be null");
+        }
+
+        Wallet wallet = walletRepository.findByUser_UserId(userId)
+            .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+
+        BigDecimal currentShadowBalance = wallet.getShadowBalance();
+        BigDecimal currentPendingBalance = wallet.getPendingBalance();
+
+        List<Transaction> transactions = transactionRepository
+            .findByUserIdAndStatus(userId, TransactionStatus.SUCCESS);
+
+        BigDecimal reconciledShadowBalance = BigDecimal.ZERO;
+        BigDecimal reconciledPendingBalance = BigDecimal.ZERO;
+
+        for (Transaction txn : transactions) {
+            if (txn.getActorKind() != ActorKind.USER ||
+                !userId.equals(txn.getActorUser().getUserId())) {
+                continue;
+            }
+
+            TransactionType type = txn.getType();
+            TransactionDirection direction = txn.getDirection();
+            BigDecimal amount = txn.getAmount();
+
+            switch (type) {
+                case TOPUP -> {
+                    if (direction == TransactionDirection.IN) {
+                        reconciledShadowBalance = reconciledShadowBalance.add(amount);
+                    }
+                }
+                case HOLD_CREATE -> {
+                    reconciledShadowBalance = reconciledShadowBalance.subtract(amount);
+                    reconciledPendingBalance = reconciledPendingBalance.add(amount);
+                }
+                case HOLD_RELEASE -> {
+                    reconciledShadowBalance = reconciledShadowBalance.add(amount);
+                    reconciledPendingBalance = reconciledPendingBalance.subtract(amount);
+                }
+                case CAPTURE_FARE -> {
+                    if (direction == TransactionDirection.OUT) {
+                        reconciledPendingBalance = reconciledPendingBalance.subtract(amount);
+                    } else if (direction == TransactionDirection.IN) {
+                        reconciledShadowBalance = reconciledShadowBalance.add(amount);
+                    }
+                }
+                case PAYOUT -> {
+                    if (direction == TransactionDirection.OUT) {
+                        reconciledShadowBalance = reconciledShadowBalance.subtract(amount);
+                    }
+                }
+                case REFUND, ADJUSTMENT -> {
+                    if (direction == TransactionDirection.IN) {
+                        reconciledShadowBalance = reconciledShadowBalance.add(amount);
+                    } else if (direction == TransactionDirection.OUT) {
+                        reconciledShadowBalance = reconciledShadowBalance.subtract(amount);
+                    }
+                }
+            }
+        }
+
+        BigDecimal shadowDiff = reconciledShadowBalance.subtract(currentShadowBalance);
+        BigDecimal pendingDiff = reconciledPendingBalance.subtract(currentPendingBalance);
+
+        boolean hasDiscrepancy = shadowDiff.compareTo(BigDecimal.ZERO) != 0 ||
+            pendingDiff.compareTo(BigDecimal.ZERO) != 0;
+
+        if (hasDiscrepancy) {
+            log.warn("Wallet reconciliation discrepancy found for user {}: " +
+                    "Shadow difference: {}, Pending difference: {}",
+                userId, shadowDiff, pendingDiff);
+
+            if (shadowDiff.compareTo(BigDecimal.ZERO) != 0) {
+                createAdjustmentTransaction(userId, shadowDiff,
+                    "Reconciliation adjustment for shadow balance");
+            }
+
+            wallet.setShadowBalance(reconciledShadowBalance);
+            wallet.setPendingBalance(reconciledPendingBalance);
+            wallet.setLastSyncedAt(LocalDateTime.now());
+            walletRepository.save(wallet);
+
+            log.info("Wallet reconciled for user {}: Shadow: {} -> {}, Pending: {} -> {}",
+                userId, currentShadowBalance, reconciledShadowBalance,
+                currentPendingBalance, reconciledPendingBalance);
+        } else {
+            wallet.setLastSyncedAt(LocalDateTime.now());
+            walletRepository.save(wallet);
+
+            log.info("Wallet reconciliation completed for user {} - No discrepancies found", userId);
+        }
+    }
+
+    private void createAdjustmentTransaction(Integer userId, BigDecimal amount, String reason) {
+        //Should not automatically create adjustment transactions, maybe escalate to admin review first
+//        User user = userRepository.findById(userId)
+//            .orElseThrow(() -> new NotFoundException("User not found: " + userId));
+//
+//        Wallet wallet = walletRepository.findByUser_UserId(userId)
+//            .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+//
+//        TransactionDirection direction = amount.compareTo(BigDecimal.ZERO) > 0 ?
+//            TransactionDirection.IN : TransactionDirection.OUT;
+//
+//        Transaction adjustment = Transaction.builder()
+//            .type(TransactionType.ADJUSTMENT)
+//            .groupId(UUID.randomUUID())
+//            .direction(direction)
+//            .actorKind(ActorKind.SYSTEM)
+//            .actorUser(user)
+//            .amount(amount.abs())
+//            .currency("VND")
+//            .status(TransactionStatus.SUCCESS)
+//            .beforeAvail(wallet.getShadowBalance())
+//            .afterAvail(wallet.getShadowBalance().add(amount))
+//            .beforePending(wallet.getPendingBalance())
+//            .afterPending(wallet.getPendingBalance())
+//            .note(reason)
+//            .build();
+//
+//        transactionRepository.save(adjustment);
+    }
+
 }

@@ -24,7 +24,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     List<Transaction> findByActorUserIdOrderByCreatedAtDesc(Integer userId);
 
     @Query("SELECT t FROM Transaction t WHERE t.actorUser.userId = :userId AND t.status = :status")
-    List<Transaction> findByUserIdAndStatus(@Param("userId") Integer userId, @Param("status") String status);
+    List<Transaction> findByUserIdAndStatus(@Param("userId") Integer userId, @Param("status") TransactionStatus status);
 
     @Query("SELECT t FROM Transaction t WHERE t.pspRef = :pspRef AND t.status = 'PENDING'")
     List<Transaction> findPendingTransactionByPspRef(@Param("pspRef") String pspRef);

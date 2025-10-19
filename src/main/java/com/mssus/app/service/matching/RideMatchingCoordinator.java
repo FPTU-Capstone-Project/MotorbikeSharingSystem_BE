@@ -4,7 +4,6 @@ import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.notification.DriverRideOfferNotification;
-import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Location;
@@ -12,14 +11,13 @@ import com.mssus.app.entity.SharedRideRequest;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.LocationRepository;
 import com.mssus.app.repository.SharedRideRequestRepository;
-import com.mssus.app.service.BookingWalletService;
 import com.mssus.app.service.RealTimeNotificationService;
+import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
+import com.mssus.app.service.RideFundCoordinatingService;
 import com.mssus.app.service.RideMatchingService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -67,7 +65,7 @@ public class RideMatchingCoordinator {
     private final DriverDecisionGateway decisionGateway;
     private final MatchingResponseAssembler responseAssembler;
     private final ThreadPoolTaskExecutor matchingExecutor;
-    private final BookingWalletService bookingWalletService;
+    private final RideFundCoordinatingService rideFundCoordinatingService;
     private final ScheduledExecutorService matchingScheduler;
 
     public RideMatchingCoordinator(
@@ -81,7 +79,7 @@ public class RideMatchingCoordinator {
         MatchingResponseAssembler responseAssembler,
         @Qualifier("matchingTaskExecutor") ThreadPoolTaskExecutor matchingExecutor,
         @Qualifier("matchingScheduler") ScheduledExecutorService matchingScheduler,
-        BookingWalletService bookingWalletService) {
+        RideFundCoordinatingService rideFundCoordinatingService) {
 
         this.requestRepository = requestRepository;
         this.driverRepository = driverRepository;
@@ -92,7 +90,7 @@ public class RideMatchingCoordinator {
         this.decisionGateway = decisionGateway;
         this.responseAssembler = responseAssembler;
         this.matchingExecutor = matchingExecutor;
-        this.bookingWalletService = bookingWalletService;
+        this.rideFundCoordinatingService = rideFundCoordinatingService;
         this.matchingScheduler = matchingScheduler;
     }
 
@@ -247,34 +245,44 @@ public class RideMatchingCoordinator {
             session.rideId());
     }
 
+    @Async("matchingTaskExecutor")
+    public void rejectJoinRequest(Integer requestId, String reason) {
+        Optional<SharedRideRequest> maybeRequest = requestRepository.findById(requestId);
+        if (maybeRequest.isEmpty()) {
+            log.warn("Cannot reject join request. Request {} not found.", requestId);
+            return;
+        }
+        SharedRideRequest request = maybeRequest.get();
+
+        // The session might be null if the rejection happens after a timeout, which is fine.
+        MatchingSession session = sessions.get(requestId);
+        JoinRequestSession joinSession = session != null ? session.joinSession : null;
+
+        handleJoinRequestFailure(joinSession, request, reason);
+    }
+
     private void handleJoinRequestTimeout(JoinRequestSession session, SharedRideRequest request) {
         log.info("Driver {} timed out for join request {}", session.driverId(), session.requestId());
         handleJoinRequestFailure(session, request, "Driver response timeout");
     }
 
     private void handleJoinRequestFailure(JoinRequestSession session, SharedRideRequest request, String reason) {
-        sessions.remove(session.requestId());
-        decisionGateway.cancelOffer(session.requestId());
+        // Clean up session and gateway offer if they exist
+        if (session != null) {
+            sessions.remove(session.requestId());
+            decisionGateway.cancelOffer(session.requestId());
+        } else {
+            // If session is null (e.g., explicit rejection), still cancel any lingering gateway offer
+            decisionGateway.cancelOffer(request.getSharedRideRequestId());
+        }
 
         if (request.getStatus() == SharedRideRequestStatus.PENDING) {
-            request.setStatus(SharedRideRequestStatus.EXPIRED);
+            // Use CANCELLED for explicit rejections, EXPIRED for timeouts.
+            request.setStatus("Driver response timeout".equals(reason) ? SharedRideRequestStatus.EXPIRED : SharedRideRequestStatus.CANCELLED);
             requestRepository.save(request);
 
             // Release wallet hold
-            try {
-                WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
-                releaseRequest.setUserId(request.getRider().getRiderId());
-                releaseRequest.setBookingId(request.getSharedRideRequestId());
-                releaseRequest.setAmount(request.getTotalFare());
-                releaseRequest.setNote("Join request failed - #" + request.getSharedRideRequestId());
-
-                bookingWalletService.releaseFunds(releaseRequest);
-                log.info("Wallet hold released for failed join request {} - amount: {}",
-                    request.getSharedRideRequestId(), request.getTotalFare());
-            } catch (Exception e) {
-                log.error("Failed to release wallet hold for join request {}: {}",
-                    request.getSharedRideRequestId(), e.getMessage(), e);
-            }
+            releaseRequestHold(request, reason);
 
             // Notify rider of failure
             try {
@@ -500,54 +508,54 @@ public class RideMatchingCoordinator {
             return;
         }
         if (session.markExpired()) {
-            expireRequest(session, request);
+            handleMatchingFailure(session, request, "No available drivers found within the time limit.");
         }
     }
 
-    private void expireRequest(MatchingSession session, SharedRideRequest request) {
-        decisionGateway.cancelOffer(request.getSharedRideRequestId());
-        sessions.remove(request.getSharedRideRequestId());
-        session.cancelBroadcast();
+    private void handleMatchingFailure(MatchingSession session, SharedRideRequest request, String reason) {
+        // Clean up any active session state
+        if (session != null) {
+            decisionGateway.cancelOffer(request.getSharedRideRequestId());
+            sessions.remove(request.getSharedRideRequestId());
+            session.cancelBroadcast();
+        }
 
+        // Only update status and notify if the request is still in a pending state
         if (request.getStatus() == SharedRideRequestStatus.PENDING ||
             request.getStatus() == SharedRideRequestStatus.BROADCASTING) {
             request.setStatus(SharedRideRequestStatus.EXPIRED);
             requestRepository.save(request);
 
-            log.info("Sending no-match notification to rider {} for request {}",
-                request.getRider().getUser().getUserId(), request.getSharedRideRequestId());
+            // Release the wallet hold placed when the request was created
+            releaseRequestHold(request, "Request expired: " + reason);
 
-            int requestId = request.getSharedRideRequestId();
-
-            try {
-                WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
-                releaseRequest.setUserId(request.getRider().getRiderId());
-                releaseRequest.setBookingId(requestId);
-                releaseRequest.setAmount(request.getTotalFare());
-                releaseRequest.setNote("Request matching timeout - #" + requestId);
-
-                bookingWalletService.releaseFunds(releaseRequest);
-
-                log.info("Wallet hold released for rejected request {} - amount: {}",
-                    requestId, request.getTotalFare());
-
-            } catch (Exception e) {
-                log.error("Failed to release wallet hold for request {}: {}",
-                    requestId, e.getMessage(), e);
-                // Continue with rejection even if release fails
-            }
-
+            // Notify the rider that no match was found
             try {
                 notificationService.notifyRiderStatus(
                     request.getRider().getUser(),
                     responseAssembler.toRiderNoMatch(request));
-                log.info("No-match notification sent successfully");
+                log.info("No-match notification sent successfully for request {}", request.getSharedRideRequestId());
             } catch (Exception e) {
-                log.error("Failed to send no-match notification", e);
+                log.error("Failed to send no-match notification for request {}", request.getSharedRideRequestId(), e);
             }
         }
 
-        log.info("Request {} expired - no available drivers", request.getSharedRideRequestId());
+        log.info("Request {} failed to match and has expired. Reason: {}", request.getSharedRideRequestId(), reason);
+    }
+
+    private void releaseRequestHold(SharedRideRequest request, String reason) {
+        try {
+            RideHoldReleaseRequest releaseRequest = RideHoldReleaseRequest.builder()
+                .riderId(request.getRider().getRiderId())
+                .rideRequestId(request.getSharedRideRequestId())
+                .note(reason)
+                .build();
+
+            rideFundCoordinatingService.releaseRideFunds(releaseRequest);
+            log.info("Wallet hold released for request {} - amount: {}", request.getSharedRideRequestId(), request.getTotalFare());
+        } catch (Exception e) {
+            log.error("Failed to release wallet hold for request {}: {}", request.getSharedRideRequestId(), e.getMessage(), e);
+        }
     }
 
     private boolean tryStartBroadcast(MatchingSession session, SharedRideRequest request) {
@@ -567,12 +575,6 @@ public class RideMatchingCoordinator {
             return false;
         }
 
-        Duration broadcastWindow = Duration.ofSeconds(windowSeconds);
-        Duration effectiveWindow = broadcastWindow.compareTo(remaining) < 0 ? broadcastWindow : remaining;
-        if (effectiveWindow.isNegative() || effectiveWindow.isZero()) {
-            return false;
-        }
-
         Set<Integer> excludedDrivers = session.notifiedDriversSnapshot();
         List<DriverProfile> candidates = findBroadcastCandidates(excludedDrivers);
         if (candidates.isEmpty()) {
@@ -580,7 +582,7 @@ public class RideMatchingCoordinator {
             return false;
         }
 
-        Instant deadline = Instant.now().plus(effectiveWindow);
+        Instant deadline = Instant.now().plus(remaining);
         boolean entered;
         synchronized (session) {
             entered = session.enterBroadcast(deadline);
@@ -592,7 +594,7 @@ public class RideMatchingCoordinator {
         request.setStatus(SharedRideRequestStatus.BROADCASTING);
         requestRepository.save(request);
 
-        sendBroadcastOffers(session, request, candidates, deadline, (int) effectiveWindow.toSeconds());
+        sendBroadcastOffers(session, request, candidates, deadline, (int) remaining.toSeconds());
         return true;
     }
 
@@ -652,7 +654,7 @@ public class RideMatchingCoordinator {
             }
 
             log.info("Broadcast timeout for request {}", requestId);
-            expireRequest(session, request);
+            handleMatchingFailure(session, request, "Broadcast window timed out.");
         });
     }
 

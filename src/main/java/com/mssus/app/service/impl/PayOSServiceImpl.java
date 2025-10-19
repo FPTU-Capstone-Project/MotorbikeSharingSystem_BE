@@ -44,7 +44,7 @@ public class PayOSServiceImpl implements PayOSService {
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
 
     public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper) {
-       this.transactionService = transactionService;
+        this.transactionService = transactionService;
         this.objectMapper = objectMapper;
     }
 
@@ -71,19 +71,19 @@ public class PayOSServiceImpl implements PayOSService {
             }
 
             PaymentData data = PaymentData.builder()
-                    .orderCode(orderCode)
-                    .amount(amount.intValue())
-                    .description(description)
-                    .returnUrl(returnUrl)
-                    .cancelUrl(cancelUrl)
-                    .build();
+                .orderCode(orderCode)
+                .amount(amount.intValue())
+                .description(description)
+                .returnUrl(returnUrl)
+                .cancelUrl(cancelUrl)
+                .build();
 
             CheckoutResponseData response = payOS.createPaymentLink(data);
 
             transactionService.initTopup(userId, amount, orderCode.toString(), description);
 
             log.info("Created top-up payment link for user {} with amount {} and orderCode {}",
-                    userId, amount, orderCode);
+                userId, amount, orderCode);
 
             return response;
         } catch (Exception e) {

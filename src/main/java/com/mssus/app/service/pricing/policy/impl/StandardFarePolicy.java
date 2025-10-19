@@ -1,11 +1,11 @@
-package com.mssus.app.pricing.policy.impl;
+package com.mssus.app.service.pricing.policy.impl;
 
-import com.mssus.app.pricing.config.PricingConfigDomain;
-import com.mssus.app.pricing.model.FareBreakdown;
-import com.mssus.app.pricing.model.MoneyVnd;
-import com.mssus.app.pricing.model.PriceInput;
-import com.mssus.app.pricing.model.PromoResult;
-import com.mssus.app.pricing.policy.FarePolicy;
+import com.mssus.app.service.pricing.config.PricingConfigDomain;
+import com.mssus.app.service.pricing.model.FareBreakdown;
+import com.mssus.app.service.pricing.model.MoneyVnd;
+import com.mssus.app.service.pricing.model.PriceInput;
+import com.mssus.app.service.pricing.model.PromoResult;
+import com.mssus.app.service.pricing.policy.FarePolicy;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -29,8 +29,8 @@ public class StandardFarePolicy implements FarePolicy {
     public FareBreakdown finalizeFare(PriceInput in, PricingConfigDomain cfg, MoneyVnd pre, PromoResult promo) {
 //        var discount = promo.applied() ? promo.discount() : MoneyVnd.VND(0);
         var discount = MoneyVnd.VND(0); //TODO: promotion not implemented yet
-        var unclamped = MoneyVnd.VND(pre.amount() - discount.amount());
-        var total = MoneyVnd.VND(Math.max(unclamped.amount(), cfg.base2KmVnd().amount()));
+        var unclamped = pre.sub(discount);
+        var total = MoneyVnd.VND(unclamped.amount().max(cfg.base2KmVnd().amount()));
 
         return new FareBreakdown(
             cfg.version(),

@@ -78,4 +78,6 @@ public interface SharedRideRequestRepository extends JpaRepository<SharedRideReq
 
     boolean existsBySharedRideSharedRideIdAndStatusIn(Integer sharedRideId,
                                                       List<SharedRideRequestStatus> statuses);
+
+    List<SharedRideRequest> findByStatus(SharedRideRequestStatus status);
 }

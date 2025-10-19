@@ -7,18 +7,20 @@ import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
 import com.mssus.app.dto.request.ride.StartRideReqRequest;
-import com.mssus.app.dto.request.wallet.WalletCaptureRequest;
+import com.mssus.app.dto.request.wallet.RideCompleteSettlementRequest;
+import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
 import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
 import com.mssus.app.dto.response.RouteResponse;
-import com.mssus.app.dto.response.ride.RideCompletionResponse;
-import com.mssus.app.dto.response.ride.RideRequestCompletionResponse;
-import com.mssus.app.dto.response.ride.SharedRideResponse;
-import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
+import com.mssus.app.dto.response.ride.*;
 import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.entity.*;
 import com.mssus.app.mapper.SharedRideMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
+import com.mssus.app.service.pricing.PricingService;
+import com.mssus.app.service.pricing.model.FareBreakdown;
+import com.mssus.app.service.pricing.model.MoneyVnd;
+import com.mssus.app.service.pricing.model.SettlementResult;
 import com.mssus.app.util.PolylineDistance;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,11 +50,12 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final UserRepository userRepository;
     private final SharedRideMapper rideMapper;
     private final RoutingService routingService;
-    private final BookingWalletService bookingWalletService;
+//    private final BookingWalletService bookingWalletService;
     private final PricingConfigRepository pricingConfigRepository;
     private final RideTrackRepository trackRepository;
     private final RideTrackingService rideTrackingService;
     private final NotificationService notificationService;
+    private final RideFundCoordinatingService rideFundCoordinatingService;
 
 
     @Override
@@ -482,29 +485,29 @@ public class SharedRideServiceImpl implements SharedRideService {
             actualDistance = ride.getEstimatedDistance();
         }
 
-        BigDecimal fareCollected = BigDecimal.ZERO;
-        BigDecimal platformCommission = BigDecimal.ZERO;
         PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+        FareBreakdown fareBreakdown = new FareBreakdown(
+            activePricingConfig.getVersion(),
+            rideRequest.getDistanceMeters(),
+            MoneyVnd.VND(activePricingConfig.getBase2KmVnd()),
+            MoneyVnd.VND(activePricingConfig.getAfter2KmPerKmVnd()),
+            MoneyVnd.VND(rideRequest.getDiscountAmount()),
+            MoneyVnd.VND(rideRequest.getSubtotalFare()),
+            MoneyVnd.VND(rideRequest.getTotalFare()),
+            activePricingConfig.getSystemCommissionRate()
+            );
+        RideRequestSettledResponse requestSettledResponse = null;
 
         try {
-            WalletCaptureRequest captureRequest = new WalletCaptureRequest();
-            captureRequest.setUserId(rideRequest.getRider().getRiderId());
-            captureRequest.setBookingId(rideRequest.getSharedRideRequestId());
-            captureRequest.setAmount(rideRequest.getTotalFare());
+            RideCompleteSettlementRequest captureRequest = new RideCompleteSettlementRequest();
+            captureRequest.setRiderId(rideRequest.getRider().getRiderId());
+            captureRequest.setRideRequestId(rideRequest.getSharedRideRequestId());
             captureRequest.setDriverId(driver.getDriverId());
             captureRequest.setNote("Ride completion - Request #" + rideRequest.getSharedRideRequestId());
 
-            bookingWalletService.captureFunds(captureRequest);
+            requestSettledResponse = rideFundCoordinatingService.settleRideFunds(captureRequest, fareBreakdown);
 
-            fareCollected = fareCollected.add(rideRequest.getTotalFare());
-
-            BigDecimal commissionRate = activePricingConfig.getSystemCommissionRate();
-            BigDecimal requestCommission = rideRequest.getTotalFare().multiply(commissionRate);
-            platformCommission = platformCommission.add(requestCommission);
-
-
-            // Update request status
             rideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
             rideRequest.setActualDropoffTime(LocalDateTime.now());
             requestRepository.save(rideRequest);
@@ -517,7 +520,8 @@ public class SharedRideServiceImpl implements SharedRideService {
                 rideRequest.getSharedRideRequestId(), e.getMessage(), e);
         }
 
-        BigDecimal driverEarnings = fareCollected.subtract(platformCommission);
+        BigDecimal driverEarnings = requestSettledResponse.driverEarnings() == null
+            ? BigDecimal.ZERO : requestSettledResponse.driverEarnings();
 
         try {
             notificationService.sendNotification(
@@ -534,7 +538,6 @@ public class SharedRideServiceImpl implements SharedRideService {
             log.warn("Failed to notify driver for request completion {}: {}", request.rideRequestId(), ex.getMessage());
         }
 
-        // Send notification to rider
         try {
             notificationService.sendNotification(
                 rideRequest.getRider().getUser(),
@@ -554,7 +557,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             .sharedRideRequestId(rideRequest.getSharedRideRequestId())
             .sharedRideId(rideId)
             .driverEarningsOfRequest(driverEarnings)
-            .platformCommission(platformCommission)
+            .platformCommission(requestSettledResponse.systemCommission())
             .requestActualDistance(actualDistance)
             .requestActualDuration(actualDuration)
             .build();
@@ -752,14 +755,13 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         for (SharedRideRequest request : confirmedRequests) {
             try {
-                // Release wallet hold
-                WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
-                releaseRequest.setUserId(request.getRider().getRiderId());
-                releaseRequest.setBookingId(request.getSharedRideRequestId());
-                releaseRequest.setAmount(request.getTotalFare());
-                releaseRequest.setNote("Ride cancelled - Request #" + request.getSharedRideRequestId());
+                RideHoldReleaseRequest releaseRequest = RideHoldReleaseRequest.builder()
+                    .riderId(request.getRider().getRiderId())
+                    .rideRequestId(request.getSharedRideRequestId())
+                    .note("Ride cancelled - Request #" + request.getSharedRideRequestId())
+                    .build();
 
-                bookingWalletService.releaseFunds(releaseRequest);
+                rideFundCoordinatingService.releaseRideFunds(releaseRequest);
 
                 // Update request status
                 request.setStatus(SharedRideRequestStatus.CANCELLED);
