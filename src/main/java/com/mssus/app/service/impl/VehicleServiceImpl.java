@@ -93,8 +93,8 @@ public class VehicleServiceImpl implements VehicleService {
     public MessageResponse deleteVehicle(Integer vehicleId) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
-
-        vehicleRepository.delete(vehicle);
+        vehicle.setStatus(VehicleStatus.INACTIVE);
+        vehicleRepository.save(vehicle);
         return MessageResponse.builder()
                 .message("Vehicle deleted successfully")
                 .build();

@@ -35,8 +35,6 @@ import org.springframework.web.bind.annotation.*;
 public class WalletController {
 
     private final WalletService walletService;
-     private final TransactionService transactionService;
-
     @Operation(summary = "Get wallet balance", description = "Retrieve current wallet balance and summary")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Balance retrieved successfully",
@@ -48,27 +46,6 @@ public class WalletController {
         log.info("Get balance request from user: {}", authentication.getName());
         WalletResponse response = walletService.getBalance(authentication);
         return ResponseEntity.ok(response);
-    }
-
-    @Operation(summary = "Get transaction history", description = "Retrieve paginated transaction history")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Transactions retrieved successfully",
-                    content = @Content(schema = @Schema(implementation = PageResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthorized")
-    })
-    @GetMapping("/transactions")
-    public ResponseEntity<PageResponse<TransactionResponse>> getTransactions(
-            Authentication authentication,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
-            @Parameter(description = "Filter by transaction type") @RequestParam(required = false) String type,
-            @Parameter(description = "Filter by status") @RequestParam(required = false) String status) {
-        log.info("Get transactions request from user: {}, page: {}, type: {}, status: {}",
-                authentication.getName(), pageable.getPageNumber(), type, status);
-        // TODO: Implement service call
-        // PageResponse<TransactionResponse> response = transactionService.getUserTransactions(
-        //     authentication, pageable, type, status);
-        // return ResponseEntity.ok(response);
-        throw new UnsupportedOperationException("Service implementation required");
     }
 
     @Operation(summary = "Initiate top-up", description = "Initiate a wallet top-up transaction (Rider only)")

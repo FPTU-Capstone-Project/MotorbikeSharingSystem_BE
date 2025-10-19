@@ -14,8 +14,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Registration request")
-public class RegisterRequest {
+@Schema(description = "Create user request (Admin only)")
+public class CreateUserRequest {
 
     @NotBlank(message = "Full name is required")
     @Size(min = 2, max = 100, message = "Full name must be between 2 and 100 characters")
@@ -24,12 +24,12 @@ public class RegisterRequest {
 
     @NotBlank(message = "Email is required")
     @Email(message = "Email must be valid")
-    @Schema(description = "Unique email address used for login", example = "student@example.edu")
+    @Schema(description = "Unique email address", example = "user@example.com")
     private String email;
 
     @NotBlank(message = "Phone is required")
     @Pattern(regexp = "^(\\+84|0)[0-9]{9,10}$", message = "Phone number must be valid Vietnamese format")
-    @Schema(description = "Unique phone number used for login and verification", example = "0901234567")
+    @Schema(description = "Unique phone number", example = "0901234567")
     private String phone;
 
     @NotBlank(message = "Password is required")
@@ -39,8 +39,17 @@ public class RegisterRequest {
     @Schema(description = "Plaintext password; will be hashed before storage")
     private String password;
 
-    @Pattern(regexp = "^(rider)$", message = "Role must be either 'rider'")
-    @Schema(description = "Initial role for the account", example = "rider", defaultValue = "rider")
-    @Builder.Default
-    private String role = "rider";
+    @Pattern(regexp = "^(USER|ADMIN)$", message = "User type must be either 'USER' or 'ADMIN'")
+    @Schema(description = "User type", example = "USER")
+    private String userType;
+
+    @Schema(description = "Student ID (optional)", example = "SE123456")
+    private String studentId;
+
+    @Schema(description = "Date of birth (optional)", example = "2000-01-01")
+    private String dateOfBirth;
+
+    @Pattern(regexp = "^(MALE|FEMALE|OTHER)$", message = "Gender must be MALE, FEMALE, or OTHER")
+    @Schema(description = "Gender", example = "MALE")
+    private String gender;
 }

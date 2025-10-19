@@ -5,6 +5,7 @@ import com.mssus.app.common.enums.NotificationType;
 import com.mssus.app.common.enums.DriverProfileStatus;
 import com.mssus.app.common.enums.Priority;
 import com.mssus.app.common.enums.RequestKind;
+import com.mssus.app.common.enums.RiderProfileStatus;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;

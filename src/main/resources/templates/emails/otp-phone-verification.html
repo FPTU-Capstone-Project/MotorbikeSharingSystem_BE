@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify your phone</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f6f8fb; color: #0f172a; }
+    .wrapper { width: 100%; background: #f6f8fb; padding: 24px 0; }
+    .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 6px 24px rgba(2, 6, 23, 0.06); }
+    .header { background: #8b5cf6; color: #ffffff; padding: 20px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; }
+    .brand { font-size: 18px; font-weight: 700; letter-spacing: 0.2px; }
+    .content { padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; line-height: 1.6; }
+    .greeting { font-size: 16px; margin: 0 0 12px 0; }
+    .lead { font-size: 14px; margin: 0 0 16px 0; color: #334155; }
+    .otp-box { display: inline-block; margin: 8px 0 16px 0; padding: 14px 18px; font-size: 24px; font-weight: 800; letter-spacing: 4px; border-radius: 8px; background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; }
+    .meta { font-size: 12px; color: #64748b; margin-top: 8px; }
+    .note { font-size: 12px; color: #475569; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .footer { padding: 12px 24px 24px 24px; font-size: 12px; color: #64748b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial; }
+    .muted { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="brand">Motorbike Sharing System</div>
+      </div>
+      <div class="content">
+        <p class="greeting" th:text="${fullName}">Hi </p>
+        <p class="lead">Use the One-Time Password (OTP) below to verify your phone number.</p>
+
+        <div class="otp-box" th:text="${otpCode}">{{otpCode}}</div>
+
+        <p class="meta" th:text="${expiresInMinutes}">This code will expire in 5 minutes.</p>
+
+        <p class="note">
+          If you did not request this, you can safely ignore this email. For security, do not share this code with anyone.
+        </p>
+      </div>
+      <div class="footer">
+        <div>Need help? Contact us at <span class="muted"  th:text="${supportEmail}">{{supportEmail}}</span>.</div>
+        <div class="muted">© {{year}} Motorbike Sharing System. All rights reserved.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+
+
+
+
+
+

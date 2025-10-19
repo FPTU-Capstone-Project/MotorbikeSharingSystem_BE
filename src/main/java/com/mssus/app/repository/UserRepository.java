@@ -45,6 +45,8 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     Page<User> findByUserType(UserType userType, Pageable pageable);
 
+    Page<User> findByStatus(UserStatus status, Pageable pageable);
+
 
     @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.driverProfile IS NOT NULL AND u.userId = :userId")
     boolean isDriver(@Param("userId") Integer userId);

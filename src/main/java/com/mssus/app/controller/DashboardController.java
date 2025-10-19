@@ -35,10 +35,7 @@ import java.time.LocalDate;
 @Tag(name = "Admin Wallet", description = "Administrative wallet management operations")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('ADMIN')")
-public class AdminWalletController {
-
-    // Note: Service layer methods need to be implemented
-    // private final AdminWalletService adminWalletService;
+public class DashboardController {
 
     @Operation(
             summary = "Search wallets",

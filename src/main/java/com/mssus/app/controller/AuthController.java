@@ -31,7 +31,6 @@ import org.springframework.web.multipart.MultipartFile;
 public class AuthController {
 
     private final AuthService authService;
-    private final UserRepository userRepository;
 
     @Operation(summary = "Register", description = "Create a new user account")
     @ApiResponses(value = {

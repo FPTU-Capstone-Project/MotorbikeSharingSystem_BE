@@ -26,6 +26,20 @@ public class VehicleResponse {
     @Schema(description = "Driver ID", example = "1")
     private Integer driverId;
 
+    @JsonProperty("driver_name")
+    @Schema(description = "Driver full name", example = "John Doe")
+    private String driverName;
+
+    @JsonProperty("driver_phone")
+    private String driverPhone;
+
+    @Schema(description = "Driver phone number", example = "+1234567890")
+    @JsonProperty("driver_email")
+    private String driverEmail;
+
+    @JsonProperty("user_status")
+    private String userStatus;
+
     @JsonProperty("plate_number")
     @Schema(description = "Vehicle plate number", example = "29A-12345")
     private String plateNumber;
@@ -55,7 +69,8 @@ public class VehicleResponse {
     private String fuelType;
 
     @Schema(description = "Vehicle status", example = "active")
-    private String status;
+    @JsonProperty("vehicle_status")
+    private String vehicleStatus;
 
     @JsonProperty("verified_at")
     @Schema(description = "Verification date")

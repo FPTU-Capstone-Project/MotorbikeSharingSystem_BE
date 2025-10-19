@@ -14,6 +14,8 @@ import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
 import com.mssus.app.service.EmailService;
+import org.springframework.security.core.Authentication;
+import com.mssus.app.common.enums.TransactionType;
 import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
 import com.mssus.app.service.pricing.model.SettlementResult;
@@ -52,7 +54,6 @@ public class TransactionServiceImpl implements TransactionService {
     public List<Transaction> initTopup(Integer userId, BigDecimal amount, String pspRef, String description) {
         validateTopupInput(userId, amount, pspRef);
 
-        // Check for duplicate PSP reference
         List<Transaction> existingTransactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
         if (!existingTransactions.isEmpty()) {
             throw new ValidationException("Transaction with PSP reference " + pspRef + " already exists");
@@ -65,7 +66,6 @@ public class TransactionServiceImpl implements TransactionService {
 
         UUID groupId = generateGroupId();
 
-        // Create system inflow transaction (PSP -> Master Wallet)
         Transaction systemInflow = Transaction.builder()
                 .type(TransactionType.TOPUP)
                 .groupId(groupId)
@@ -79,7 +79,6 @@ public class TransactionServiceImpl implements TransactionService {
                 .note("PSP Inflow - " + description)
                 .build();
 
-        // Create user credit transaction (User receives pending balance)
         Transaction userCredit = Transaction.builder()
                 .type(TransactionType.TOPUP)
                 .groupId(groupId)
@@ -98,13 +97,11 @@ public class TransactionServiceImpl implements TransactionService {
                 .note(description)
                 .build();
 
-        // Save transactions
         List<Transaction> transactions = Arrays.asList(
                 transactionRepository.save(systemInflow),
                 transactionRepository.save(userCredit)
         );
 
-        // Update wallet pending balance
         walletService.increasePendingBalance(userId, amount);
 
         log.info("Initiated top-up for user {} with amount {} and pspRef {}", userId, amount, pspRef);
@@ -720,6 +717,41 @@ public class TransactionServiceImpl implements TransactionService {
         return buildPageResponse(transactionsPage, transactions);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<TransactionResponse> getUserHistoryTransactions(Authentication authentication,
+                                                                        Pageable pageable,
+                                                                        String type,
+                                                                        String status) {
+        Integer userId = extractUserId(authentication);
+
+        TransactionType typeEnum = null;
+        if (type != null && !type.isBlank()) {
+            try {
+                typeEnum = TransactionType.valueOf(type.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new ValidationException("Invalid transaction type: " + type);
+            }
+        }
+
+        TransactionStatus statusEnum = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                statusEnum = TransactionStatus.valueOf(status.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new ValidationException("Invalid transaction status: " + status);
+            }
+        }
+
+        Page<Transaction> page = transactionRepository.findUserHistory(userId, typeEnum, statusEnum, pageable);
+        List<TransactionResponse> items = page.getContent().stream()
+                .map(transactionMapper::mapToTransactionResponse)
+                .collect(Collectors.toList());
+        return buildPageResponse(page, items);
+    }
+
+    // ========== PRIVATE HELPER METHODS ==========
+
     private void validateTopupInput(Integer userId, BigDecimal amount, String pspRef) {
         if (userId == null) {
             throw new ValidationException("User ID cannot be null");
@@ -796,6 +828,16 @@ public class TransactionServiceImpl implements TransactionService {
         if (promoCode == null || promoCode.trim().isEmpty()) {
             throw new ValidationException("Promo code cannot be null or empty");
         }
+    }
+
+    private Integer extractUserId(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new ValidationException("Unauthenticated request");
+        }
+        // authentication.getName() is expected to be email; map to userId
+        return userRepository.findByEmail(authentication.getName())
+                .map(User::getUserId)
+                .orElseThrow(() -> new NotFoundException("User not found: " + authentication.getName()));
     }
 
     private void validateAdjustmentInput(Integer userId, BigDecimal amount, Integer adminUserId, String reason) {

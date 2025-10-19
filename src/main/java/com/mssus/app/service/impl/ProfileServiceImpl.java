@@ -6,6 +6,7 @@ import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
 import com.mssus.app.dto.response.*;
+import com.mssus.app.service.AuthService;
 import com.mssus.app.service.FPTAIService;
 import org.json.JSONArray;
 import org.springframework.data.domain.Page;
@@ -44,12 +45,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProfileServiceImpl implements ProfileService {
     private final UserRepository userRepository;
-    private final DriverProfileRepository driverProfileRepository;
     private final VerificationRepository verificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final VerificationMapper verificationMapper;
-    private final AuthServiceImpl authService;
+    private final AuthService authService;
     private final JwtService jwtService;
     private final FileUploadService fileUploadService;
     private final FPTAIService fptaiService;
@@ -65,15 +65,13 @@ public class ProfileServiceImpl implements ProfileService {
             return userMapper.toAdminProfileResponse(user);
         }
 
-        String activeProfile = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+        String activeProfile = Optional.ofNullable(authService.getUserContext(user.getUserId()))
                 .filter(Map.class::isInstance)
-                .map(obj -> (Map<String, Object>) obj)
                 .map(claims -> (String) claims.get("active_profile"))
                 .orElse(null);
 
-        List<String> availableProfiles = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+        List<String> availableProfiles = Optional.ofNullable(authService.getUserContext(user.getUserId()))
                 .filter(Map.class::isInstance)
-                .map(obj -> (Map<String, Object>) obj)
                 .map(claims -> (List<String>) claims.get("profiles"))
                 .map(profiles -> profiles.stream()
                         .filter(profile -> user.isProfileActive(profile))
@@ -181,7 +179,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         Map<String, Object> claims = authService.buildTokenClaims(user, request.getTargetProfile());
 
-        AuthServiceImpl.userContext.put(user.getUserId().toString(), claims);
+        authService.setUserContext(user.getUserId(), claims);
 
         String accessToken = jwtService.generateToken(user.getEmail(), claims);
 
@@ -196,6 +194,14 @@ public class ProfileServiceImpl implements ProfileService {
     public VerificationResponse submitStudentVerification(String username, List<MultipartFile> documents) {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
+
+        // Enforce email and phone verification before allowing student_id submission
+        if (Boolean.FALSE.equals(user.getEmailVerified())) {
+            throw ValidationException.of("Email must be verified before submitting student ID");
+        }
+        if (Boolean.FALSE.equals(user.getPhoneVerified())) {
+            throw ValidationException.of("Phone must be verified before submitting student ID");
+        }
         if(documents == null || documents.isEmpty()){
             throw new ValidationException("At least one documents to upload");
         }
