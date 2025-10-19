@@ -7,6 +7,7 @@ import org.springframework.data.annotation.CreatedDate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "shared_rides")
@@ -18,6 +19,9 @@ public class SharedRide {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "shared_ride_id")
     private Integer sharedRideId;
+
+    @OneToMany(mappedBy = "sharedRide", fetch = FetchType.LAZY)
+    private List<SharedRideRequest> rideRequests;
 
     @ManyToOne
     @JoinColumn(name = "driver_id", nullable = false)
@@ -55,11 +59,12 @@ public class SharedRide {
     @Column(name = "current_passengers")
     private Integer currentPassengers;
 
-    @Column(name = "base_fare", precision = 10, scale = 2)
-    private BigDecimal baseFare;
+    @ManyToOne
+    @JoinColumn(name = "pricing_config_id", nullable = false)
+    private PricingConfig pricingConfig;
 
-    @Column(name = "per_km_rate", precision = 10, scale = 2)
-    private BigDecimal perKmRate;
+    @Column(name = "driver_earned_amount", precision = 19, scale = 2)
+    private BigDecimal driverEarnedAmount;
 
     @Column(name = "estimated_duration")
     private Integer estimatedDuration;

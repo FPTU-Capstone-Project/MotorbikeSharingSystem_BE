@@ -4,8 +4,7 @@ import java.util.Optional;
 
 public record PriceInput(
     long distanceMeters,
-    long durationSeconds,
     Optional<String> promoCode,
-    String riderId
+    Integer riderId
 ) {}
 

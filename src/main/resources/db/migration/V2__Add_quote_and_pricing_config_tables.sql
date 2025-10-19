@@ -71,31 +71,3 @@ VALUES ('2025-01-01', -- version (using current date format)
         true, -- is_active
         NULL -- created_by
        );
-
-
--- Create quotes table
--- CREATE TABLE quotes
--- (
---     quote_id              UUID PRIMARY KEY,
---     rider_id              BIGINT           NOT NULL,
---     pickup_lat            DOUBLE PRECISION NOT NULL,
---     pickup_lng            DOUBLE PRECISION NOT NULL,
---     dropoff_lat           DOUBLE PRECISION NOT NULL,
---     dropoff_lng           DOUBLE PRECISION NOT NULL,
---     distance_m            INTEGER          NOT NULL,
---     duration_s            INTEGER          NOT NULL,
---     polyline              TEXT             NOT NULL,
---     pricing_version       TEXT             NOT NULL REFERENCES pricing_config (version),
---     base_flag_vnd         BIGINT           NOT NULL,
---     per_km_component_vnd  BIGINT           NOT NULL,
---     per_min_component_vnd BIGINT           NOT NULL,
---     surcharge_vnd         BIGINT           NOT NULL, -- 0 in MVP
---     discount_vnd          BIGINT           NOT NULL, -- 0 in MVP (no promos)
---     subtotal_vnd          BIGINT           NOT NULL,
---     total_vnd             BIGINT           NOT NULL,
---     created_at            TIMESTAMPTZ      NOT NULL DEFAULT now(),
---     expires_at            TIMESTAMPTZ      NOT NULL  -- e.g., now() + interval '5 min'
--- );
---
--- -- Index for fast lookup by rider and creation time
--- CREATE INDEX idx_quotes_rider_created_at ON quotes (rider_id, created_at);

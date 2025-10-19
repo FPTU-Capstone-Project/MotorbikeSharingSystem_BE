@@ -18,14 +18,11 @@ public class StandardFarePolicy implements FarePolicy {
     @Override
     public MoneyVnd computeSubtotal(PriceInput in, PricingConfigDomain cfg) {
         var km = BigDecimal.valueOf(in.distanceMeters()).divide(BigDecimal.valueOf(1000), 3, R);
-        var mins = BigDecimal.valueOf(in.durationSeconds()).divide(BigDecimal.valueOf(60), 3, R);
 
-        var distance = cfg.perKm().mulBig(km, R);      // Money × decimal
-        var time = cfg.perMin().mulBig(mins, R);
-        var base = cfg.baseFlag();
-//        var sur = in.peak() ? cfg.peakSurcharge() : MoneyVnd.VND(0);
+        var distance = cfg.after2KmPerKmVnd().mulBig(km.subtract(BigDecimal.valueOf(2)).max(BigDecimal.ZERO), R);
+        var base = cfg.base2KmVnd();
 
-        return base.add(distance).add(time)/*.add(sur)*/;
+        return base.add(distance);
     }
 
     @Override
@@ -33,28 +30,18 @@ public class StandardFarePolicy implements FarePolicy {
 //        var discount = promo.applied() ? promo.discount() : MoneyVnd.VND(0);
         var discount = MoneyVnd.VND(0); //TODO: promotion not implemented yet
         var unclamped = MoneyVnd.VND(pre.amount() - discount.amount());
-        var total = MoneyVnd.VND(Math.max(unclamped.amount(), cfg.minFare().amount()));
+        var total = MoneyVnd.VND(Math.max(unclamped.amount(), cfg.base2KmVnd().amount()));
 
         return new FareBreakdown(
             cfg.version(),
             in.distanceMeters(),
-            in.durationSeconds(),
-            cfg.baseFlag(),
-            MoneyVnd.VND(pre.amount() - cfg.baseFlag().amount()
-//                - (in.peak() ? cfg.peakSurcharge().amount() : 0)
-                - computeTime(cfg, in).amount()),
-            computeTime(cfg, in),
-            /*in.peak() ? cfg.peakSurcharge() : */MoneyVnd.VND(0),
+            cfg.base2KmVnd(),
+            cfg.after2KmPerKmVnd(),
             discount,
             pre,
             total,
-            cfg.defaultCommission()
+            cfg.systemCommissionRate()
         );
-    }
-
-    private MoneyVnd computeTime(PricingConfigDomain cfg, PriceInput in) {
-        var mins = BigDecimal.valueOf(in.durationSeconds()).divide(BigDecimal.valueOf(60), 3, RoundingMode.HALF_UP);
-        return cfg.perMin().mulBig(mins, RoundingMode.HALF_UP);
     }
 }
 

@@ -21,6 +21,13 @@ public enum SharedRideRequestStatus {
      * Request is awaiting driver acceptance (AI_BOOKING) or approval (JOIN_RIDE).
      */
     PENDING,
+
+    /**
+     * Request is being broadcasted to potential drivers (AI_BOOKING).
+     * NEW in Ride Module MVP.
+     */
+    //TODO: Implement logic around this status
+    BROADCASTING,
     
     /**
      * Request accepted by driver, awaiting ride start.

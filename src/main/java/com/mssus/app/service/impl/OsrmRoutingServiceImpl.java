@@ -1,6 +1,7 @@
 package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.service.RoutingService;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,9 +9,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
+//@Primary
 public class OsrmRoutingServiceImpl implements RoutingService {
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -34,6 +37,11 @@ public class OsrmRoutingServiceImpl implements RoutingService {
             route.duration,    // seconds
             route.geometry            // encoded polyline
         );
+    }
+
+    @Override
+    public RouteResponse getMultiStopRoute(List<LatLng> waypoints, LocalDateTime departureTime) {
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     // Response DTOs

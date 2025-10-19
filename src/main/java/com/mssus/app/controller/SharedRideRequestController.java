@@ -1,11 +1,10 @@
 package com.mssus.app.controller;
 
-import com.mssus.app.dto.request.ride.AcceptRequestDto;
-import com.mssus.app.dto.request.ride.CreateRideRequestDto;
+import com.mssus.app.dto.ride.AcceptRequestDto;
+import com.mssus.app.dto.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;
-import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.service.SharedRideRequestService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,8 +27,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @Slf4j
 @RestController
@@ -58,14 +55,13 @@ public class SharedRideRequestController {
             @ApiResponse(responseCode = "404", description = "Quote expired or location not found",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<List<RideMatchProposalResponse>> bookRide(
+    public ResponseEntity<SharedRideRequestResponse> bookRide(
             @Valid @RequestBody CreateRideRequestDto request,
             Authentication authentication) {
         log.info("Rider {} creating booking request with quote {}",
                 authentication.getName(), request.quoteId());
         SharedRideRequestResponse bookingRequest = requestService.createAIBookingRequest(request, authentication);
-        List<RideMatchProposalResponse> proposals = requestService.getMatchProposals(bookingRequest.getSharedRideRequestId(), authentication);
-        return ResponseEntity.status(HttpStatus.CREATED).body(proposals);
+        return ResponseEntity.status(HttpStatus.CREATED).body(bookingRequest);
     }
 
     @PostMapping("/rides/{rideId}")

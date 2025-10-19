@@ -1,64 +1,86 @@
 <!DOCTYPE html>
-<meta charset="utf-8" />
+<meta charset="utf-8"/>
 <title>Rider Test</title>
 <body>
-  <h3>Rider</h3>
-  <button id="connect">Connect WS</button>
-  <button id="create">Create AI Booking</button>
-  <pre id="log"></pre>
-  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
-  <script>
+<h3>Rider</h3>
+<button id="connect">Connect WS (SockJS)</button>
+<button id="connect-native">Connect WS (Native)</button>
+<button id="create">Create AI Booking</button>
+<pre id="log"></pre>
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+<script>
     const BASE = "http://localhost:8080";
     const JWT =
-      "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwMDEyOTEyLCJleHAiOjI3NjAwMTI5MTJ9.ZQJUfWkqIz5cwN3HIod8HNwBnJVQlNKvGUB7OqqHQgY";
+        "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwMDEyOTEyLCJleHAiOjI3NjAwMTI5MTJ9.ZQJUfWkqIz5cwN3HIod8HNwBnJVQlNKvGUB7OqqHQgY";
     const log = (m) => (document.getElementById("log").textContent += m + "\n");
 
     let stomp;
 
     document.getElementById("connect").onclick = () => {
-      const sock = new SockJS(
-        BASE +
-          "/ws?token=eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwMDEyOTEyLCJleHAiOjI3NjAwMTI5MTJ9.ZQJUfWkqIz5cwN3HIod8HNwBnJVQlNKvGUB7OqqHQgY"
-      );
-      stomp = Stomp.over(sock);
-      stomp.connect(
-        { Authorization: "Bearer " + JWT },
-        () => {
-          log("Rider WS connected");
-          // Rider user-queue for matching status
-          stomp.subscribe("/user/queue/ride-matching", (msg) => {
-            log("Rider receive: " + msg.body);
-          });
-          stomp.subscribe("/user/queue/notifications", (msg) => {
-            log("General notification: " + msg.body);
-          });
-        },
-        (err) => log("Rider WS error: " + err)
-      );
+        const sock = new SockJS(
+            BASE +
+            "/ws?token=eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwMDEyOTEyLCJleHAiOjI3NjAwMTI5MTJ9.ZQJUfWkqIz5cwN3HIod8HNwBnJVQlNKvGUB7OqqHQgY"
+        );
+        stomp = Stomp.over(sock);
+        stomp.connect(
+            {Authorization: "Bearer " + JWT},
+            () => {
+                log("Rider WS connected (SockJS)");
+                // Rider user-queue for matching status
+                stomp.subscribe("/user/queue/ride-matching", (msg) => {
+                    log("Rider receive: " + msg.body);
+                });
+                stomp.subscribe("/user/queue/notifications", (msg) => {
+                    log("General notification: " + msg.body);
+                });
+            },
+            (err) => log("Rider WS error: " + err)
+        );
+    };
+
+    document.getElementById("connect-native").onclick = () => {
+        const ws = new WebSocket(
+            "ws://localhost:8080/ws-native?token=" + encodeURIComponent(JWT)
+        );
+        stomp = Stomp.over(ws);
+        stomp.connect(
+            {Authorization: "Bearer " + JWT},
+            () => {
+                log("Rider WS connected (Native)");
+                // Rider user-queue for matching status
+                stomp.subscribe("/user/queue/ride-matching", (msg) => {
+                    log("Rider receive: " + msg.body);
+                });
+                stomp.subscribe("/user/queue/notifications", (msg) => {
+                    log("General notification: " + msg.body);
+                });
+            },
+            (err) => log("Rider WS error: " + err)
+        );
     };
 
     document.getElementById("create").onclick = async () => {
-      // ASSUMPTION: You already have a quoteId and optional pickup/dropoff IDs/time.
-      // Fill these with your test values:
-      const body = {
-        quoteId: "7e4bcb7a-4a1b-429e-b5b4-d192becfb27f", // <- put a real quoteId
-        // pickupLocationId: 10,         // optional if quote stores coords
-        // dropoffLocationId: 11,        // optional if quote stores coords
-        // desiredPickupTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // +1 day and 5 min
-        notes: "helmet pls",
-      };
-      const res = await fetch(BASE + "/api/v1/ride-requests", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + JWT,
-        },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      log("Create AI booking: " + res.status + " " + JSON.stringify(data));
-      // data is initial proposals snapshot; real-time continues via WS
+        // ASSUMPTION: You already have a quoteId and optional pickup/dropoff IDs/time.
+        // Fill these with your test values:
+        const body = {
+            quoteId: "7e4bcb7a-4a1b-429e-b5b4-d192becfb27f", // <- put a real quoteId
+            // pickupLocationId: 10,         // optional if quote stores coords
+            // dropoffLocationId: 11,        // optional if quote stores coords
+            // desiredPickupTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // +1 day and 5 min
+            notes: "helmet pls",
+        };
+        const res = await fetch(BASE + "/api/v1/ride-requests", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + JWT,
+            },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        log("Create AI booking: " + res.status + " " + JSON.stringify(data));
+        // data is initial proposals snapshot; real-time continues via WS
     };
-  </script>
+</script>
 </body>

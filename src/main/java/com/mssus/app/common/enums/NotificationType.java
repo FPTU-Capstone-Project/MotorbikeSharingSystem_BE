@@ -8,5 +8,6 @@ public enum NotificationType {
     PAYMENT,
     PROMOTION,
     SYSTEM,
-    EMERGENCY
+    EMERGENCY,
+    RIDE_TRACKING_START,
 }

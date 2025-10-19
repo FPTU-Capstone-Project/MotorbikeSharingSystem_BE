@@ -22,6 +22,7 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
+        log.info("WS handshake from {} {}", request.getRemoteAddress(), request.getURI());
         String authHeader = request.getHeaders().getFirst("Authorization");
         String token = null;
 

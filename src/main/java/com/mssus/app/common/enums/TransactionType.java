@@ -48,6 +48,6 @@ public enum TransactionType {
      * Affects the user's shadow_balance (increase or decrease).
      */
     ADJUSTMENT,
-    REFUND
 
+    REFUND
 }

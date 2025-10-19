@@ -28,7 +28,7 @@ public class DriverRideOfferNotification {
     Double dropoffLat;
     Double dropoffLng;
     LocalDateTime pickupTime;
-    BigDecimal fareAmount;
+    BigDecimal totalFare;
     Float matchScore;
     Integer proposalRank;
     ZonedDateTime offerExpiresAt;

@@ -1,13 +1,16 @@
 package com.mssus.app.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mssus.app.common.enums.NotificationType;
+import com.mssus.app.common.enums.Priority;
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.RiderProfileStatus;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.config.properties.RideConfigurationProperties;
-import com.mssus.app.dto.request.ride.AcceptRequestDto;
-import com.mssus.app.dto.request.ride.CreateRideRequestDto;
+import com.mssus.app.dto.ride.AcceptRequestDto;
+import com.mssus.app.dto.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.request.wallet.WalletHoldRequest;
 import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
@@ -15,6 +18,7 @@ import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.entity.*;
 import com.mssus.app.mapper.SharedRideRequestMapper;
+import com.mssus.app.pricing.PricingService;
 import com.mssus.app.pricing.model.Quote;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
@@ -23,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -32,6 +37,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,6 +61,8 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final RideMatchingService matchingService;
     private final RideConfigurationProperties rideConfig;
     private final RideMatchingCoordinator matchingCoordinator;
+    private final ApplicationEventPublisherService eventPublisherService;
+    private final PricingConfigRepository pricingConfigRepository;
 
     @Override
     @Transactional
@@ -62,7 +70,6 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         String username = authentication.getName();
         log.info("Rider {} creating AI booking request with quote {}", username, request.quoteId());
 
-        // Get authenticated rider
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         RiderProfile rider = riderRepository.findByUserUserId(user.getUserId())
@@ -79,39 +86,15 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 "Active profile is not rider");
         }
 
-        // Enforce rider ACTIVE status
-        if (rider.getStatus() != RiderProfileStatus.ACTIVE) {
-            throw BaseDomainException.of("rider.profile.not-active", "Rider profile not active");
-        }
-
-        // Get and validate quote
         Quote quote = quoteService.getQuote(request.quoteId());
 
-        // Validate rider owns the quote
         if (quote.riderId() != rider.getRiderId()) {
             throw BaseDomainException.of("ride.unauthorized.request-not-owner",
                 "Quote belongs to different user");
         }
 
-        Location pickupLoc = null;
-        Location dropoffLoc = null;
-
-        if (request.pickupLocationId() != null) {
-            pickupLoc = locationRepository.findById(request.pickupLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "Pickup location not found"));
-            validateLocationMatchesQuote(pickupLoc, quote.pickupLat(), quote.pickupLng(), "pickup");
-        }
-
-        if (request.dropoffLocationId() != null) {
-            dropoffLoc = locationRepository.findById(request.dropoffLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "Dropoff location not found"));
-            validateLocationMatchesQuote(dropoffLoc, quote.dropoffLat(), quote.dropoffLng(), "dropoff");
-        }
-
-        // Extract fare from quote
         BigDecimal fareAmount = BigDecimal.valueOf(quote.fare().total().amount());
+        BigDecimal subtotalFare = BigDecimal.valueOf(quote.fare().subtotal().amount());
 
         log.info("Creating AI booking - fare from quote: {} VND", fareAmount);
 
@@ -121,22 +104,23 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
         SharedRideRequest rideRequest = SharedRideRequest.builder()
             .requestKind(RequestKind.BOOKING)
-            .sharedRide(null) // NULL for AI_BOOKING until driver accepts
+            .sharedRide(null)
             .rider(rider)
-            .pickupLocationId(request.pickupLocationId())
-            .dropoffLocationId(request.dropoffLocationId())
+            .pickupLocationId(quote.pickupLocationId())
+            .dropoffLocationId(quote.dropoffLocationId())
             .pickupLat(quote.pickupLat())
             .pickupLng(quote.pickupLng())
             .dropoffLat(quote.dropoffLat())
             .dropoffLng(quote.dropoffLng())
             .status(SharedRideRequestStatus.PENDING)
-            .fareAmount(fareAmount)
-            .originalFare(fareAmount)
+            .totalFare(fareAmount)
+            .pricingConfig(pricingConfigRepository.findByPricingConfigId(quote.pricingConfigId()))
+            .subtotalFare(subtotalFare)
+            .promotion(null)
             .discountAmount(BigDecimal.ZERO)
-            .coverageTimeStep(rideConfig.getMatching().getCoverageTimeStep())
             .pickupTime(desiredPickupTime)
-            .estimatedPickupTime(LocalDateTime.now())
-            .estimatedDropoffTime(LocalDateTime.now().plusMinutes(quote.durationS() / 60 + 5)) // +5 min buffer
+            .estimatedPickupTime(LocalDateTime.now()) //TODO: improve with actual estimate
+            .estimatedDropoffTime(LocalDateTime.now().plusMinutes(quote.durationS() / 60 + 5)) //TODO: improve with actual estimate
             .actualPickupTime(null)
             .actualDropoffTime(null)
             .specialRequests(request.notes())
@@ -146,16 +130,35 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
         SharedRideRequest savedRequest = requestRepository.save(rideRequest);
 
+        try {
+            WalletHoldRequest holdRequest = new WalletHoldRequest();
+            holdRequest.setUserId(rider.getRiderId());
+            holdRequest.setBookingId(savedRequest.getSharedRideRequestId());
+            holdRequest.setAmount(fareAmount);
+            holdRequest.setNote("Hold for join ride request #" + savedRequest.getSharedRideRequestId());
+
+            bookingWalletService.holdFunds(holdRequest);
+
+            log.info("Wallet hold placed for booking request {} - amount: {}",
+                savedRequest.getSharedRideRequestId(), fareAmount);
+
+        } catch (Exception e) {
+            log.error("Failed to place wallet hold for request {}: {}",
+                savedRequest.getSharedRideRequestId(), e.getMessage(), e);
+            // Rollback: delete the request
+            requestRepository.delete(savedRequest);
+            throw BaseDomainException.of("ride.operation.wallet-hold-failed",
+                "Failed to reserve funds: " + e.getMessage());
+        }
+
         log.info("AI booking request created - ID: {}, rider: {}, fare: {}, status: {}",
             savedRequest.getSharedRideRequestId(), rider.getRiderId(),
             fareAmount, savedRequest.getStatus());
 
-        // TODO: Trigger notification service for potential drivers (placeholder for MVP)
-        // notificationService.notifyDriversOfNewRequest(savedRequest);
+        // Publish an event to trigger matching after the transaction commits
+        eventPublisherService.publishRideRequestCreatedEvent(savedRequest.getSharedRideRequestId());
 
-        matchingCoordinator.initiateMatching(savedRequest.getSharedRideRequestId());
-
-        return buildRequestResponse(savedRequest, pickupLoc, dropoffLoc);
+        return buildRequestResponse(savedRequest);
     }
 
     @Override
@@ -165,18 +168,11 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         String username = authentication.getName();
         log.info("Rider {} requesting to join ride {} with quote {}", username, rideId, request.quoteId());
 
-        // Get authenticated rider
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         RiderProfile rider = riderRepository.findByUserUserId(user.getUserId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.rider-profile"));
 
-        // Enforce rider ACTIVE status
-        if (rider.getStatus() != com.mssus.app.common.enums.RiderProfileStatus.ACTIVE) {
-            throw BaseDomainException.of("rider.profile.not-active", "Rider profile not active");
-        }
-
-        // Get quote and validate
         Quote quote = quoteService.getQuote(request.quoteId());
 
         if (quote.riderId() != rider.getRiderId()) {
@@ -184,54 +180,46 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 "Quote belongs to different user");
         }
 
-        // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
-        // Validate ride state
         if (ride.getStatus() != SharedRideStatus.SCHEDULED) {
             throw BaseDomainException.of("ride.validation.invalid-state",
                 Map.of("currentState", ride.getStatus()));
         }
 
-        // Validate available seats
         if (ride.getCurrentPassengers() >= ride.getMaxPassengers()) {
             throw BaseDomainException.of("ride.validation.no-seats-available");
         }
 
-        // Validate locations
-        Location pickupLoc = locationRepository.findById(request.pickupLocationId())
-            .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                "Pickup location not found"));
-        Location dropoffLoc = locationRepository.findById(request.dropoffLocationId())
-            .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                "Dropoff location not found"));
-
-        validateLocationMatchesQuote(pickupLoc, quote.pickupLat(), quote.pickupLng(), "pickup");
-        validateLocationMatchesQuote(dropoffLoc, quote.dropoffLat(), quote.dropoffLng(), "dropoff");
-
-        // Extract fare from quote
         BigDecimal fareAmount = BigDecimal.valueOf(quote.fare().total().amount());
+        BigDecimal subtotalFare = BigDecimal.valueOf(quote.fare().subtotal().amount());
 
-        // Create request entity
-        SharedRideRequest rideRequest = new SharedRideRequest();
-        rideRequest.setRequestKind(RequestKind.JOIN_RIDE);
-        rideRequest.setSharedRide(ride);
-        rideRequest.setRider(rider);
-        rideRequest.setPickupLocationId(request.pickupLocationId());
-        rideRequest.setDropoffLocationId(request.dropoffLocationId());
-        rideRequest.setStatus(SharedRideRequestStatus.PENDING);
-        rideRequest.setFareAmount(fareAmount);
-        rideRequest.setOriginalFare(fareAmount);
-        rideRequest.setDiscountAmount(BigDecimal.ZERO);
-        rideRequest.setPickupTime(request.pickupTime());
-        rideRequest.setSpecialRequests(request.specialRequests());
-        rideRequest.setInitiatedBy("rider");
-        rideRequest.setCreatedAt(LocalDateTime.now());
+
+        SharedRideRequest rideRequest = SharedRideRequest.builder()
+            .requestKind(RequestKind.JOIN_RIDE)
+            .sharedRide(ride)
+            .rider(rider)
+            .pickupLocationId(quote.pickupLocationId())
+            .dropoffLocationId(quote.dropoffLocationId())
+            .pickupLat(quote.pickupLat())
+            .pickupLng(quote.pickupLng())
+            .dropoffLat(quote.dropoffLat())
+            .dropoffLng(quote.dropoffLng())
+            .status(SharedRideRequestStatus.PENDING)
+            .totalFare(fareAmount)
+            .pricingConfig(pricingConfigRepository.findByPricingConfigId(quote.pricingConfigId()))
+            .subtotalFare(subtotalFare)
+            .promotion(null)
+            .discountAmount(BigDecimal.ZERO)
+            .pickupTime(request.desiredPickupTime())
+            .specialRequests(request.notes())
+            .initiatedBy("rider")
+            .createdAt(LocalDateTime.now())
+            .build();
 
         SharedRideRequest savedRequest = requestRepository.save(rideRequest);
 
-        // Place wallet hold (for JOIN_RIDE, hold on creation)
         try {
             WalletHoldRequest holdRequest = new WalletHoldRequest();
             holdRequest.setUserId(rider.getRiderId());
@@ -256,10 +244,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         log.info("Join ride request created - ID: {}, rider: {}, ride: {}, fare: {}, status: {}",
             savedRequest.getSharedRideRequestId(), rider.getRiderId(), rideId, fareAmount, savedRequest.getStatus());
 
-        // TODO: Notify driver of new join request (placeholder for MVP)
-        // notificationService.notifyDriverOfJoinRequest(ride.getDriver(), savedRequest);
+        matchingCoordinator.initiateRideJoining(savedRequest.getSharedRideRequestId());
 
-        return buildRequestResponse(savedRequest, pickupLoc, dropoffLoc);
+        return buildRequestResponse(savedRequest);
     }
 
     @Override
@@ -268,10 +255,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         SharedRideRequest request = requestRepository.findById(requestId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.request", requestId));
 
-        Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-        Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-
-        return buildRequestResponse(request, pickupLoc, dropoffLoc);
+        return buildRequestResponse(request);
     }
 
     @Override
@@ -339,11 +323,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             requestPage = requestRepository.findByRiderRiderIdOrderByCreatedAtDesc(riderId, pageable);
         }
 
-        return requestPage.map(request -> {
-            Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-            Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-            return buildRequestResponse(request, pickupLoc, dropoffLoc);
-        });
+        return requestPage.map(this::buildRequestResponse);
     }
 
     @Override
@@ -353,7 +333,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         log.info("Fetching requests for ride: {}, status: {}", rideId, status);
 
         // Validate ride exists
-        SharedRide ride = rideRepository.findById(rideId)
+        rideRepository.findById(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
         Page<SharedRideRequest> requestPage;
@@ -361,17 +341,13 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             SharedRideRequestStatus requestStatus = SharedRideRequestStatus.valueOf(status.toUpperCase());
             List<SharedRideRequest> requests = requestRepository.findBySharedRideSharedRideIdAndStatus(
                 rideId, requestStatus);
-            requestPage = new org.springframework.data.domain.PageImpl<>(requests, pageable, requests.size());
+            requestPage = new PageImpl<>(requests, pageable, requests.size());
         } else {
             List<SharedRideRequest> requests = requestRepository.findBySharedRideSharedRideId(rideId);
-            requestPage = new org.springframework.data.domain.PageImpl<>(requests, pageable, requests.size());
+            requestPage = new PageImpl<>(requests, pageable, requests.size());
         }
 
-        return requestPage.map(request -> {
-            Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-            Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-            return buildRequestResponse(request, pickupLoc, dropoffLoc);
-        });
+        return requestPage.map(this::buildRequestResponse);
     }
 
     @Override
@@ -432,20 +408,20 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 request.setSharedRide(ride);
 
                 // Place wallet hold
-                WalletHoldRequest holdRequest = new WalletHoldRequest();
-                holdRequest.setUserId(request.getRider().getRiderId());
-                holdRequest.setBookingId(requestId);
-                holdRequest.setAmount(request.getFareAmount());
-                holdRequest.setNote("Hold for AI booking acceptance #" + requestId);
-
-                try {
-                    bookingWalletService.holdFunds(holdRequest);
-                    log.info("Wallet hold placed for AI booking {} - amount: {}", requestId, request.getFareAmount());
-                } catch (Exception e) {
-                    log.error("Failed to place wallet hold for AI booking {}: {}", requestId, e.getMessage(), e);
-                    throw BaseDomainException.of("ride.operation.wallet-hold-failed",
-                        "Failed to reserve funds: " + e.getMessage());
-                }
+//                WalletHoldRequest holdRequest = new WalletHoldRequest();
+//                holdRequest.setUserId(request.getRider().getRiderId());
+//                holdRequest.setBookingId(requestId);
+//                holdRequest.setAmount(request.getFareAmount());
+//                holdRequest.setNote("Hold for AI booking acceptance #" + requestId);
+//
+//                try {
+//                    bookingWalletService.holdFunds(holdRequest);
+//                    log.info("Wallet hold placed for AI booking {} - amount: {}", requestId, request.getFareAmount());
+//                } catch (Exception e) {
+//                    log.error("Failed to place wallet hold for AI booking {}: {}", requestId, e.getMessage(), e);
+//                    throw BaseDomainException.of("ride.operation.wallet-hold-failed",
+//                        "Failed to reserve funds: " + e.getMessage());
+//                }
 
             } else if (request.getRequestKind() == RequestKind.JOIN_RIDE) {
                 // For JOIN_RIDE: validate ride ID matches
@@ -477,9 +453,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             throw e;
         }
 
-        Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-        Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-        return buildRequestResponse(request, pickupLoc, dropoffLoc);
+        return buildRequestResponse(request);
     }
 
     @Override
@@ -520,13 +494,13 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
                 releaseRequest.setUserId(request.getRider().getRiderId());
                 releaseRequest.setBookingId(requestId);
-                releaseRequest.setAmount(request.getFareAmount());
+                releaseRequest.setAmount(request.getTotalFare());
                 releaseRequest.setNote("Request rejected - #" + requestId);
 
                 bookingWalletService.releaseFunds(releaseRequest);
 
                 log.info("Wallet hold released for rejected request {} - amount: {}",
-                    requestId, request.getFareAmount());
+                    requestId, request.getTotalFare());
 
             } catch (Exception e) {
                 log.error("Failed to release wallet hold for request {}: {}",
@@ -544,9 +518,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         // TODO: Notify rider of rejection (placeholder for MVP)
         // notificationService.notifyRiderOfRejection(request.getRider(), request, reason);
 
-        Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-        Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-        return buildRequestResponse(request, pickupLoc, dropoffLoc);
+        return buildRequestResponse(request);
     }
 
     @Override
@@ -601,7 +573,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             if (!withinGracePeriod) {
                 // Apply cancellation fee
                 BigDecimal feePercentage = rideConfig.getCancellation().getFeePercentage();
-                cancellationFee = request.getFareAmount().multiply(feePercentage);
+                cancellationFee = request.getTotalFare().multiply(feePercentage);
 
                 log.info("Cancellation fee applied for request {} - fee: {} ({}%)",
                     requestId, cancellationFee, feePercentage.multiply(BigDecimal.valueOf(100)));
@@ -615,13 +587,13 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
                 releaseRequest.setUserId(request.getRider().getRiderId());
                 releaseRequest.setBookingId(requestId);
-                releaseRequest.setAmount(request.getFareAmount());
+                releaseRequest.setAmount(request.getTotalFare());
                 releaseRequest.setNote("Request cancelled - #" + requestId);
 
                 bookingWalletService.releaseFunds(releaseRequest);
 
                 log.info("Full wallet hold released for cancelled request {} - amount: {}",
-                    requestId, request.getFareAmount());
+                    requestId, request.getTotalFare());
 
             } else {
                 // TODO: Implement partial release with cancellation fee capture
@@ -629,7 +601,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 WalletReleaseRequest releaseRequest = new WalletReleaseRequest();
                 releaseRequest.setUserId(request.getRider().getRiderId());
                 releaseRequest.setBookingId(requestId);
-                releaseRequest.setAmount(request.getFareAmount());
+                releaseRequest.setAmount(request.getTotalFare());
                 releaseRequest.setNote("Request cancelled with fee - #" + requestId);
 
                 bookingWalletService.releaseFunds(releaseRequest);
@@ -660,38 +632,47 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         //     notificationService.notifyDriverOfCancellation(request.getSharedRide().getDriver(), request);
         // }
 
-        Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-        Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-        return buildRequestResponse(request, pickupLoc, dropoffLoc);
+        return buildRequestResponse(request);
     }
 
-    /**
-     * Validate location coordinates match quote (within tolerance).
-     * Tolerance: 100 meters (~0.001 degrees)
-     */
-    private void validateLocationMatchesQuote(Location location, double quoteLat, double quoteLng, String locationType) {
-        double latDiff = Math.abs(location.getLat() - quoteLat);
-        double lngDiff = Math.abs(location.getLng() - quoteLng);
-        double tolerance = 0.001; // ~100 meters
-
-        if (latDiff > tolerance || lngDiff > tolerance) {
-            throw BaseDomainException.of("ride.validation.invalid-location",
-                String.format("%s location coordinates don't match quote (lat: %.6f vs %.6f, lng: %.6f vs %.6f)",
-                    locationType, location.getLat(), quoteLat, location.getLng(), quoteLng));
-        }
-    }
-
-    private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request,
-                                                           Location pickupLoc, Location dropoffLoc) {
+    private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request) {
         SharedRideRequestResponse response = requestMapper.toResponse(request);
 
-        if (pickupLoc != null) {
-            response.setPickupLocationName(pickupLoc.getName());
+        if (request.getPickupLocationId() != null) {
+            Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
+            if (pickupLoc != null) {
+                response.setPickupLocationName(pickupLoc.getName());
+                response.setPickupLat(pickupLoc.getLat());
+                response.setPickupLng(pickupLoc.getLng());
+            } else {
+                response.setPickupLocationName("Unknown Location");
+                response.setPickupLat(request.getPickupLat());
+                response.setPickupLng(request.getPickupLng());
+            }
+        } else {
+            response.setPickupLocationName("Custom Pickup Location");
+            response.setPickupLat(request.getPickupLat());
+            response.setPickupLng(request.getPickupLng());
         }
-        if (dropoffLoc != null) {
-            response.setDropoffLocationName(dropoffLoc.getName());
+
+        if (request.getDropoffLocationId() != null) {
+            Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
+            if (dropoffLoc != null) {
+                response.setDropoffLocationName(dropoffLoc.getName());
+                response.setDropoffLat(dropoffLoc.getLat());
+                response.setDropoffLng(dropoffLoc.getLng());
+            } else {
+                response.setDropoffLocationName("Unknown Location");
+                response.setDropoffLat(request.getDropoffLat());
+                response.setDropoffLng(request.getDropoffLng());
+            }
+        } else {
+            response.setDropoffLocationName("Custom Dropoff Location");
+            response.setDropoffLat(request.getDropoffLat());
+            response.setDropoffLng(request.getDropoffLng());
         }
 
         return response;
     }
+
 }

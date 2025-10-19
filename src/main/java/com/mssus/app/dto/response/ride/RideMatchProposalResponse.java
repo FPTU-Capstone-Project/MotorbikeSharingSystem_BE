@@ -58,8 +58,12 @@ public class RideMatchProposalResponse {
     private Integer availableSeats;
 
     @JsonProperty("estimated_fare")
-    @Schema(description = "Estimated fare for this match", example = "25000.00")
-    private BigDecimal estimatedFare;
+    @Schema(description = "Total fare for this match", example = "25000.00")
+    private BigDecimal totalFare;
+
+    @JsonProperty("earned_amount")
+    @Schema(description = "Driver's earned amount for this match", example = "20000.00")
+    private BigDecimal earnedAmount;
 
     @JsonProperty("estimated_duration")
     @Schema(description = "Estimated ride duration in minutes", example = "25")

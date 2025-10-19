@@ -43,7 +43,7 @@ No existing flows were removed. JOIN_RIDE and other ride management features con
 3. **Offer sent to driver**:
    - The coordinator fetches driver profile + location names.
    - Builds a `DriverRideOfferNotification` payload and sends it through `RealTimeNotificationService`:
-     - WebSocket destination: `/user/{driverId}/queue/ride-offers`.
+     - WebSocket destination: `/user/queue/ride-offers`.
      - Also persists the notification (so drivers can see it later even if offline).
    - `DriverDecisionGateway` starts a timer (90 s default). If the driver doesn’t respond, the offer times out.
 
