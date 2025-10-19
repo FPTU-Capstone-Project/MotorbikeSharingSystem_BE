@@ -46,8 +46,8 @@ public class PayOSServiceImpl implements PayOSService {
     private PayOS payOS;
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
 
-    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper, IdempotencyKeyRepository idempotencyKeyRepository) {
-       this.transactionService = transactionService;
+    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper) {
+        this.transactionService = transactionService;
         this.objectMapper = objectMapper;
         this.idempotencyKeyRepository = idempotencyKeyRepository;
     }
@@ -75,12 +75,12 @@ public class PayOSServiceImpl implements PayOSService {
             }
 
             PaymentData data = PaymentData.builder()
-                    .orderCode(orderCode)
-                    .amount(amount.intValue())
-                    .description(description)
-                    .returnUrl(returnUrl)
-                    .cancelUrl(cancelUrl)
-                    .build();
+                .orderCode(orderCode)
+                .amount(amount.intValue())
+                .description(description)
+                .returnUrl(returnUrl)
+                .cancelUrl(cancelUrl)
+                .build();
 
             // Idempotency guard: ensure we haven't already created this orderCode
             String keyHash = String.valueOf(orderCode);
@@ -101,7 +101,7 @@ public class PayOSServiceImpl implements PayOSService {
             idempotencyKeyRepository.save(idem);
 
             log.info("Created top-up payment link for user {} with amount {} and orderCode {}",
-                    userId, amount, orderCode);
+                userId, amount, orderCode);
 
             return response;
         } catch (Exception e) {

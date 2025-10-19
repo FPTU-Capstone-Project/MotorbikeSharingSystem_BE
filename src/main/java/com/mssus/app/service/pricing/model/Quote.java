@@ -1,6 +1,4 @@
-package com.mssus.app.pricing.model;
-
-import com.mssus.app.entity.PricingConfig;
+package com.mssus.app.service.pricing.model;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -17,7 +15,6 @@ public record Quote(
     long distanceM,
     long durationS,
     String polyline,
-    int pricingConfigId,
     FareBreakdown fare,
     Instant createdAt,
     Instant expiresAt

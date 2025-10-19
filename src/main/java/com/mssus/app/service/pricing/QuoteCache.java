@@ -1,6 +1,6 @@
-package com.mssus.app.pricing;
+package com.mssus.app.service.pricing;
 
-import com.mssus.app.pricing.model.Quote;
+import com.mssus.app.service.pricing.model.Quote;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;

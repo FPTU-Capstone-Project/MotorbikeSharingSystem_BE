@@ -207,4 +207,31 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         log.info("Tracking initiated for ride {} - driver notified to start GPS updates", rideId);
     }
 
+    @Override
+    public void stopTracking(Integer rideId) {
+        if (rideId == null) {
+            throw BaseDomainException.of("ride.tracking.invalid-ride-id");
+        }
+
+        RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
+            .orElse(null);
+
+        if (track == null) {
+            log.debug("stopTracking called for ride {} but no tracking record exists", rideId);
+            return;
+        }
+
+        if (Boolean.TRUE.equals(track.getIsTracking())) {
+            log.debug("stopTracking called for ride {} but tracking already stopped", rideId);
+            return;
+        }
+
+        track.setIsTracking(false);
+        track.setStoppedAt(LocalDateTime.now());
+        trackRepository.save(track);
+
+        log.info("Stopped tracking for ride {}", rideId);
+    }
+
+
 }

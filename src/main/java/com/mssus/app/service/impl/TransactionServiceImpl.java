@@ -3,6 +3,7 @@ package com.mssus.app.service.impl;
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
+import com.mssus.app.dto.request.CreateTransactionRequest;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.wallet.TransactionResponse;
 import com.mssus.app.entity.Transaction;
@@ -17,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import com.mssus.app.common.enums.TransactionType;
 import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
+import com.mssus.app.service.pricing.model.SettlementResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -46,8 +48,6 @@ public class TransactionServiceImpl implements TransactionService {
     public UUID generateGroupId() {
         return UUID.randomUUID();
     }
-
-    // ========== RIDER_TOPUP FLOWS ==========
 
     @Override
     @Transactional
@@ -195,245 +195,305 @@ public class TransactionServiceImpl implements TransactionService {
         log.info("Top-up failed for pspRef: {} with reason: {}", pspRef, reason);
     }
 
-    // ========== RIDE_HOLD FLOWS ==========
-
     @Override
     @Transactional
-    public List<Transaction> createHold(Integer riderId, BigDecimal amount, Integer bookingId, String description) {
-        validateHoldInput(riderId, amount, bookingId);
+    public Transaction createTransaction(CreateTransactionRequest request) {
+        TransactionType type = request.type();
+        TransactionDirection direction = request.direction();
+        ActorKind actorKind = request.actorKind();
+        Integer actorUserId = request.actorUserId();
+        SystemWallet systemWallet = request.systemWallet();
+        BigDecimal amount = request.amount();
+        String currency = request.currency();
+        UUID groupId = request.groupId();
+        Integer bookingId = request.bookingId();
+        Integer riderUserId = request.riderUserId();
+        Integer driverUserId = request.driverUserId();
+        String pspRef = request.pspRef();
+        TransactionStatus status = request.status();
+        String note = request.note();
+        BigDecimal beforeAvail = request.beforeAvail();
+        BigDecimal afterAvail = request.afterAvail();
+        BigDecimal beforePending = request.beforePending();
+        BigDecimal afterPending = request.afterPending();
 
-        Wallet wallet = walletRepository.findByUser_UserId(riderId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found for riderId: " + riderId));
-        User rider = userRepository.findById(riderId)
-                .orElseThrow(() -> new NotFoundException("Rider not found for riderId: " + riderId));
+        validateCreateTransactionRequest(request);
 
-        // Check sufficient balance
-        if (wallet.getShadowBalance().compareTo(amount) < 0) {
-            throw new ValidationException("Insufficient balance. Available: " + wallet.getShadowBalance() + ", Required: " + amount);
+        User actorUser = userRepository.findById(actorUserId)
+            .orElseThrow(() -> new NotFoundException("Actor user not found: " + actorUserId));
+
+        User riderUser = (riderUserId != null) ? userRepository.findById(riderUserId)
+            .orElseThrow(() -> new NotFoundException("Rider user not found: " + riderUserId)) : null;
+        User driverUser = (driverUserId != null) ? userRepository.findById(driverUserId)
+            .orElseThrow(() -> new NotFoundException("Driver user not found: " + driverUserId)) : null;
+
+        if (actorKind == ActorKind.USER) {
+            if (request.beforeAvail() == null || request.afterAvail() == null ||
+                request.beforePending() == null || request.afterPending() == null) {
+                throw new ValidationException("Balance snapshots (before/after) are required for USER transactions.");
+            }
         }
 
-        UUID groupId = generateGroupId();
+        Transaction transaction = Transaction.builder()
+            .groupId(groupId)
+            .type(type)
+            .direction(direction)
+            .actorKind(actorKind)
+            .actorUser(actorUser)
+            .systemWallet(systemWallet)
+            .amount(amount)
+            .currency(currency)
+            .bookingId(bookingId)
+            .riderUser(riderUser)
+            .driverUser(driverUser)
+            .pspRef(pspRef)
+            .status(status)
+            .beforeAvail(beforeAvail)
+            .afterAvail(afterAvail)
+            .beforePending(beforePending)
+            .afterPending(afterPending)
+            .note(note)
+            .build();
 
-        // Create hold transaction (moves from available to pending)
-        Transaction holdTransaction = Transaction.builder()
-                .type(TransactionType.HOLD_CREATE)
-                .groupId(groupId)
-                .direction(TransactionDirection.INTERNAL)
-                .actorKind(ActorKind.USER)
-                .actorUser(rider.getRiderProfile().getUser())
-                .riderUser(rider)
-                .amount(amount)
-                .currency("VND")
-                .bookingId(bookingId)
-                .status(TransactionStatus.SUCCESS)
-                .beforeAvail(wallet.getShadowBalance())
-                .afterAvail(wallet.getShadowBalance().subtract(amount))
-                .beforePending(wallet.getPendingBalance())
-                .afterPending(wallet.getPendingBalance().add(amount))
-                .note(description)
-                .build();
+        Transaction savedTransaction = transactionRepository.save(transaction);
 
-        Transaction savedTransaction = transactionRepository.save(holdTransaction);
+        log.info("Created transaction - ID: {}, type: {}, actor: {}, amount: {}",
+            savedTransaction.getTxnId(), type, actorKind, amount);
 
-        // Update wallet balances
-        wallet.setShadowBalance(wallet.getShadowBalance().subtract(amount));
-        wallet.setPendingBalance(wallet.getPendingBalance().add(amount));
-        walletRepository.save(wallet);
-
-        log.info("Created hold for rider {} with amount {} for booking {}", riderId, amount, bookingId);
-        return Arrays.asList(savedTransaction);
+        return savedTransaction;
     }
 
-    // ========== RIDE_CAPTURE FLOWS ==========
 
-    @Override
-    @Transactional
-    public List<Transaction> captureFare(UUID groupId, Integer riderId, Integer driverId, BigDecimal totalFare,
-                                        BigDecimal commissionRate, String description) {
-        validateCaptureInput(groupId, riderId, driverId, totalFare, commissionRate);
-
-        // Find the original hold transaction
-        List<Transaction> holdTransactions = transactionRepository.findByGroupIdAndStatus(groupId, TransactionStatus.SUCCESS);
-        Transaction holdTransaction = holdTransactions.stream()
-                .filter(t -> t.getType() == TransactionType.HOLD_CREATE)
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
-
-        BigDecimal heldAmount = holdTransaction.getAmount();
-        if (totalFare.compareTo(heldAmount) > 0) {
-            throw new ValidationException("Capture amount exceeds held amount. Held: " + heldAmount + ", Capture: " + totalFare);
-        }
-
-        Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
-                .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
-        Wallet driverWallet = walletRepository.findByUser_UserId(driverId)
-                .orElseThrow(() -> new NotFoundException("Driver wallet not found"));
-
-        User rider = userRepository.findById(riderId).orElseThrow(() -> new NotFoundException("Rider not found"));
-        User driver = userRepository.findById(driverId).orElseThrow(() -> new NotFoundException("Driver not found"));
-
-        BigDecimal commission = calculateCommission(totalFare, commissionRate);
-        BigDecimal driverAmount = totalFare.subtract(commission);
-        BigDecimal releaseAmount = heldAmount.subtract(totalFare);
-
-        List<Transaction> transactions = new ArrayList<>();
-
-        // 1. Capture fare from rider's pending balance
-        Transaction riderCharge = Transaction.builder()
-                .type(TransactionType.CAPTURE_FARE)
-                .groupId(groupId)
-                .direction(TransactionDirection.OUT)
-                .actorKind(ActorKind.USER)
-                .actorUser(rider.getRiderProfile().getUser())
-                .riderUser(rider)
-                .amount(totalFare)
-                .currency("VND")
-                .bookingId(holdTransaction.getBookingId())
-                .status(TransactionStatus.SUCCESS)
-                .beforeAvail(riderWallet.getShadowBalance())
-                .afterAvail(riderWallet.getShadowBalance())
-                .beforePending(riderWallet.getPendingBalance())
-                .afterPending(riderWallet.getPendingBalance().subtract(totalFare))
-                .note("Fare capture - " + description)
-                .build();
-
-        // 2. Pay driver
-        Transaction driverCredit = Transaction.builder()
-                .type(TransactionType.CAPTURE_FARE)
-                .groupId(groupId)
-                .direction(TransactionDirection.IN)
-                .actorUser(driver.getDriverProfile().getUser())
-                .actorKind(ActorKind.USER)
-                .driverUser(driver)
-                .amount(driverAmount)
-                .currency("VND")
-                .bookingId(holdTransaction.getBookingId())
-                .status(TransactionStatus.SUCCESS)
-                .beforeAvail(driverWallet.getShadowBalance())
-                .afterAvail(driverWallet.getShadowBalance().add(driverAmount))
-                .beforePending(driverWallet.getPendingBalance())
-                .afterPending(driverWallet.getPendingBalance())
-                .note("Driver payment - " + description)
-                .build();
-
-        // 3. Commission to system
-        Transaction commissionTransaction = Transaction.builder()
-                .type(TransactionType.CAPTURE_FARE)
-                .groupId(groupId)
-                .direction(TransactionDirection.IN)
-                .actorKind(ActorKind.SYSTEM)
-                .systemWallet(SystemWallet.COMMISSION)
-                .amount(commission)
-                .currency("VND")
-                .bookingId(holdTransaction.getBookingId())
-                .status(TransactionStatus.SUCCESS)
-                .note("Commission - " + description)
-                .build();
-
-        transactions.add(transactionRepository.save(riderCharge));
-        transactions.add(transactionRepository.save(driverCredit));
-        transactions.add(transactionRepository.save(commissionTransaction));
-
-        // 4. Release remaining hold if any
-        if (releaseAmount.compareTo(BigDecimal.ZERO) > 0) {
-            Transaction releaseTransaction = Transaction.builder()
-                    .type(TransactionType.HOLD_RELEASE)
-                    .groupId(groupId)
-                    .direction(TransactionDirection.INTERNAL)
-                    .actorKind(ActorKind.SYSTEM)
-                    .riderUser(rider)
-                    .amount(releaseAmount)
-                    .currency("VND")
-                    .bookingId(holdTransaction.getBookingId())
-                    .status(TransactionStatus.SUCCESS)
-                    .beforeAvail(riderWallet.getShadowBalance())
-                    .afterAvail(riderWallet.getShadowBalance().add(releaseAmount))
-                    .beforePending(riderWallet.getPendingBalance().subtract(totalFare))
-                    .afterPending(riderWallet.getPendingBalance().subtract(heldAmount))
-                    .note("Hold release - " + description)
-                    .build();
-
-            transactions.add(transactionRepository.save(releaseTransaction));
-
-            // Update rider wallet - release remaining amount
-            riderWallet.setShadowBalance(riderWallet.getShadowBalance().add(releaseAmount));
-        }
-
-        // Update wallet balances
-        riderWallet.setPendingBalance(riderWallet.getPendingBalance().subtract(heldAmount));
-        riderWallet.setTotalSpent(riderWallet.getTotalSpent().add(totalFare));
-
-        driverWallet.setShadowBalance(driverWallet.getShadowBalance().add(driverAmount));
-
-        walletRepository.save(riderWallet);
-        walletRepository.save(driverWallet);
-
-        log.info("Captured fare for booking {} - Total: {}, Driver: {}, Commission: {}",
-                holdTransaction.getBookingId(), totalFare, driverAmount, commission);
-
-        return transactions;
-    }
-
-    // ========== RIDE_CANCEL FLOWS ==========
-
-    @Override
-    @Transactional
-    public List<Transaction> releaseHold(UUID groupId, String description) {
-        if (groupId == null) {
-            throw new ValidationException("Group ID cannot be null");
-        }
-
-        // Find the original hold transaction
-        List<Transaction> holdTransactions = transactionRepository.findByGroupIdAndStatus(groupId, TransactionStatus.SUCCESS);
-        Transaction holdTransaction = holdTransactions.stream()
-                .filter(t -> t.getType() == TransactionType.HOLD_CREATE)
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
-
-        // Check if already released
-        boolean alreadyReleased = holdTransactions.stream()
-                .anyMatch(t -> t.getType() == TransactionType.HOLD_RELEASE);
-        if (alreadyReleased) {
-            throw new ValidationException("Hold has already been released for groupId: " + groupId);
-        }
-
-        BigDecimal heldAmount = holdTransaction.getAmount();
-        Integer riderId = holdTransaction.getRiderUser().getUserId();
-
-        Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
-                .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
-
-        // Create release transaction
-        Transaction releaseTransaction = Transaction.builder()
-                .type(TransactionType.HOLD_RELEASE)
-                .groupId(groupId)
-                .direction(TransactionDirection.INTERNAL)
-                .actorKind(ActorKind.USER)
-                .actorUser(holdTransaction.getActorUser())
-                .riderUser(holdTransaction.getRiderUser())
-                .amount(heldAmount)
-                .currency("VND")
-                .bookingId(holdTransaction.getBookingId())
-                .status(TransactionStatus.SUCCESS)
-                .beforeAvail(riderWallet.getShadowBalance())
-                .afterAvail(riderWallet.getShadowBalance().add(heldAmount))
-                .beforePending(riderWallet.getPendingBalance())
-                .afterPending(riderWallet.getPendingBalance().subtract(heldAmount))
-                .note(description)
-                .build();
-
-        Transaction savedTransaction = transactionRepository.save(releaseTransaction);
-
-        // Update rider wallet balances
-        riderWallet.setShadowBalance(riderWallet.getShadowBalance().add(heldAmount));
-        riderWallet.setPendingBalance(riderWallet.getPendingBalance().subtract(heldAmount));
-        walletRepository.save(riderWallet);
-
-        log.info("Released hold for groupId {} with amount {}", groupId, heldAmount);
-        return Arrays.asList(savedTransaction);
-    }
-
-    // ========== DRIVER_PAYOUT FLOWS ==========
+//    @Override
+//    @Transactional
+//    public List<Transaction> createHold(Integer riderId, BigDecimal amount, Integer bookingId, String description) {
+//        validateHoldInput(riderId, amount, bookingId);
+//
+//        Wallet wallet = walletRepository.findByUser_UserId(riderId)
+//                .orElseThrow(() -> new NotFoundException("Wallet not found for riderId: " + riderId));
+//        User rider = userRepository.findById(riderId)
+//                .orElseThrow(() -> new NotFoundException("Rider not found for riderId: " + riderId));
+//
+//        // Check sufficient balance
+//        if (wallet.getShadowBalance().compareTo(amount) < 0) {
+//            throw new ValidationException("Insufficient balance. Available: " + wallet.getShadowBalance() + ", Required: " + amount);
+//        }
+//
+//        UUID groupId = generateGroupId();
+//
+//        // Create hold transaction (moves from available to pending)
+//        Transaction holdTransaction = Transaction.builder()
+//                .type(TransactionType.HOLD_CREATE)
+//                .groupId(groupId)
+//                .direction(TransactionDirection.INTERNAL)
+//                .actorKind(ActorKind.USER)
+//                .actorUser(rider.getRiderProfile().getUser())
+//                .riderUser(rider)
+//                .amount(amount)
+//                .currency("VND")
+//                .bookingId(bookingId)
+//                .status(TransactionStatus.SUCCESS)
+//                .beforeAvail(wallet.getShadowBalance())
+//                .afterAvail(wallet.getShadowBalance().subtract(amount))
+//                .beforePending(wallet.getPendingBalance())
+//                .afterPending(wallet.getPendingBalance().add(amount))
+//                .note(description)
+//                .build();
+//
+//        Transaction savedTransaction = transactionRepository.save(holdTransaction);
+//
+//        // Update wallet balances
+//        wallet.setShadowBalance(wallet.getShadowBalance().subtract(amount));
+//        wallet.setPendingBalance(wallet.getPendingBalance().add(amount));
+//        walletRepository.save(wallet);
+//
+//        log.info("Created hold for rider {} with amount {} for booking {}", riderId, amount, bookingId);
+//        return Arrays.asList(savedTransaction);
+//    }
+//
+//    @Override
+//    @Transactional
+//    public List<Transaction> captureFare(SettlementResult settlementResult, Integer riderId, Integer driverId, String description) {
+//        validateCaptureInput(riderId, driverId, settlementResult.driverPayout());
+//
+//        // Find the original hold transaction
+//        List<Transaction> holdTransactions = transactionRepository.findByGroupIdAndStatus(groupId, TransactionStatus.SUCCESS);
+//        Transaction holdTransaction = holdTransactions.stream()
+//                .filter(t -> t.getType() == TransactionType.HOLD_CREATE)
+//                .findFirst()
+//                .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
+//
+//        BigDecimal heldAmount = holdTransaction.getAmount();
+//        if (totalFare.compareTo(heldAmount) > 0) {
+//            throw new ValidationException("Capture amount exceeds held amount. Held: " + heldAmount + ", Capture: " + totalFare);
+//        }
+//
+//        Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
+//                .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
+//        Wallet driverWallet = walletRepository.findByUser_UserId(driverId)
+//                .orElseThrow(() -> new NotFoundException("Driver wallet not found"));
+//
+//        User rider = userRepository.findById(riderId).orElseThrow(() -> new NotFoundException("Rider not found"));
+//        User driver = userRepository.findById(driverId).orElseThrow(() -> new NotFoundException("Driver not found"));
+//
+//        BigDecimal commission = calculateCommission(totalFare, commissionRate);
+//        BigDecimal driverAmount = totalFare.subtract(commission);
+//        BigDecimal releaseAmount = heldAmount.subtract(totalFare);
+//
+//        List<Transaction> transactions = new ArrayList<>();
+//
+//        // 1. Capture fare from rider's pending balance
+//        Transaction riderCharge = Transaction.builder()
+//                .type(TransactionType.CAPTURE_FARE)
+//                .groupId(groupId)
+//                .direction(TransactionDirection.OUT)
+//                .actorKind(ActorKind.USER)
+//                .actorUser(rider.getRiderProfile().getUser())
+//                .riderUser(rider)
+//                .amount(totalFare)
+//                .currency("VND")
+//                .bookingId(holdTransaction.getBookingId())
+//                .status(TransactionStatus.SUCCESS)
+//                .beforeAvail(riderWallet.getShadowBalance())
+//                .afterAvail(riderWallet.getShadowBalance())
+//                .beforePending(riderWallet.getPendingBalance())
+//                .afterPending(riderWallet.getPendingBalance().subtract(totalFare))
+//                .note("Fare capture - " + description)
+//                .build();
+//
+//        // 2. Pay driver
+//        Transaction driverCredit = Transaction.builder()
+//                .type(TransactionType.CAPTURE_FARE)
+//                .groupId(groupId)
+//                .direction(TransactionDirection.IN)
+//                .actorUser(driver.getDriverProfile().getUser())
+//                .actorKind(ActorKind.USER)
+//                .driverUser(driver)
+//                .amount(driverAmount)
+//                .currency("VND")
+//                .bookingId(holdTransaction.getBookingId())
+//                .status(TransactionStatus.SUCCESS)
+//                .beforeAvail(driverWallet.getShadowBalance())
+//                .afterAvail(driverWallet.getShadowBalance().add(driverAmount))
+//                .beforePending(driverWallet.getPendingBalance())
+//                .afterPending(driverWallet.getPendingBalance())
+//                .note("Driver payment - " + description)
+//                .build();
+//
+//        // 3. Commission to system
+//        Transaction commissionTransaction = Transaction.builder()
+//                .type(TransactionType.CAPTURE_FARE)
+//                .groupId(groupId)
+//                .direction(TransactionDirection.IN)
+//                .actorKind(ActorKind.SYSTEM)
+//                .systemWallet(SystemWallet.COMMISSION)
+//                .amount(commission)
+//                .currency("VND")
+//                .bookingId(holdTransaction.getBookingId())
+//                .status(TransactionStatus.SUCCESS)
+//                .note("Commission - " + description)
+//                .build();
+//
+//        transactions.add(transactionRepository.save(riderCharge));
+//        transactions.add(transactionRepository.save(driverCredit));
+//        transactions.add(transactionRepository.save(commissionTransaction));
+//
+//        // 4. Release remaining hold if any
+//        if (releaseAmount.compareTo(BigDecimal.ZERO) > 0) {
+//            Transaction releaseTransaction = Transaction.builder()
+//                    .type(TransactionType.HOLD_RELEASE)
+//                    .groupId(groupId)
+//                    .direction(TransactionDirection.INTERNAL)
+//                    .actorKind(ActorKind.SYSTEM)
+//                    .riderUser(rider)
+//                    .amount(releaseAmount)
+//                    .currency("VND")
+//                    .bookingId(holdTransaction.getBookingId())
+//                    .status(TransactionStatus.SUCCESS)
+//                    .beforeAvail(riderWallet.getShadowBalance())
+//                    .afterAvail(riderWallet.getShadowBalance().add(releaseAmount))
+//                    .beforePending(riderWallet.getPendingBalance().subtract(totalFare))
+//                    .afterPending(riderWallet.getPendingBalance().subtract(heldAmount))
+//                    .note("Hold release - " + description)
+//                    .build();
+//
+//            transactions.add(transactionRepository.save(releaseTransaction));
+//
+//            // Update rider wallet - release remaining amount
+//            riderWallet.setShadowBalance(riderWallet.getShadowBalance().add(releaseAmount));
+//        }
+//
+//        // Update wallet balances
+//        riderWallet.setPendingBalance(riderWallet.getPendingBalance().subtract(heldAmount));
+//        riderWallet.setTotalSpent(riderWallet.getTotalSpent().add(totalFare));
+//
+//        driverWallet.setShadowBalance(driverWallet.getShadowBalance().add(driverAmount));
+//
+//        walletRepository.save(riderWallet);
+//        walletRepository.save(driverWallet);
+//
+//        log.info("Captured fare for booking {} - Total: {}, Driver: {}, Commission: {}",
+//                holdTransaction.getBookingId(), totalFare, driverAmount, commission);
+//
+//        return transactions;
+//    }
+//
+//    @Override
+//    @Transactional
+//    public List<Transaction> releaseHold(UUID groupId, String description) {
+//        if (groupId == null) {
+//            throw new ValidationException("Group ID cannot be null");
+//        }
+//
+//        // Find the original hold transaction
+//        List<Transaction> holdTransactions = transactionRepository.findByGroupIdAndStatus(groupId, TransactionStatus.SUCCESS);
+//        Transaction holdTransaction = holdTransactions.stream()
+//                .filter(t -> t.getType() == TransactionType.HOLD_CREATE)
+//                .findFirst()
+//                .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
+//
+//        // Check if already released
+//        boolean alreadyReleased = holdTransactions.stream()
+//                .anyMatch(t -> t.getType() == TransactionType.HOLD_RELEASE);
+//        if (alreadyReleased) {
+//            throw new ValidationException("Hold has already been released for groupId: " + groupId);
+//        }
+//
+//        BigDecimal heldAmount = holdTransaction.getAmount();
+//        Integer riderId = holdTransaction.getRiderUser().getUserId();
+//
+//        Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
+//                .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
+//
+//        // Create release transaction
+//        Transaction releaseTransaction = Transaction.builder()
+//                .type(TransactionType.HOLD_RELEASE)
+//                .groupId(groupId)
+//                .direction(TransactionDirection.INTERNAL)
+//                .actorKind(ActorKind.USER)
+//                .actorUser(holdTransaction.getActorUser())
+//                .riderUser(holdTransaction.getRiderUser())
+//                .amount(heldAmount)
+//                .currency("VND")
+//                .bookingId(holdTransaction.getBookingId())
+//                .status(TransactionStatus.SUCCESS)
+//                .beforeAvail(riderWallet.getShadowBalance())
+//                .afterAvail(riderWallet.getShadowBalance().add(heldAmount))
+//                .beforePending(riderWallet.getPendingBalance())
+//                .afterPending(riderWallet.getPendingBalance().subtract(heldAmount))
+//                .note(description)
+//                .build();
+//
+//        Transaction savedTransaction = transactionRepository.save(releaseTransaction);
+//
+//        // Update rider wallet balances
+//        riderWallet.setShadowBalance(riderWallet.getShadowBalance().add(heldAmount));
+//        riderWallet.setPendingBalance(riderWallet.getPendingBalance().subtract(heldAmount));
+//        walletRepository.save(riderWallet);
+//
+//        log.info("Released hold for groupId {} with amount {}", groupId, heldAmount);
+//        return Arrays.asList(savedTransaction);
+//    }
 
     @Override
     @Transactional
@@ -558,8 +618,6 @@ public class TransactionServiceImpl implements TransactionService {
         log.info("Payout failed for pspRef: {} with reason: {}", pspRef, reason);
     }
 
-    // ========== RIDE_REFUND FLOWS ==========
-
     @Override
     @Transactional
     public List<Transaction> refundRide(UUID originalGroupId, Integer riderId, Integer driverId,
@@ -629,51 +687,6 @@ public class TransactionServiceImpl implements TransactionService {
         log.info("Processed refund for original groupId {} - Amount: {}", originalGroupId, refundAmount);
         return transactions;
     }
-
-    // ========== PROMO_CREDIT FLOWS ==========
-
-//    @Override
-//    @Transactional
-//    public Transaction creditPromo(Integer userId, BigDecimal amount, String promoCode, String description) {
-//        validatePromoInput(userId, amount, promoCode);
-//
-//        Wallet wallet = walletRepository.findByUser_UserId(userId)
-//                .orElseThrow(() -> new NotFoundException("Wallet not found"));
-//        User user = userRepository.findById(userId)
-//                .orElseThrow(() -> new NotFoundException("User not found"));
-//
-//        UUID groupId = generateGroupId();
-//
-//        // Create promo credit transaction
-//        Transaction promoTransaction = Transaction.builder()
-//                .type(TransactionType.PROMO_CREDIT)
-//                .groupId(groupId)
-//                .direction(TransactionDirection.IN)
-//                .actorKind(ActorKind.SYSTEM)
-//                .systemWallet(SystemWallet.PROMO)
-//                .actorUser(user)
-//                .amount(amount)
-//                .currency("VND")
-//                .status(TransactionStatus.SUCCESS)
-//                .beforeAvail(wallet.getShadowBalance())
-//                .afterAvail(wallet.getShadowBalance().add(amount))
-//                .beforePending(wallet.getPendingBalance())
-//                .afterPending(wallet.getPendingBalance())
-//                .note("Promo credit: " + promoCode + " - " + description)
-//                .build();
-//
-//        Transaction savedTransaction = transactionRepository.save(promoTransaction);
-//
-//        // Update wallet balance
-//        wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
-//        walletRepository.save(wallet);
-//
-//        log.info("Credited promo {} to user {} with amount {}", promoCode, userId, amount);
-//        return savedTransaction;
-//    }
-
-
-    // ========== UTILITY METHODS ==========
 
     @Override
     public List<Transaction> getTransactionsByGroupId(UUID groupId) {
@@ -763,10 +776,7 @@ public class TransactionServiceImpl implements TransactionService {
         }
     }
 
-    private void validateCaptureInput(UUID groupId, Integer riderId, Integer driverId, BigDecimal totalFare, BigDecimal commissionRate) {
-        if (groupId == null) {
-            throw new ValidationException("Group ID cannot be null");
-        }
+    private void validateCaptureInput(Integer riderId, Integer driverId, BigDecimal totalFare, BigDecimal commissionRate) {
         if (riderId == null) {
             throw new ValidationException("Rider ID cannot be null");
         }
@@ -844,6 +854,146 @@ public class TransactionServiceImpl implements TransactionService {
             throw new ValidationException("Adjustment reason cannot be null or empty");
         }
     }
+
+    private void validateCreateTransactionRequest(CreateTransactionRequest request) {
+        TransactionType type = request.type();
+        TransactionDirection direction = request.direction();
+        ActorKind actorKind = request.actorKind();
+        Integer actorUserId = request.actorUserId();
+        SystemWallet systemWallet = request.systemWallet();
+        BigDecimal amount = request.amount();
+        String currency = request.currency();
+        Integer bookingId = request.bookingId();
+        Integer riderUserId = request.riderUserId();
+        Integer driverUserId = request.driverUserId();
+        TransactionStatus status = request.status();
+
+        if (type == null) {
+            throw new ValidationException("Transaction type is required");
+        }
+        if (direction == null) {
+            throw new ValidationException("Transaction direction is required");
+        }
+        if (actorKind == null) {
+            throw new ValidationException("Actor kind is required");
+        }
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Amount must be greater than zero");
+        }
+
+        if (actorKind == ActorKind.USER && actorUserId == null) {
+            throw new ValidationException("Actor user ID is required for USER transactions");
+        }
+        if (actorKind != ActorKind.USER && actorUserId != null) {
+            throw new ValidationException("Actor user ID must be null for non-USER transactions");
+        }
+
+        if (actorKind == ActorKind.SYSTEM && systemWallet == null) {
+            throw new ValidationException("System wallet is required for SYSTEM transactions");
+        }
+        if (actorKind != ActorKind.SYSTEM && systemWallet != null) {
+            throw new ValidationException("System wallet must be null for non-SYSTEM transactions");
+        }
+
+        if ((type == TransactionType.HOLD_CREATE || type == TransactionType.HOLD_RELEASE ||
+            type == TransactionType.CAPTURE_FARE) && bookingId == null) {
+            throw new ValidationException("Booking ID is required for ride-related transactions: " + type);
+        }
+
+        validateTypeCombo(type, direction, actorKind, systemWallet);
+
+        if (type == TransactionType.CAPTURE_FARE) {
+            validateCaptureFareAlignment(direction, actorKind, systemWallet, actorUserId, riderUserId, driverUserId);
+        }
+
+        validateStatusByType(type, status);
+    }
+
+    private void validateTypeCombo(TransactionType type, TransactionDirection direction,
+                                   ActorKind actorKind, SystemWallet systemWallet) {
+        switch (type) {
+            case TOPUP -> {
+                boolean validTopup = (actorKind == ActorKind.SYSTEM && systemWallet == SystemWallet.MASTER && direction == TransactionDirection.IN) ||
+                    (actorKind == ActorKind.USER && direction == TransactionDirection.IN);
+                if (!validTopup) {
+                    throw new ValidationException("Invalid TOPUP combination: must be (SYSTEM/MASTER/IN) or (USER/*/IN)");
+                }
+            }
+            case HOLD_CREATE, HOLD_RELEASE -> {
+                if (!(actorKind == ActorKind.USER && direction == TransactionDirection.INTERNAL)) {
+                    throw new ValidationException("Invalid " + type + " combination: must be (USER/*/INTERNAL)");
+                }
+            }
+            case CAPTURE_FARE -> {
+                boolean validCapture = (actorKind == ActorKind.USER && (direction == TransactionDirection.IN || direction == TransactionDirection.OUT)) ||
+                    (actorKind == ActorKind.SYSTEM && systemWallet == SystemWallet.COMMISSION && direction == TransactionDirection.IN);
+                if (!validCapture) {
+                    throw new ValidationException("Invalid CAPTURE_FARE combination: must be (USER/*/IN|OUT) or (SYSTEM/COMMISSION/IN)");
+                }
+            }
+            case PAYOUT -> {
+                boolean validPayout = (actorKind == ActorKind.USER && direction == TransactionDirection.OUT) ||
+                    (actorKind == ActorKind.SYSTEM && systemWallet == SystemWallet.MASTER && direction == TransactionDirection.OUT);
+                if (!validPayout) {
+                    throw new ValidationException("Invalid PAYOUT combination: must be (USER/*/OUT) or (SYSTEM/MASTER/OUT)");
+                }
+            }
+//            case PROMO_CREDIT -> {
+//                boolean validPromo = (actorKind == ActorKind.SYSTEM && systemWallet == SystemWallet.PROMO && direction == TransactionDirection.OUT) ||
+//                    (actorKind == ActorKind.USER && direction == TransactionDirection.IN);
+//                if (!validPromo) {
+//                    throw new ValidationException("Invalid PROMO_CREDIT combination: must be (SYSTEM/PROMO/OUT) or (USER/*/IN)");
+//                }
+//            }
+            case ADJUSTMENT -> {
+                // ADJUSTMENT allows any combination - most flexible
+            }
+            default -> throw new ValidationException("Unsupported transaction type: " + type);
+        }
+    }
+
+    private void validateCaptureFareAlignment(TransactionDirection direction, ActorKind actorKind,
+                                              SystemWallet systemWallet, Integer actorUserId,
+                                              Integer riderUserId, Integer driverUserId) {
+        if (actorKind == ActorKind.USER && direction == TransactionDirection.OUT) {
+            if (riderUserId == null || !riderUserId.equals(actorUserId)) {
+                throw new ValidationException("For CAPTURE_FARE OUT transactions, actor user must be the rider");
+            }
+        } else if (actorKind == ActorKind.USER && direction == TransactionDirection.IN) {
+            if (driverUserId == null || !driverUserId.equals(actorUserId)) {
+                throw new ValidationException("For CAPTURE_FARE IN transactions, actor user must be the driver");
+            }
+        } else if (actorKind == ActorKind.SYSTEM && direction == TransactionDirection.IN) {
+            if (systemWallet != SystemWallet.COMMISSION) {
+                throw new ValidationException("For CAPTURE_FARE SYSTEM IN transactions, must use COMMISSION wallet");
+            }
+        }
+    }
+
+    private void validateStatusByType(TransactionType type, TransactionStatus status) {
+        if (status == null) {
+            return;
+        }
+
+        switch (type) {
+            case TOPUP -> {
+                if (status != TransactionStatus.PENDING && status != TransactionStatus.SUCCESS &&
+                    status != TransactionStatus.FAILED && status != TransactionStatus.REVERSED) {
+                    throw new ValidationException("TOPUP transactions can only have status: PENDING, SUCCESS, FAILED, or REVERSED");
+                }
+            }
+            case PAYOUT -> {
+                //implement later
+            }
+            default -> {
+                if (status != TransactionStatus.SUCCESS) {
+                    throw new ValidationException(type + " transactions can only have SUCCESS status");
+                }
+            }
+        }
+    }
+
 
     private void sendTopupSuccessEmail(Integer userId, BigDecimal amount, Integer txnId) {
         try {

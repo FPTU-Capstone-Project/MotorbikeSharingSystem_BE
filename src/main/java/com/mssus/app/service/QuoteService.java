@@ -1,8 +1,7 @@
 package com.mssus.app.service;
 
 import com.mssus.app.dto.request.QuoteRequest;
-import com.mssus.app.pricing.model.FareBreakdown;
-import com.mssus.app.pricing.model.Quote;
+import com.mssus.app.service.pricing.model.Quote;
 
 import java.util.UUID;
 

@@ -1,4 +1,4 @@
-package com.mssus.app.pricing.model;
+package com.mssus.app.service.pricing.model;
 
 public record PromoResult(
     boolean applied,

@@ -18,6 +18,22 @@ public interface WalletRepository extends JpaRepository<Wallet, Integer> {
     @Query("SELECT COUNT(w) > 0 FROM Wallet w WHERE w.user.userId = :userId")
     boolean existsByUserId(@Param("userId") Integer userId);
 
+    @Modifying
+    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance + :amount WHERE w.user.userId = :userId")
+    int increasePendingBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+
+    @Modifying
+    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance - :amount WHERE w.user.userId = :userId AND w.pendingBalance >= :amount")
+    int decreasePendingBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+
+    @Modifying
+    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance + :amount WHERE w.user.userId = :userId")
+    int increaseShadowBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+
+    @Modifying
+    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance - :amount WHERE w.user.userId = :userId AND w.shadowBalance >= :amount")
+    int decreaseShadowBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+
     Optional<Wallet> findByUser_UserId(Integer userId);
 
     @Modifying

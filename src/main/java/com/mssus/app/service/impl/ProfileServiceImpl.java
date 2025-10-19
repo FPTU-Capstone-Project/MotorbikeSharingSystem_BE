@@ -155,6 +155,28 @@ public class ProfileServiceImpl implements ProfileService {
 
         authService.validateUserBeforeGrantingToken(user);
 
+        var currentProfile = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+                .filter(Map.class::isInstance)
+                .map(obj -> (Map<String, Object>) obj)
+                .map(claims -> (String) claims.get("active_profile"))
+                .orElse(null);
+
+        if (currentProfile != null && !targetProfile.equalsIgnoreCase(currentProfile)) {
+            if ("rider".equals(currentProfile)) {
+                user.getRiderProfile().setStatus(RiderProfileStatus.INACTIVE);
+            } else if ("driver".equals(currentProfile)) {
+                user.getDriverProfile().setStatus(DriverProfileStatus.INACTIVE);
+            }
+        }
+
+        if ("rider".equalsIgnoreCase(targetProfile)) {
+            user.getRiderProfile().setStatus(RiderProfileStatus.ACTIVE);
+        } else if ("driver".equalsIgnoreCase(targetProfile)) {
+            user.getDriverProfile().setStatus(DriverProfileStatus.ACTIVE);
+        }
+
+        userRepository.save(user);
+
         Map<String, Object> claims = authService.buildTokenClaims(user, request.getTargetProfile());
 
         authService.setUserContext(user.getUserId(), claims);
@@ -404,4 +426,29 @@ public class ProfileServiceImpl implements ProfileService {
                         .build())
                 .build();
     }
+
+    @Override
+    @Transactional
+    public void setDriverStatus(String username, boolean isActive) {
+        User user = userRepository.findByEmailWithProfiles(username)
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not found: " + username));
+
+        if (user.getDriverProfile() == null) {
+            throw ValidationException.of("User does not have a driver profile");
+        }
+
+        DriverProfile driverProfile = user.getDriverProfile();
+
+        DriverProfileStatus newStatus = isActive ? DriverProfileStatus.ACTIVE : DriverProfileStatus.INACTIVE;
+        DriverProfileStatus currentStatus = driverProfile.getStatus();
+
+        if (currentStatus != newStatus) {
+            driverProfile.setStatus(newStatus);
+            driverProfileRepository.save(driverProfile);
+
+            log.info("Driver status updated for user {} from {} to {}",
+                user.getUserId(), currentStatus, newStatus);
+        }
+    }
+
 }

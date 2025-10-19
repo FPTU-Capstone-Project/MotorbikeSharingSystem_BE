@@ -230,4 +230,40 @@ public class ProfileController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Update Driver Status",
+        description = "Enable or disable driver's active status for ride sharing",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Driver status updated successfully",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = MessageResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid request or user does not have driver profile",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "403", description = "Forbidden - Driver access required",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PutMapping("/driver-status")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<MessageResponse> updateDriverStatus(
+        Authentication authentication,
+        @Parameter(description = "Driver active status", required = true, example = "true")
+        @RequestParam boolean isActive) {
+
+        String username = authentication.getName();
+        profileService.setDriverStatus(username, isActive);
+
+        String message = String.format("Driver status %s successfully",
+            isActive ? "activated" : "deactivated");
+
+        return ResponseEntity.ok(MessageResponse.builder()
+            .message(message)
+            .build());
+    }
+
+
 }

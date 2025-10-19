@@ -5,15 +5,17 @@
   <h3>Driver</h3>
   <label>requestId <input id="requestId" value="" /></label>
   <label>rideId <input id="rideId" value="" /></label>
+  <label>vehicleId <input id="vehicleId" value="1" /></label>
   <button id="connect">Connect WS</button>
   <button id="accept">Accept Current Offer</button>
+  <button id="acceptBroadcast">Accept Broadcast Offer</button>
   <pre id="log"></pre>
   <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
   <script>
     const BASE = "http://localhost:8080";
     const JWT =
-      "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJkcml2ZXIxQGV4YW1wbGUuY29tIiwicHJvZmlsZV9zdGF0dXMiOnsiRFJJVkVSIjoiQUNUSVZFIiwiUklERVIiOiJBQ1RJVkUifSwiaXNzIjoibXNzdXMuYXBpIiwicHJvZmlsZXMiOlsiUklERVIiLCJEUklWRVIiXSwiYWN0aXZlX3Byb2ZpbGUiOiJkcml2ZXIiLCJlbWFpbCI6ImRyaXZlcjFAZXhhbXBsZS5jb20iLCJpYXQiOjE3NjAwMTI5ODcsImV4cCI6Mjc2MDAxMjk4N30.QbLxTxqX8b0WhU-o5uYIrgqUa2sR2QObohsk3uX9kLw";
+      "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJkcml2ZXIxQGV4YW1wbGUuY29tIiwicHJvZmlsZV9zdGF0dXMiOnsiRFJJVkVSIjoiQUNUSVZFIiwiUklERVIiOiJBQ1RJVkUifSwiaXNzIjoibXNzdXMuYXBpIiwicHJvZmlsZXMiOlsiUklERVIiLCJEUklWRVIiXSwiYWN0aXZlX3Byb2ZpbGUiOiJkcml2ZXIiLCJlbWFpbCI6ImRyaXZlcjFAZXhhbXBsZS5jb20iLCJpYXQiOjE3NjA3OTQ5NjUsImV4cCI6MTc2MDc5ODU2NX0.8ORvnbRyqmD4w_BSwKIunTr76Zzky7ygc6GT4NAzpLE";
     const log = (m) => (document.getElementById("log").textContent += m + "\n");
 
     let stomp, lastOffer;
@@ -21,7 +23,7 @@
     document.getElementById("connect").onclick = () => {
       const sock = new SockJS(
         BASE +
-          "/ws?token=eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJkcml2ZXIxQGV4YW1wbGUuY29tIiwicHJvZmlsZV9zdGF0dXMiOnsiRFJJVkVSIjoiQUNUSVZFIiwiUklERVIiOiJBQ1RJVkUifSwiaXNzIjoibXNzdXMuYXBpIiwicHJvZmlsZXMiOlsiUklERVIiLCJEUklWRVIiXSwiYWN0aXZlX3Byb2ZpbGUiOiJkcml2ZXIiLCJlbWFpbCI6ImRyaXZlcjFAZXhhbXBsZS5jb20iLCJpYXQiOjE3NjAwMTI5ODcsImV4cCI6Mjc2MDAxMjk4N30.QbLxTxqX8b0WhU-o5uYIrgqUa2sR2QObohsk3uX9kLw"
+          "/ws?token=" + encodeURIComponent(JWT)
       );
       stomp = Stomp.over(sock);
       stomp.connect(
@@ -32,7 +34,10 @@
             log("Driver offer: " + msg.body);
             lastOffer = JSON.parse(msg.body);
             document.getElementById("requestId").value = lastOffer.requestId;
-            document.getElementById("rideId").value = lastOffer.rideId;
+            document.getElementById("rideId").value = lastOffer.rideId ?? "";
+            if (lastOffer.broadcast) {
+              log("Broadcast offer detected. Use 'Accept Broadcast Offer' and supply vehicleId.");
+            }
           });
           stomp.subscribe("/user/queue/notifications", (msg) => {
             log("General notification: " + msg.body);
@@ -59,6 +64,33 @@
       });
       const data = await res.json();
       log("Accept result: " + res.status + " " + JSON.stringify(data));
+    };
+
+    document.getElementById("acceptBroadcast").onclick = async () => {
+      if (!lastOffer || !lastOffer.broadcast) {
+        return log("No broadcast offer to accept.");
+      }
+      const reqId = document.getElementById("requestId").value;
+      const vehicleId = parseInt(document.getElementById("vehicleId").value, 10);
+      if (!vehicleId) {
+        return log("Vehicle ID is required to accept broadcast offer.");
+      }
+      const body = {
+        vehicleId,
+      };
+      const res = await fetch(
+        `${BASE}/api/v1/ride-requests/${reqId}/broadcast/accept`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + JWT,
+          },
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await res.json();
+      log("Broadcast accept result: " + res.status + " " + JSON.stringify(data));
     };
   </script>
 </body>

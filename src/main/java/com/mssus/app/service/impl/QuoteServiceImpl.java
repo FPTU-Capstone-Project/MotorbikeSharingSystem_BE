@@ -3,14 +3,13 @@ package com.mssus.app.service.impl;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.QuoteRequest;
 import com.mssus.app.entity.Location;
-import com.mssus.app.pricing.PricingService;
-import com.mssus.app.pricing.QuoteCache;
-import com.mssus.app.pricing.model.PriceInput;
-import com.mssus.app.pricing.model.Quote;
+import com.mssus.app.service.pricing.PricingService;
+import com.mssus.app.service.pricing.QuoteCache;
+import com.mssus.app.service.pricing.model.PriceInput;
+import com.mssus.app.service.pricing.model.Quote;
 import com.mssus.app.repository.LocationRepository;
 import com.mssus.app.repository.PricingConfigRepository;
 import com.mssus.app.service.QuoteService;
-import com.mssus.app.service.RideMatchingService;
 import com.mssus.app.service.RoutingService;
 import com.mssus.app.util.PolylineDistance;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -101,10 +99,6 @@ public class QuoteServiceImpl implements QuoteService {
             dropoffLoc.getLat(), dropoffLoc.getLng()
         );
 
-        var pricingConfigId = cfgRepo.findActive(Instant.now())
-            .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"))
-            .getPricingConfigId();
-
         var fareBreakdown = pricingService.quote(new PriceInput(route.distance(), null, userId));
         var quote = new Quote(
             UUID.randomUUID(),
@@ -118,7 +112,6 @@ public class QuoteServiceImpl implements QuoteService {
             route.distance(),
             route.time(),
             route.polyline(),
-            pricingConfigId,
             fareBreakdown,
             Instant.now(),
             Instant.now().plusSeconds(300) // Quote valid for 5 minutes

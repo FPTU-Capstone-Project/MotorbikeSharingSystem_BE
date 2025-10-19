@@ -37,6 +37,9 @@ public class SharedRideRequest {
     @JoinColumn(name = "rider_id", nullable = false)
     private RiderProfile rider;
 
+    @Column(name = "distance_meters", nullable = false)
+    private Integer distanceMeters;
+
     @Column(name = "pickup_location_id")
     private Integer pickupLocationId;
 

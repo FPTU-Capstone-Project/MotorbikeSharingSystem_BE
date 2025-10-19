@@ -4,10 +4,12 @@ import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
 import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
+import com.mssus.app.dto.request.ride.StartRideReqRequest;
 import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
 import com.mssus.app.dto.response.ride.RideRequestCompletionResponse;
+import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
 import com.mssus.app.dto.response.ride.TrackingResponse;
 import com.mssus.app.dto.ride.LocationPoint;
@@ -133,6 +135,29 @@ public class SharedRideController {
             Authentication authentication) {
         log.info("Driver {} starting ride {}", authentication.getName(), request.rideId());
         SharedRideResponse response = sharedRideService.startRide(request, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/start-ride-request")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(
+        summary = "Start a specific ride request (Driver)",
+        description = "Marks a CONFIRMED ride request as ONGOING once the rider is picked up."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Ride request started successfully",
+            content = @Content(schema = @Schema(implementation = SharedRideRequestResponse.class))),
+        @ApiResponse(responseCode = "403", description = "Not the ride owner",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Ride or ride request not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "409", description = "Invalid ride/request state",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<SharedRideRequestResponse> startRideRequest(
+        @Valid @RequestBody StartRideReqRequest request,
+        Authentication authentication) {
+        SharedRideRequestResponse response = sharedRideService.startRideRequestOfRide(request, authentication);
         return ResponseEntity.ok(response);
     }
 

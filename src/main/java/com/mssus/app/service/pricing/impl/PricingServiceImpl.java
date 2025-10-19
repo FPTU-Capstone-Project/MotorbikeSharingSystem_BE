@@ -1,15 +1,15 @@
-package com.mssus.app.pricing.impl;
+package com.mssus.app.service.pricing.impl;
 
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.mapper.PricingConfigMapper;
-import com.mssus.app.pricing.PricingService;
-import com.mssus.app.pricing.model.FareBreakdown;
-import com.mssus.app.pricing.model.MoneyVnd;
-import com.mssus.app.pricing.model.PriceInput;
-import com.mssus.app.pricing.model.SettlementResult;
-import com.mssus.app.pricing.policy.CommissionPolicy;
-import com.mssus.app.pricing.policy.FarePolicy;
-import com.mssus.app.pricing.policy.PromotionPolicy;
+import com.mssus.app.service.pricing.PricingService;
+import com.mssus.app.service.pricing.model.FareBreakdown;
+import com.mssus.app.service.pricing.model.MoneyVnd;
+import com.mssus.app.service.pricing.model.PriceInput;
+import com.mssus.app.service.pricing.model.SettlementResult;
+import com.mssus.app.service.pricing.policy.CommissionPolicy;
+import com.mssus.app.service.pricing.policy.FarePolicy;
+import com.mssus.app.service.pricing.policy.PromotionPolicy;
 import com.mssus.app.repository.PricingConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,7 +38,7 @@ public class PricingServiceImpl implements PricingService {
 
     @Override
     public SettlementResult settle(FareBreakdown agreed) {
-        return commissionPolicy.settle(agreed, agreed.commissionRate());
+        return commissionPolicy.settle(agreed);
     }
 
     @Override

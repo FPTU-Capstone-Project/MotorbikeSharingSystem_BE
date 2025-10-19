@@ -1,7 +1,8 @@
 package com.mssus.app.mapper;
 
 import com.mssus.app.entity.PricingConfig;
-import com.mssus.app.pricing.config.PricingConfigDomain;
+import com.mssus.app.service.pricing.config.PricingConfigDomain;
+import com.mssus.app.service.pricing.model.MoneyVnd;
 import org.mapstruct.InheritInverseConfiguration;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -16,8 +17,8 @@ public interface PricingConfigMapper {
 
     @Mapping(target = "pricingConfigId", source = "pricingConfigId")
     @Mapping(target = "version", source = "version")
-    @Mapping(target = "base2KmVnd", expression = "java(new MoneyVnd(entity.getBase2KmVnd().longValue()))")
-    @Mapping(target = "after2KmPerKmVnd", expression = "java(new MoneyVnd(entity.getAfter2KmPerKmVnd().longValue()))")
+    @Mapping(target = "base2KmVnd", expression = "java(MoneyVnd.VND(entity.getBase2KmVnd()))")
+    @Mapping(target = "after2KmPerKmVnd", expression = "java(MoneyVnd.VND(entity.getAfter2KmPerKmVnd()))")
     @Mapping(target = "systemCommissionRate", source = "systemCommissionRate")
     @Mapping(target = "validFrom", source = "validFrom")
     @Mapping(target = "validUntil", source = "validUntil")

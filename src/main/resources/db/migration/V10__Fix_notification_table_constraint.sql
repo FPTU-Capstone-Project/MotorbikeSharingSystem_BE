@@ -1,0 +1,30 @@
+ALTER TABLE notifications
+    DROP CONSTRAINT IF EXISTS chk_notification_type;
+ALTER TABLE notifications
+    DROP CONSTRAINT IF EXISTS chk_priority;
+
+ALTER TABLE notifications
+    ADD CONSTRAINT chk_notification_type
+        CHECK (type IN
+               ('RIDE_REQUEST', 'RIDE_CONFIRMED', 'RIDE_STARTED', 'RIDE_COMPLETED', 'PAYMENT', 'PROMOTION', 'SYSTEM',
+                'EMERGENCY', 'RIDE_TRACKING_START', 'WALLET_HOLD', 'WALLET_CAPTURE', 'WALLET_RELEASE', 'WALLET_REFUND',
+                'BOOKING_REQUEST_CREATED', 'JOIN_RIDE_REQUEST_CREATED', 'RIDE_AUTO_STARTED', 'RIDE_AUTO_COMPLETED',
+                'REQUEST_AUTO_STARTED', 'REQUEST_AUTO_COMPLETED', 'REQUEST_STARTED', 'REQUEST_COMPLETED', ' WALLET_PAYOUT'));
+
+ALTER TABLE notifications
+    ADD CONSTRAINT chk_priority
+        CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'URGENT'));
+
+
+ALTER TABLE ride_tracks
+    ADD COLUMN IF NOT EXISTS is_tracking BOOLEAN DEFAULT TRUE;
+
+ALTER TABLE ride_tracks
+    ADD COLUMN IF NOT EXISTS stopped_at TIMESTAMP;
+
+ALTER TABLE rider_profiles
+    DROP CONSTRAINT IF EXISTS chk_rider_status;
+
+ALTER TABLE rider_profiles
+    ADD CONSTRAINT chk_rider_status
+        CHECK (status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED'));

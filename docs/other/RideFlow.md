@@ -434,3 +434,48 @@ Terminal States:
 **Last Updated**: October 4, 2025  
 **Review Cycle**: Quarterly
 
+---
+
+## Appendix A - Ride Lifecycle Method Reference
+
+This appendix documents the four lifecycle methods introduced to keep ride-level state management decoupled from rider-level progression. Use it when reviewing code paths, auditing incidents, or onboarding new contributors.
+
+### `startRide`
+
+- **Who calls it**: Driver (service entry point `SharedRideService.startRide`)
+- **When it is allowed**: The shared ride is in `SCHEDULED`, owned by the authenticated driver, and has at least one `CONFIRMED` request queued for pickup.
+- **What it does**: Locks the ride, logs the driver’s current position, ensures the driver is near the pickup radius, then flips the ride status to `ONGOING` and stamps `startedAt`. It does *not* touch individual ride requests.
+- **Why it matters**: Keeps the ride’s timeline authoritative while leaving per-rider transitions to separate methods, preventing accidental double updates.
+
+### `startRideRequestOfRide`
+
+- **Who calls it**: Driver after collecting a specific rider (`SharedRideService.startRideRequestOfRide`)
+- **When it is allowed**: Ride is already `ONGOING`, the targeted request belongs to the ride, and sits in `CONFIRMED`. The driver must still be within pickup proximity of that rider.
+- **What it does**: Marks the request `ONGOING`, records `actualPickupTime`, and returns a refreshed `SharedRideRequestResponse`.
+- **Why it matters**: Records proof-of-pickup per rider, supports staggered pickups, and keeps rider analytics correct even if the ride has multiple legs.
+
+### `completeRide`
+
+- **Who calls it**: Driver when the entire route is finished (`SharedRideService.completeRide`)
+- **When it is allowed**: Ride is `ONGOING`, all outstanding ride requests have been moved out of `ONGOING`, and settlement can be computed.
+- **What it does**: Calculates route distance/duration, performs wallet captures and commissions, updates ride totals, sets status to `COMPLETED`, and emits completion stats.
+- **Why it matters**: Centralizes financial closure for the ride while relying on per-request completion to guarantee each rider’s fare is already validated.
+
+### `completeRideRequestOfRide`
+
+- **Who calls it**: Driver as each rider is dropped off (`SharedRideService.completeRideRequestOfRide`)
+- **When it is allowed**: Ride is `ONGOING`, request is `ONGOING`, and the driver is within drop-off proximity for that passenger.
+- **What it does**: Marks the request `COMPLETED`, updates actual metrics, and (once implemented) can trigger partial captures or notifications.
+- **Why it matters**: Enforces granular accountability—each rider’s journey, fare capture, and metrics are recorded independently, supporting disputed trips and post-ride analytics.
+
+### Design Outcome
+
+By separating ride-level and request-level methods:
+
+- **State Clarity**: Avoids hidden coupling between ride and rider state machines, making domain rules explicit.
+- **Concurrency Safety**: Each method performs a tailored lock/read/validate cycle, reducing race-condition surface area.
+- **Extensibility**: Future enhancements (e.g., partial refunds, per-rider notifications) can plug into the dedicated methods without risking regressions elsewhere.
+- **Observability**: Logs and metrics can distinguish between “ride started” and “rider picked up,” improving monitoring fidelity.
+
+Keep this appendix updated whenever lifecycle semantics evolve so future maintainers understand the rationale behind split methods.
+

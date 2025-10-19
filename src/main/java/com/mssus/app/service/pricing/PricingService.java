@@ -1,9 +1,9 @@
-package com.mssus.app.pricing;
+package com.mssus.app.service.pricing;
 
-import com.mssus.app.pricing.model.FareBreakdown;
-import com.mssus.app.pricing.model.MoneyVnd;
-import com.mssus.app.pricing.model.PriceInput;
-import com.mssus.app.pricing.model.SettlementResult;
+import com.mssus.app.service.pricing.model.FareBreakdown;
+import com.mssus.app.service.pricing.model.MoneyVnd;
+import com.mssus.app.service.pricing.model.PriceInput;
+import com.mssus.app.service.pricing.model.SettlementResult;
 
 public interface PricingService {
     FareBreakdown quote(PriceInput input);               // used by /quotes

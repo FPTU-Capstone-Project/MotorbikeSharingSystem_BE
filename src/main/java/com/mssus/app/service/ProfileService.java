@@ -20,7 +20,6 @@ public interface ProfileService {
 
     VerificationResponse submitStudentVerification(String username, List<MultipartFile> documents);
 
-
     VerificationResponse submitDriverLicense(String username, List<MultipartFile> documents);
 
     VerificationResponse submitDriverDocuments(String username, List<MultipartFile> documents);
@@ -28,4 +27,6 @@ public interface ProfileService {
     VerificationResponse submitVehicleRegistration(String username, List<MultipartFile> documents);
 
     PageResponse<UserResponse> getAllUsers(Pageable pageable);
+
+    void setDriverStatus(String username, boolean isActive);
 }

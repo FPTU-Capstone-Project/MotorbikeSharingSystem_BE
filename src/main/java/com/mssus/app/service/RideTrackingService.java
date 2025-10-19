@@ -16,4 +16,6 @@ public interface RideTrackingService {
     Optional<LatLng> getLatestPosition(Integer rideId, int maxStaleMinutes);
 
     void startTracking(Integer rideId);
+
+    void stopTracking(Integer rideId);
 }
