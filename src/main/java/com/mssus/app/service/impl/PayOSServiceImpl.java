@@ -46,7 +46,7 @@ public class PayOSServiceImpl implements PayOSService {
     private PayOS payOS;
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
 
-    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper) {
+    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper, IdempotencyKeyRepository idempotencyKeyRepository) {
         this.transactionService = transactionService;
         this.objectMapper = objectMapper;
         this.idempotencyKeyRepository = idempotencyKeyRepository;

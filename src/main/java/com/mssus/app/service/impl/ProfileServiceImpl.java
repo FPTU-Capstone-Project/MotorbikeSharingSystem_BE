@@ -47,6 +47,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final UserRepository userRepository;
     private final VerificationRepository verificationRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DriverProfileRepository driverProfileRepository;
     private final UserMapper userMapper;
     private final VerificationMapper verificationMapper;
     private final AuthService authService;

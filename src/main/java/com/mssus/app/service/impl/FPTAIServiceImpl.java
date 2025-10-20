@@ -93,7 +93,7 @@ public class FPTAIServiceImpl implements FPTAIService {
 
         if (json.has("data") && json.get("data") instanceof JSONArray) {
             JSONArray arr = json.getJSONArray("data");
-            if (!arr.isEmpty()) {
+            if (arr.length() > 0) {
                 JSONObject data = arr.getJSONObject(0);
 
                 name = data.optString("name", "");

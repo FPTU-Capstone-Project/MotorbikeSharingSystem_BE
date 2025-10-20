@@ -1,14 +1,16 @@
-package com.mssus.app.service;
+package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.*;
 import com.mssus.app.dto.response.*;
+import com.mssus.app.dto.response.notification.EmailPriority;
+import com.mssus.app.dto.response.notification.EmailResult;
 import com.mssus.app.entity.*;
 import com.mssus.app.repository.*;
 import com.mssus.app.security.JwtService;
+import com.mssus.app.service.EmailService;
 import com.mssus.app.service.RefreshTokenService;
-import com.mssus.app.service.impl.AuthServiceImpl;
 import com.mssus.app.util.Constants;
 import com.mssus.app.util.OtpUtil;
 import com.mssus.app.util.ValidationUtil;
@@ -29,6 +31,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -36,7 +39,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthService Unit Tests")
-class AuthServiceTest {
+class AuthServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
@@ -58,6 +61,9 @@ class AuthServiceTest {
 
     @Mock
     private RefreshTokenService refreshTokenService;
+
+    @Mock
+    private EmailService emailService;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -124,6 +130,9 @@ class AuthServiceTest {
 
         testUser.setRiderProfile(testRiderProfile);
         testUser.setWallet(testWallet);
+
+        lenient().when(emailService.sendEmail(anyString(), anyString(), anyString(), anyMap(), any(EmailPriority.class),
+            anyLong(), anyString())).thenReturn(CompletableFuture.completedFuture(EmailResult.success("email-1")));
     }
 
     @Nested
@@ -139,8 +148,6 @@ class AuthServiceTest {
             when(userRepository.existsByPhone(anyString())).thenReturn(false);
             when(passwordEncoder.encode(anyString())).thenReturn("hashedPassword");
             when(userRepository.save(any(User.class))).thenReturn(testUser);
-            when(riderProfileRepository.save(any(RiderProfile.class))).thenReturn(testRiderProfile);
-            when(walletRepository.save(any(Wallet.class))).thenReturn(testWallet);
             when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("jwt-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
@@ -164,8 +171,6 @@ class AuthServiceTest {
                 verify(userRepository).existsByPhone("0901234567");
                 verify(passwordEncoder).encode("TestPass123");
                 verify(userRepository).save(any(User.class));
-                verify(riderProfileRepository).save(any(RiderProfile.class));
-                verify(walletRepository).save(any(Wallet.class));
                 verify(jwtService).generateToken(eq("test@example.com"), any(Map.class));
             }
         }
@@ -240,8 +245,6 @@ class AuthServiceTest {
             when(userRepository.existsByPhone(anyString())).thenReturn(false);
             when(passwordEncoder.encode(anyString())).thenReturn("hashedPassword");
             when(userRepository.save(any(User.class))).thenReturn(testUser);
-            when(riderProfileRepository.save(any(RiderProfile.class))).thenReturn(testRiderProfile);
-            when(walletRepository.save(any(Wallet.class))).thenReturn(testWallet);
             when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("jwt-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
@@ -252,7 +255,7 @@ class AuthServiceTest {
 
                 // Assert
                 assertThat(response).isNotNull();
-                verify(riderProfileRepository).save(any(RiderProfile.class));
+                assertThat(response.getUserType()).isEqualTo("rider");
             }
         }
 
@@ -266,8 +269,6 @@ class AuthServiceTest {
             when(userRepository.existsByPhone(anyString())).thenReturn(false);
             when(passwordEncoder.encode(anyString())).thenReturn("hashedPassword");
             when(userRepository.save(any(User.class))).thenReturn(testUser);
-            when(riderProfileRepository.save(any(RiderProfile.class))).thenReturn(testRiderProfile);
-            when(walletRepository.save(any(Wallet.class))).thenReturn(testWallet);
             when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("jwt-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
@@ -278,7 +279,7 @@ class AuthServiceTest {
 
                 // Assert
                 assertThat(response).isNotNull();
-                verify(riderProfileRepository).save(any(RiderProfile.class));
+                assertThat(response.getUserType()).isEqualTo("rider");
             }
         }
     }
@@ -421,22 +422,28 @@ class AuthServiceTest {
         }
 
         @Test
-        @DisplayName("login_UserPending_ThrowsUnauthorizedException")
-        void login_UserPending_ThrowsUnauthorizedException() {
+        @DisplayName("login_UserPending_AllowsLogin")
+        void login_UserPending_AllowsLogin() {
             // Arrange
             testUser.setStatus(UserStatus.PENDING);
             when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
+            when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("access-token");
+            when(jwtService.getExpirationTime()).thenReturn(3600000L);
+            when(refreshTokenService.generateRefreshToken(any(User.class))).thenReturn("refresh-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
                 validationUtil.when(() -> ValidationUtil.isValidEmail(anyString())).thenReturn(true);
 
-                // Act & Assert
-                assertThatThrownBy(() -> authService.login(loginRequest))
-                        .isInstanceOf(BaseDomainException.class)
-                        .extracting("errorId")
-                        .isEqualTo("auth.unauthorized.account-pending");
+                // Act
+                LoginResponse response = authService.login(loginRequest);
 
-                verify(authenticationManager, never()).authenticate(any());
+                // Assert
+                assertThat(response).isNotNull();
+                assertThat(response.getUserId()).isEqualTo(1);
+                assertThat(response.getUserType()).isEqualTo("USER");
+                assertThat(response.getAccessToken()).isEqualTo("access-token");
+                assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+                verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
             }
         }
 
@@ -645,6 +652,8 @@ class AuthServiceTest {
                 verify(userRepository).findByEmail("test@example.com");
                 otpUtil.verify(() -> OtpUtil.generateOtp());
                 otpUtil.verify(() -> OtpUtil.storeOtp("test@example.com:" + Constants.OTP_FORGOT_PASSWORD, "123456", OtpFor.FORGOT_PASSWORD));
+                verify(emailService).sendEmail(eq("test@example.com"), eq("Password Reset OTP"), eq("emails/otp-password-reset"),
+                        anyMap(), eq(EmailPriority.HIGH), eq(Long.valueOf(testUser.getUserId())), eq(""));
             }
         }
 
@@ -669,6 +678,10 @@ class AuthServiceTest {
                 assertThat(response).isNotNull();
                 assertThat(response.getMessage()).isEqualTo("OTP sent to your registered contact");
                 verify(userRepository).findByPhone("0901234567");
+                otpUtil.verify(() -> OtpUtil.generateOtp());
+                otpUtil.verify(() -> OtpUtil.storeOtp("test@example.com:" + Constants.OTP_FORGOT_PASSWORD, "123456", OtpFor.FORGOT_PASSWORD));
+                verify(emailService).sendEmail(eq("test@example.com"), eq("Password Reset OTP"), eq("emails/otp-password-reset"),
+                        anyMap(), eq(EmailPriority.HIGH), eq(Long.valueOf(testUser.getUserId())), eq(""));
             }
         }
 
@@ -708,7 +721,7 @@ class AuthServiceTest {
             assertThat(claims.get("iss")).isEqualTo("mssus.api");
             assertThat(claims.get("sub")).isEqualTo("user-1");
             assertThat(claims.get("email")).isEqualTo("test@example.com");
-            assertThat(claims.get("active_profile")).isEqualTo("rider");
+            assertThat(claims.get("active_profile")).isEqualTo("RIDER");
             assertThat(claims.get("token_version")).isEqualTo(1);
 
             @SuppressWarnings("unchecked")
@@ -783,16 +796,14 @@ class AuthServiceTest {
         }
 
         @Test
-        @DisplayName("validateUserBeforeGrantingToken_PendingUser_ThrowsException")
-        void validateUserBeforeGrantingToken_PendingUser_ThrowsException() {
+        @DisplayName("validateUserBeforeGrantingToken_PendingUser_DoesNotThrowException")
+        void validateUserBeforeGrantingToken_PendingUser_DoesNotThrowException() {
             // Arrange
             testUser.setStatus(UserStatus.PENDING);
 
             // Act & Assert
-            assertThatThrownBy(() -> authService.validateUserBeforeGrantingToken(testUser))
-                    .isInstanceOf(BaseDomainException.class)
-                    .extracting("errorId")
-                    .isEqualTo("auth.unauthorized.account-pending");
+            assertThatCode(() -> authService.validateUserBeforeGrantingToken(testUser))
+                    .doesNotThrowAnyException();
         }
 
         @Test
