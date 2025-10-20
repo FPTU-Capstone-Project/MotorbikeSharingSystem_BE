@@ -68,7 +68,6 @@ public class GoongRoutingServiceImpl implements RoutingService {
             GOONG_URL, origin, dest, API_KEY);
 
         // Note: Goong does not support departure_time for traffic-aware routing (static durations only)
-        // If needed, consider fallback to another service or log warning
 
         ResponseEntity<GoongResponse> resp = restTemplate.getForEntity(url, GoongResponse.class);
 

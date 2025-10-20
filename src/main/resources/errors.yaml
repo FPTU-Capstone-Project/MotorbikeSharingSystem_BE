@@ -498,6 +498,16 @@ errors:
     owner: ride-team
     remediation: "Provide your current location"
 
+  - id: ride.validation.vehicle-not-found
+    httpStatus: 404
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Không tìm thấy phương tiện"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Verify the vehicle registration and try again"
+
   - id: ride-request.validation.invalid-state
     httpStatus: 409
     severity: WARN

@@ -69,13 +69,10 @@ public class SharedRideServiceImpl implements SharedRideService {
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
-        PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
-            .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
 
         // Validate vehicle ownership
-        Vehicle vehicle = vehicleRepository.findById(request.vehicleId())
-            .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                "Vehicle not found with ID: " + request.vehicleId()));
+        Vehicle vehicle = vehicleRepository.findByDriver_DriverId(driver.getDriverId())
+            .orElseThrow(() -> BaseDomainException.formatted("ride.validation.vehicle-not-found"));
 
         if (!vehicle.getDriver().getDriverId().equals(driver.getDriverId())) {
             throw BaseDomainException.of("ride.unauthorized.not-owner",
@@ -170,8 +167,31 @@ public class SharedRideServiceImpl implements SharedRideService {
                                                      Pageable pageable, Authentication authentication) {
         log.info("Fetching rides for driver: {}, status: {}", driverId, status);
 
-        // TODO: For production, validate user has permission to view driver's rides
-        // For MVP, allowing any authenticated user
+        Page<SharedRide> ridePage;
+        if (status != null && !status.isBlank()) {
+            SharedRideStatus rideStatus = SharedRideStatus.valueOf(status.toUpperCase());
+            ridePage = rideRepository.findByDriverDriverIdAndStatusOrderByScheduledTimeDesc(
+                driverId, rideStatus, pageable);
+        } else {
+            ridePage = rideRepository.findByDriverDriverIdOrderByScheduledTimeDesc(driverId, pageable);
+        }
+
+        return ridePage.map(ride -> {
+            Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
+            Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+            return buildRideResponse(ride, startLoc, endLoc);
+        });
+    }
+
+    @Override
+    public Page<SharedRideResponse> getRidesByDriver(String status, Pageable pageable, Authentication authentication) {
+        User user = userRepository.findByEmail(authentication.getName())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+
+        DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+
+        Integer driverId = driver.getDriverId();
 
         Page<SharedRide> ridePage;
         if (status != null && !status.isBlank()) {

@@ -176,7 +176,6 @@ class SharedRideServiceImplTest {
 
         createRideRequest = new CreateRideRequest(
                 1,
-                1,
                 2,
                 null,
                 null,
@@ -189,7 +188,7 @@ class SharedRideServiceImplTest {
         when(authentication.getName()).thenReturn("driver@test.com");
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(vehicleRepository.findById(1)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByDriver_DriverId(driver.getDriverId())).thenReturn(Optional.of(vehicle));
         when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
         when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
@@ -208,7 +207,6 @@ class SharedRideServiceImplTest {
     @Test
     void createRide_WithAdHocCoordinates_ReturnsSharedRideResponse() {
         CreateRideRequest adHocRequest = new CreateRideRequest(
-                1,
                 null,
                 null,
                 new LatLng(10.762622, 106.660172),
@@ -219,7 +217,7 @@ class SharedRideServiceImplTest {
         when(authentication.getName()).thenReturn("driver@test.com");
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(vehicleRepository.findById(1)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByDriver_DriverId(driver.getDriverId())).thenReturn(Optional.of(vehicle));
         when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
         when(routingService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(new RouteResponse(10500L, 1800L, "encoded_polyline"));
@@ -306,12 +304,6 @@ class SharedRideServiceImplTest {
         when(authentication.getName()).thenReturn("driver@test.com");
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(vehicleRepository.findById(1)).thenReturn(Optional.of(vehicle));
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
-        when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
-        when(routingService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
-                .thenThrow(new RuntimeException("Route not found"));
 
         assertThrows(BaseDomainException.class,
                 () -> sharedRideService.createRide(createRideRequest, authentication));

@@ -8,12 +8,6 @@ import java.time.LocalDateTime;
 
 @Schema(description = "Request to create a new shared ride")
 public record CreateRideRequest(
-        
-        @NotNull(message = "Vehicle ID is required")
-        @Positive(message = "Vehicle ID must be positive")
-        @Schema(description = "Vehicle ID for this ride", example = "10", required = true)
-        Integer vehicleId,
-
         @Positive(message = "Start location ID must be positive")
         @Schema(description = "Starting location ID", example = "1")
         Integer startLocationId,

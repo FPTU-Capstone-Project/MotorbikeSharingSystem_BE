@@ -114,6 +114,44 @@ public class SharedRideController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping()
+    @PreAuthorize("hasAnyRole('DRIVER')")
+    @Operation(
+        summary = "Get rides for logged-in driver (Driver)",
+        description = "Retrieve all rides for a the driver with optional status filter"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Rides retrieved successfully",
+            content = @Content(schema = @Schema(implementation = PageResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "404", description = "Driver not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<PageResponse<SharedRideResponse>> getDriverRides(
+        @Parameter(description = "Status filter (SCHEDULED, ONGOING, COMPLETED, CANCELLED)")
+        @RequestParam(required = false) String status,
+        @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+        @Parameter(description = "Sort by field") @RequestParam(defaultValue = "scheduledDepartureTime") String sortBy,
+        @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir,
+        Authentication authentication) {
+
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        var pageData = sharedRideService.getRidesByDriver(status, pageable, authentication);
+        PageResponse<SharedRideResponse> response = PageResponse.<SharedRideResponse>builder()
+            .data(pageData.getContent())
+            .pagination(PageResponse.PaginationInfo.builder()
+                .page(pageData.getNumber() + 1)
+                .pageSize(pageData.getSize())
+                .totalPages(pageData.getTotalPages())
+                .totalRecords(pageData.getTotalElements())
+                .build())
+            .build();
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{rideId}/start")
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(

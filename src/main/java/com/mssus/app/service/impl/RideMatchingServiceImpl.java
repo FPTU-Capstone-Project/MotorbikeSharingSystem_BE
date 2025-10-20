@@ -279,17 +279,17 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         double pickupDistance = PolylineDistance.haversineMeters(
             request.pickup().getLat(), request.pickup().getLng(),
             ride.pickup().getLat(), ride.pickup().getLng()
-        );
-        log.debug("Pickup distance: {} meters", pickupDistance);
+        ) / 1000.0; // convert to km
+        log.debug("Pickup distance: {} km", pickupDistance);
 
         double dropoffDistance = PolylineDistance.haversineMeters(
             request.dropoff().getLat(), request.dropoff().getLng(),
             ride.dropoff().getLat(), ride.dropoff().getLng()
-        );
-        log.debug("Dropoff distance: {} meters", dropoffDistance);
+        ) / 1000.0;
+        log.debug("Dropoff distance: {} km", dropoffDistance);
 
         double maxProximityKm = rideConfig.getMatching().getMaxProximityKm();
-        boolean valid = pickupDistance / 1000 <= maxProximityKm && dropoffDistance / 1000 <= maxProximityKm;
+        boolean valid = pickupDistance <= maxProximityKm && dropoffDistance <= maxProximityKm;
         log.debug("Max proximity: {} km. Proximity check valid: {}", maxProximityKm, valid);
 
         ProximityCheck result = new ProximityCheck(valid, pickupDistance, dropoffDistance);
@@ -626,8 +626,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             timeScore,
             ratingScore,
             detourScore,
-            pickupDistance / 1000.0,
-            dropoffDistance / 1000.0,
+            pickupDistance,
+            dropoffDistance,
             detour.distanceKm(),
             detour.durationMinutes(),
             timeDiffMinutes,
