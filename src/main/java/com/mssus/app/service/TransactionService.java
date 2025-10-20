@@ -6,6 +6,7 @@ import com.mssus.app.dto.response.wallet.TransactionResponse;
 import com.mssus.app.entity.Transaction;
 import com.mssus.app.service.pricing.model.SettlementResult;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -47,7 +48,7 @@ public interface TransactionService {
     PageResponse<TransactionResponse> getAllTransactions(Pageable pageable);
 
     PageResponse<TransactionResponse> getUserHistoryTransactions(Authentication authentication,
-                                                                Pageable pageable,
-                                                                String type,
-                                                                String status);
+                                                                 Pageable pageable,
+                                                                 String type,
+                                                                 String status);
 }

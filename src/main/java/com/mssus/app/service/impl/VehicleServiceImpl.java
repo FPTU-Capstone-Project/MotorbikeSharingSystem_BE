@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -56,11 +57,11 @@ public class VehicleServiceImpl implements VehicleService {
                 .insuranceExpiry(request.getInsuranceExpiry())
                 .lastMaintenance(request.getLastMaintenance())
                 .fuelType(FuelType.valueOf(request.getFuelType()))
-                .status(VehicleStatus.valueOf(request.getStatus() != null ? request.getStatus() : "PENDING"))
+                .status(resolveVehicleStatus(request.getStatus()))
                 .build();
 
         Vehicle savedVehicle = vehicleRepository.save(vehicle);
-        return vehicleMapper.mapToVehicleResponse(savedVehicle);
+        return mapVehicleResponse(savedVehicle);
     }
 
     @Override
@@ -68,7 +69,7 @@ public class VehicleServiceImpl implements VehicleService {
     public VehicleResponse getVehicleById(Integer vehicleId) {
         Vehicle vehicle = vehicleRepository.findByIdWithDriver(vehicleId)
                 .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
-        return vehicleMapper.mapToVehicleResponse(vehicle);
+        return mapVehicleResponse(vehicle);
     }
 
     @Override
@@ -85,7 +86,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         updateVehicleFields(vehicle, request);
         Vehicle updatedVehicle = vehicleRepository.save(vehicle);
-        return vehicleMapper.mapToVehicleResponse(updatedVehicle);
+        return mapVehicleResponse(updatedVehicle);
     }
 
     @Override
@@ -105,7 +106,7 @@ public class VehicleServiceImpl implements VehicleService {
     public PageResponse<VehicleResponse> getAllVehicles(Pageable pageable) {
         Page<Vehicle> vehiclePage = vehicleRepository.findAll(pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
-                .map(vehicleMapper::mapToVehicleResponse)
+                .map(this::mapVehicleResponse)
                 .toList();
 
         return PageResponse.<VehicleResponse>builder()
@@ -126,7 +127,7 @@ public class VehicleServiceImpl implements VehicleService {
         Integer driverId = users.getDriverProfile().getDriverId();
         Page<Vehicle> vehiclePage = vehicleRepository.findByDriverDriverId(driverId, pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
-                .map(vehicleMapper::mapToVehicleResponse)
+                .map(this::mapVehicleResponse)
                 .toList();
 
         return PageResponse.<VehicleResponse>builder()
@@ -145,7 +146,7 @@ public class VehicleServiceImpl implements VehicleService {
     public PageResponse<VehicleResponse> getVehiclesByStatus(String status, Pageable pageable) {
         Page<Vehicle> vehiclePage = vehicleRepository.findByStatus(status, pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
-                .map(vehicleMapper::mapToVehicleResponse)
+                .map(this::mapVehicleResponse)
                 .toList();
 
         return PageResponse.<VehicleResponse>builder()
@@ -185,8 +186,48 @@ public class VehicleServiceImpl implements VehicleService {
             vehicle.setFuelType(FuelType.valueOf(request.getFuelType()));
         }
         if (request.getStatus() != null) {
-            vehicle.setStatus(VehicleStatus.valueOf(request.getStatus()));
+            vehicle.setStatus(resolveVehicleStatus(request.getStatus()));
         }
+    }
+
+    private VehicleStatus resolveVehicleStatus(String rawStatus) {
+        String candidate = (rawStatus == null || rawStatus.trim().isEmpty())
+                ? VehicleStatus.PENDING.name()
+                : rawStatus.trim().toUpperCase(Locale.ROOT);
+        return VehicleStatus.valueOf(candidate);
+    }
+
+    private VehicleResponse mapVehicleResponse(Vehicle vehicle) {
+        VehicleResponse response = vehicleMapper.mapToVehicleResponse(vehicle);
+        if (response == null) {
+            return null;
+        }
+
+        response.setVehicleId(vehicle.getVehicleId());
+        response.setDriverId(vehicle.getDriver() != null ? vehicle.getDriver().getDriverId() : null);
+        response.setPlateNumber(vehicle.getPlateNumber());
+        response.setModel(vehicle.getModel());
+        response.setColor(vehicle.getColor());
+        response.setYear(vehicle.getYear());
+        response.setCapacity(vehicle.getCapacity());
+        response.setInsuranceExpiry(vehicle.getInsuranceExpiry());
+        response.setLastMaintenance(vehicle.getLastMaintenance());
+        response.setFuelType(vehicle.getFuelType() != null ? vehicle.getFuelType().name() : null);
+        response.setVehicleStatus(vehicle.getStatus() != null ? vehicle.getStatus().name().toLowerCase(Locale.ROOT) : null);
+        response.setCreatedAt(vehicle.getCreatedAt());
+
+        if (vehicle.getDriver() != null) {
+            DriverProfile driver = vehicle.getDriver();
+            User user = driver.getUser();
+            if (user != null) {
+                response.setDriverName(user.getFullName());
+                response.setDriverPhone(user.getPhone());
+                response.setDriverEmail(user.getEmail());
+                response.setUserStatus(user.getStatus() != null ? user.getStatus().name() : null);
+            }
+        }
+
+        return response;
     }
 
 }
