@@ -291,14 +291,15 @@ public class AuthServiceImpl implements AuthService {
     public Map<String, String> buildProfileStatus(User user) {
         Map<String, String> roleStatus = new HashMap<>();
 
-        if (user.hasProfile("RIDER")) {
-            roleStatus.put("RIDER", user.getRiderProfile().getStatus().name());
-        }
+        Optional.ofNullable(user.getRiderProfile())
+            .map(RiderProfile::getStatus)
+            .ifPresent(status -> roleStatus.put("RIDER", status.name()));
 
-        if (user.hasProfile("DRIVER")) {
-            roleStatus.put("DRIVER", user.getDriverProfile().getStatus().name());
-        }
+        Optional.ofNullable(user.getDriverProfile())
+            .map(DriverProfile::getStatus)
+            .ifPresent(status -> roleStatus.put("DRIVER", status.name()));
 
         return roleStatus;
     }
+
 }

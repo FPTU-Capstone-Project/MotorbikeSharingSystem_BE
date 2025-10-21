@@ -443,7 +443,7 @@ This appendix documents the four lifecycle methods introduced to keep ride-level
 ### `startRide`
 
 - **Who calls it**: Driver (service entry point `SharedRideService.startRide`)
-- **When it is allowed**: The shared ride is in `SCHEDULED`, owned by the authenticated driver, and has at least one `CONFIRMED` request queued for pickup.
+- **When it is allowed**: The shared ride is in `SCHEDULED`.
 - **What it does**: Locks the ride, logs the driver’s current position, ensures the driver is near the pickup radius, then flips the ride status to `ONGOING` and stamps `startedAt`. It does *not* touch individual ride requests.
 - **Why it matters**: Keeps the ride’s timeline authoritative while leaving per-rider transitions to separate methods, preventing accidental double updates.
 
