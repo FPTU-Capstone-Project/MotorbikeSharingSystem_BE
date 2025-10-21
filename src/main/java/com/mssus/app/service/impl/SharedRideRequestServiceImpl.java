@@ -84,16 +84,18 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         RiderProfile rider = riderRepository.findByUserUserId(user.getUserId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.rider-profile"));
 
-        String activeProfile = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
-            .filter(Map.class::isInstance)
-            .map(obj -> (Map<String, Object>) obj)
-            .map(claims -> (String) claims.get("active_profile"))
-            .orElse(null);
-
-        if (activeProfile == null || !activeProfile.equals("rider")) {
-            throw BaseDomainException.of("ride.unauthorized.invalid-profile",
-                "Active profile is not rider");
-        }
+//        String activeProfile = Optional.ofNullable(AuthServiceImpl.userContext.get(user.getUserId().toString()))
+//            .filter(Map.class::isInstance)
+//            .map(obj -> (Map<String, Object>) obj)
+//            .map(claims -> (String) claims.get("active_profile"))
+//            .orElse(null);
+//
+//        System.out.println(activeProfile);
+//
+//        if (activeProfile == null || !activeProfile.equals("rider")) {
+//            throw BaseDomainException.of("ride.unauthorized.invalid-profile",
+//                "Active profile is not rider");
+//        }
 
         Quote quote = quoteService.getQuote(request.quoteId());
 

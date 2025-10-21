@@ -444,7 +444,7 @@ This appendix documents the four lifecycle methods introduced to keep ride-level
 
 - **Who calls it**: Driver (service entry point `SharedRideService.startRide`)
 - **When it is allowed**: The shared ride is in `SCHEDULED`.
-- **What it does**: Locks the ride, logs the driver’s current position, ensures the driver is near the pickup radius, then flips the ride status to `ONGOING` and stamps `startedAt`. It does *not* touch individual ride requests.
+- **What it does**: Locks the ride, logs the driver’s current position, then flips the ride status to `ONGOING` and stamps `startedAt`. It does *not* touch individual ride requests.
 - **Why it matters**: Keeps the ride’s timeline authoritative while leaving per-rider transitions to separate methods, preventing accidental double updates.
 
 ### `startRideRequestOfRide`
@@ -479,3 +479,16 @@ By separating ride-level and request-level methods:
 
 Keep this appendix updated whenever lifecycle semantics evolve so future maintainers understand the rationale behind split methods.
 
+### Why the Separation Matters (A Story From The Road)
+
+**Shared ride and shared ride request story.**
+Shared ride is "driver intended to go from A to B, and on that route, they are willing to share their ride with someone who wants to move along that route". Shared ride request is "rider wants to go from where he is standing to a desired destination through a ride shared by a driver who is also going on that route". So, the ride matching flow is essentially "if rider's place of standing is on driver's intended route or detour in an acceptable range, then a shared ride matching can happen between these people"
+
+**The ideal morning.**  
+Minh schedules a shared ride for 6:30 AM from his apartment in Vinhomes Grand Park to FPT University. He hops on his bike, taps **Start Ride**, and the platform marks his route as `ONGOING`. Five minutes later a broadcast goes out: An is standing along the corridor at gate C, wanting to join. Minh accepts, drives toward An, taps **Start Ride Request** when he picks her up, and the two of them ride happily to campus. When they arrive, Minh drops An off, taps **Complete Ride Request**, and finally **Complete Ride** once he finishes his own journey. Every event—Minh’s trip, An’s experience, the wallet captures—lands in the ledger at the correct timestamps.
+
+**What happens when everything is fused.**  
+Now imagine we never split the lifecycle. The moment Minh hits **Start Ride**, every `CONFIRMED` request is forced to `ONGOING` too—even if the rider is still waiting. If An cancels because Minh never arrived, both of them lose track of who owes what. Worse, if Minh taps **Complete Ride** after dropping off his first passenger, the system would close the entire ride; An would still be sitting on the curb with a request stuck in `ONGOING`, no way to join later segments, and no protection from automatic wallet captures. In other words, the driver’s story (“I’m driving from A to B”) and the rider’s story (“I need to go from where I stand to my destination”) get hopelessly entangled.
+
+**Independent timelines make the ride pairing work.**  
+By keeping `SharedRide` and `SharedRideRequest` states independent we let the matching flow do its real job: determine whether the rider’s standing point fits on the driver’s intended route within an acceptable detour. Once that decision is made, each timeline advances at its own pace—drivers can start their journey, riders can join later or leave earlier, and automation can enforce rules without guesswork. The separation gives us clarity, fairness, and the room to evolve features (broadcast fallback, proactive acceptance, lifecycle automation) without rewriting every edge case.
