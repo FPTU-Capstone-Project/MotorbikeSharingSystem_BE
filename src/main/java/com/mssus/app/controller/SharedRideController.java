@@ -132,7 +132,7 @@ public class SharedRideController {
         @RequestParam(required = false) String status,
         @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-        @Parameter(description = "Sort by field") @RequestParam(defaultValue = "scheduledDepartureTime") String sortBy,
+        @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
         @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir,
         Authentication authentication) {
 
