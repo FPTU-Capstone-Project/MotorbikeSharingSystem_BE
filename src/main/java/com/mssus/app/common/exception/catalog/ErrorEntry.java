@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+
 /**
  * Represents an error entry from the error catalog.
  * Contains all metadata needed to create consistent error responses.
@@ -62,16 +64,38 @@ public class ErrorEntry {
     private String remediation;
     
     /**
-     * Get the formatted error message, replacing placeholders if needed
-     * 
-     * @param args Optional arguments to replace placeholders in messageTemplate
+     * Formats the message template using standard `String.format` placeholders (e.g., %s, %d).
+     *
+     * @param args Arguments to be formatted into the message template.
      * @return Formatted error message
      */
     public String getFormattedMessage(Object... args) {
-        if (args.length > 0) {
-            return String.format(messageTemplate, args);
+        if (messageTemplate == null || args == null || args.length == 0) {
+            return messageTemplate;
         }
-        return messageTemplate;
+        return String.format(messageTemplate, args);
+    }
+
+    /**
+     * Formats the message template using a map of named placeholders.
+     * Replaces occurrences of "{key}" with the corresponding value from the map.
+     *
+     * @param context A map of placeholder names to their replacement values.
+     * @return The formatted message string.
+     */
+    public String getFormattedMessage(Map<String, Object> context) {
+        if (context == null || context.isEmpty() || this.messageTemplate == null) {
+            return this.messageTemplate;
+        }
+
+        String formattedMessage = this.messageTemplate;
+        for (Map.Entry<String, Object> entry : context.entrySet()) {
+            String placeholder = "{" + entry.getKey() + "}";
+            // Ensure value is not null to prevent `replace` from throwing an error
+            String value = entry.getValue() != null ? entry.getValue().toString() : "";
+            formattedMessage = formattedMessage.replace(placeholder, value);
+        }
+        return formattedMessage;
     }
     
     /**

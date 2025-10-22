@@ -14,28 +14,29 @@ import com.mssus.app.service.RoutingService;
 import com.mssus.app.util.PolylineDistance;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class QuoteServiceImpl implements QuoteService {
     private final QuoteCache quoteCache;
     private final RoutingService routingService;
-    private final PricingConfigRepository cfgRepo;
     private final PricingService pricingService;
     private final LocationRepository locationRepository;
 
     private static final double LOCATION_TOLERANCE = 0.001;
 
     @Override
+    @Transactional
     public Quote generateQuote(QuoteRequest request, int userId) {
         Location pickupLoc;
         Location dropoffLoc;
-        boolean isPickupALocation = false;
-        boolean isDropoffALocation = false;
 
         Location fptuLoc = locationRepository.findByLatAndLng(10.841480, 106.809844)
             .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
@@ -45,34 +46,8 @@ public class QuoteServiceImpl implements QuoteService {
             .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
                 "Student Culture House location not found"));
 
-        if (request.pickupLocationId() != null) {
-            pickupLoc = locationRepository.findById(request.pickupLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "Pickup location not found"));
-            isPickupALocation = true;
-        } else {
-            pickupLoc = new Location();
-            pickupLoc.setName("Temp pickup");
-            pickupLoc.setLat(request.pickup().latitude());
-            pickupLoc.setLng(request.pickup().longitude());
-        }
-
-        if (request.dropoffLocationId() != null) {
-            dropoffLoc = locationRepository.findById(request.dropoffLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "Dropoff location not found"));
-            isDropoffALocation = true;
-        } else {
-            dropoffLoc = new Location();
-            dropoffLoc.setName("Temp dropoff");
-            dropoffLoc.setLat(request.dropoff().latitude());
-            dropoffLoc.setLng(request.dropoff().longitude());
-        }
-
-        if (pickupLoc == null || dropoffLoc == null) {
-            throw BaseDomainException.formatted("ride.validation.invalid-location",
-                "Invalid pickup coordinates");
-        }
+        pickupLoc = findOrCreateLocation(request.pickupLocationId(), request.pickup());
+        dropoffLoc = findOrCreateLocation(request.dropoffLocationId(), request.dropoff());
 
         if (Objects.equals(pickupLoc.getLat(), dropoffLoc.getLat()) &&
             Objects.equals(pickupLoc.getLng(), dropoffLoc.getLng())) {
@@ -91,7 +66,7 @@ public class QuoteServiceImpl implements QuoteService {
 
         if (pickupDistKm > maxRadiusKm || dropoffDistKm > maxRadiusKm) {
             throw BaseDomainException.of("ride.validation.service-area-violation",
-                "Pickup " + pickupDistKm +"km or dropoff " + dropoffDistKm + "km outside 25 km service area from FPT University");
+                "Pickup " + pickupDistKm + "km or dropoff " + dropoffDistKm + "km outside 25 km service area from FPT University");
         }
 
         var route = routingService.getRoute(
@@ -103,23 +78,48 @@ public class QuoteServiceImpl implements QuoteService {
         var quote = new Quote(
             UUID.randomUUID(),
             userId,
-            isPickupALocation ? pickupLoc.getLocationId() : null,
-            isDropoffALocation ? dropoffLoc.getLocationId() : null,
-            pickupLoc.getLat(),
-            pickupLoc.getLng(),
-            dropoffLoc.getLat(),
-            dropoffLoc.getLng(),
+            pickupLoc,
+            dropoffLoc,
             route.distance(),
             route.time(),
             route.polyline(),
             fareBreakdown,
             Instant.now(),
             Instant.now().plusSeconds(300) // Quote valid for 5 minutes
-            );
+        );
 
         quoteCache.save(quote);
 
         return quote;
+    }
+
+    private Location findOrCreateLocation(Integer locationId, com.mssus.app.dto.ride.LatLng latLng) {
+        if (locationId != null && latLng == null) {
+            return locationRepository.findById(locationId)
+                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+                    "Location not found with ID: " + locationId));
+        }
+
+        if (locationId == null && latLng != null) {
+            return locationRepository.findByLatAndLng(latLng.latitude(), latLng.longitude())
+                .orElseGet(() -> {
+                    Location newLocation = new Location();
+                    newLocation.setName(null);
+                    newLocation.setLat(latLng.latitude());
+                    newLocation.setLng(latLng.longitude());
+                    newLocation.setAddress(routingService.getAddressFromCoordinates(
+                        latLng.latitude(), latLng.longitude()));
+                    newLocation.setCreatedAt(LocalDateTime.now());
+                    newLocation.setIsPoi(false);
+                    return locationRepository.save(newLocation);
+                });
+        }
+
+        if (locationId != null) {
+            throw BaseDomainException.of("ride.validation.invalid-location", "Provide either locationId or coordinates, not both");
+        }
+
+        throw BaseDomainException.of("ride.validation.invalid-location", "Either locationId or coordinates must be provided");
     }
 
     private boolean isLocationNearTarget(Location source, Location target) {
@@ -143,7 +143,7 @@ public class QuoteServiceImpl implements QuoteService {
     @Override
     public Quote getQuote(UUID quoteId) {
         return quoteCache.load(quoteId)
-                .orElseThrow(() -> BaseDomainException.of("ride.validation.invalid-location", 
-                        "Quote not found or expired: " + quoteId));
+            .orElseThrow(() -> BaseDomainException.of("ride.validation.invalid-location",
+                "Quote not found or expired: " + quoteId));
     }
 }

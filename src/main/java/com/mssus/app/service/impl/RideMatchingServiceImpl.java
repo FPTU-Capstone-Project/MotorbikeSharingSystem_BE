@@ -68,19 +68,21 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
     private LocationPair extractRequestLocations(SharedRideRequest request) {
         log.debug(">> extractRequestLocations(request={})", request);
-        Location pickup = resolveLocation(
-            request.getPickupLocationId(),
-            request.getPickupLat(),
-            request.getPickupLng(),
-            "Pickup Location"
-        );
+        Location pickup = request.getPickupLocation();
+//        Location pickup = resolveLocation(
+//            request.getPickupLocationId(),
+//            request.getPickupLat(),
+//            request.getPickupLng(),
+//            "Pickup Location"
+//        );
+        Location dropoff = request.getDropoffLocation();
 
-        Location dropoff = resolveLocation(
-            request.getDropoffLocationId(),
-            request.getDropoffLat(),
-            request.getDropoffLng(),
-            "Dropoff Location"
-        );
+//        Location dropoff = resolveLocation(
+//            request.getDropoffLocationId(),
+//            request.getDropoffLat(),
+//            request.getDropoffLng(),
+//            "Dropoff Location"
+//        );
 
         LocationPair result = new LocationPair(pickup, dropoff);
         log.debug("<< extractRequestLocations(): {}", result);
@@ -227,19 +229,21 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
     private LocationPair extractRideLocations(SharedRide ride) {
         log.debug(">> extractRideLocations(rideId={})", ride.getSharedRideId());
-        Location start = resolveRideLocation(
-            ride.getStartLocationId(),
-            ride.getStartLat(),
-            ride.getStartLng(),
-            "Ride Start Location"
-        );
-
-        Location end = resolveRideLocation(
-            ride.getEndLocationId(),
-            ride.getEndLat(),
-            ride.getEndLng(),
-            "Ride End Location"
-        );
+        Location start = ride.getStartLocation();
+        Location end = ride.getEndLocation();
+//        Location start = resolveRideLocation(
+//            ride.getStartLocationId(),
+//            ride.getStartLat(),
+//            ride.getStartLng(),
+//            "Ride Start Location"
+//        );
+//
+//        Location end = resolveRideLocation(
+//            ride.getEndLocationId(),
+//            ride.getEndLat(),
+//            ride.getEndLng(),
+//            "Ride End Location"
+//        );
 
         LocationPair result = new LocationPair(start, end);
         log.debug("<< extractRideLocations(): {}", result);
@@ -382,7 +386,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             LatLng latestPosition = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 5)
                 .orElseGet(() -> {
                     log.warn("Could not get latest position for ongoing ride {}, using ride start location.", ride.getSharedRideId());
-                    return new LatLng(ride.getStartLat(), ride.getStartLng());
+                    return new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng());
                 });
             log.debug("<< getEffectiveStartLocation(): {}", latestPosition);
             return latestPosition;

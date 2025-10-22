@@ -90,8 +90,10 @@ class QuoteServiceImplTest {
 
         assertThat(result).isNotNull();
         assertThat(result.riderId()).isEqualTo(userId);
-        assertThat(result.pickupLocationId()).isEqualTo(1);
-        assertThat(result.dropoffLocationId()).isEqualTo(2);
+        assertThat(result.pickupLocation()).isEqualTo(fptLocation);
+        assertThat(result.dropoffLocation()).isEqualTo(schLocation);
+//        assertThat(result.pickupLocationId()).isEqualTo(1);
+//        assertThat(result.dropoffLocationId()).isEqualTo(2);
         assertThat(result.distanceM()).isEqualTo(route.distance());
         assertThat(result.fare()).isEqualTo(fare);
 
@@ -250,15 +252,19 @@ class QuoteServiceImplTest {
     }
 
     private static Quote createQuote(int riderId) {
+        Location pickupLocation = createLocation(1, "Pickup Location", 10.0, 106.0);
+        Location dropoffLocation = createLocation(2, "Dropoff Location", 10.1, 106.1);
         return new Quote(
             UUID.randomUUID(),
             riderId,
-            null,
-            null,
-            10.0,
-            106.0,
-            10.1,
-            106.1,
+            pickupLocation,
+            dropoffLocation,
+//            null,
+//            null,
+//            10.0,
+//            106.0,
+//            10.1,
+//            106.1,
             10_000,
             1_200,
             "polyline",

@@ -31,23 +31,31 @@ public class SharedRide {
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 
-    @Column(name = "start_location_id", nullable = false)
-    private Integer startLocationId;
+    @ManyToOne
+    @JoinColumn(name = "start_location_id", nullable = false)
+    private Location startLocation;
 
-    @Column(name = "end_location_id", nullable = false)
-    private Integer endLocationId;
+    @ManyToOne
+    @JoinColumn(name = "end_location_id", nullable = false)
+    private Location endLocation;
 
-    @Column(name = "start_lat", nullable = false)
-    private double startLat;
+//    @Column(name = "start_location_id", nullable = false)
+//    private Integer startLocationId;
+//
+//    @Column(name = "end_location_id", nullable = false)
+//    private Integer endLocationId;
 
-    @Column(name = "start_lng", nullable = false)
-    private double startLng;
-
-    @Column(name = "end_lat", nullable = false)
-    private double endLat;
-
-    @Column(name = "end_lng", nullable = false)
-    private double endLng;
+//    @Column(name = "start_lat", nullable = false)
+//    private double startLat;
+//
+//    @Column(name = "start_lng", nullable = false)
+//    private double startLng;
+//
+//    @Column(name = "end_lat", nullable = false)
+//    private double endLat;
+//
+//    @Column(name = "end_lng", nullable = false)
+//    private double endLng;
 
     @Column(name = "status", length = 50)
     @Enumerated(EnumType.STRING)

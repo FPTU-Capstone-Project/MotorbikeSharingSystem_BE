@@ -2,6 +2,7 @@ package com.mssus.app.dto.response.ride;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.mssus.app.dto.response.LocationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -52,21 +53,29 @@ public class SharedRideResponse {
     @Schema(description = "Vehicle plate number", example = "29A-12345")
     private String vehiclePlate;
 
-    @JsonProperty("start_location_id")
-    @Schema(description = "Start location ID", example = "1")
-    private Integer startLocationId;
+    @JsonProperty("start_location")
+    @Schema(description = "Start location details")
+    private LocationResponse startLocation;
 
-    @JsonProperty("start_location_name")
-    @Schema(description = "Start location name", example = "FPT University")
-    private String startLocationName;
+    @JsonProperty("end_location")
+    @Schema(description = "End location details")
+    private LocationResponse endLocation;
 
-    @JsonProperty("end_location_id")
-    @Schema(description = "End location ID", example = "2")
-    private Integer endLocationId;
-
-    @JsonProperty("end_location_name")
-    @Schema(description = "End location name", example = "Thu Duc Market")
-    private String endLocationName;
+//    @JsonProperty("start_location_id")
+//    @Schema(description = "Start location ID", example = "1")
+//    private Integer startLocationId;
+//
+//    @JsonProperty("start_location_name")
+//    @Schema(description = "Start location name", example = "FPT University")
+//    private String startLocationName;
+//
+//    @JsonProperty("end_location_id")
+//    @Schema(description = "End location ID", example = "2")
+//    private Integer endLocationId;
+//
+//    @JsonProperty("end_location_name")
+//    @Schema(description = "End location name", example = "Thu Duc Market")
+//    private String endLocationName;
 
     @Schema(description = "Ride status (SCHEDULED, ONGOING, COMPLETED, CANCELLED)", example = "SCHEDULED")
     private String status;

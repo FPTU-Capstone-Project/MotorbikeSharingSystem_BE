@@ -142,9 +142,9 @@ public class ProfileServiceImpl implements ProfileService {
                 if (user.getDriverProfile() == null) {
                     throw BaseDomainException.of("user.validation.profile-not-exists");
                 }
-                if (!DriverProfileStatus.ACTIVE.equals(user.getDriverProfile().getStatus())) {
-                    throw BaseDomainException.of("user.validation.profile-not-active", "Driver profile is not active");
-                }
+//                if (!DriverProfileStatus.ACTIVE.equals(user.getDriverProfile().getStatus())) {
+//                    throw BaseDomainException.of("user.validation.profile-not-active", "Driver profile is not active");
+//                }
             }
             case RIDER -> {
                 if (user.getRiderProfile() == null) {

@@ -13,5 +13,7 @@ public interface RoutingService {
     // Add this method
     RouteResponse getMultiStopRoute(List<LatLng> waypoints, LocalDateTime departureTime);
 
+    String getAddressFromCoordinates(double lat, double lon);
+
 }
 

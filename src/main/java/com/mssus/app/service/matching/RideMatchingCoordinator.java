@@ -133,13 +133,15 @@ public class RideMatchingCoordinator {
 
         List<RideMatchProposalResponse> proposals = rideMatchingService.findMatches(request);
         CandidateSelector selector = new CandidateSelector(proposals);
+        Location pickup = request.getPickupLocation();
+        Location dropoff = request.getDropoffLocation();
 
-        Location pickup = request.getPickupLocationId() != null
-            ? locationRepository.findById(request.getPickupLocationId()).orElse(null)
-            : null;
-        Location dropoff = request.getDropoffLocationId() != null
-            ? locationRepository.findById(request.getDropoffLocationId()).orElse(null)
-            : null;
+//        Location pickup = request.getPickupLocationId() != null
+//            ? locationRepository.findById(request.getPickupLocationId()).orElse(null)
+//            : null;
+//        Location dropoff = request.getDropoffLocationId() != null
+//            ? locationRepository.findById(request.getDropoffLocationId()).orElse(null)
+//            : null;
 
         MatchingSession session = new MatchingSession(
             request.getSharedRideRequestId(),
@@ -186,12 +188,14 @@ public class RideMatchingCoordinator {
         }
 
         // Get locations for notification
-        Location pickup = request.getPickupLocationId() != null
-            ? locationRepository.findById(request.getPickupLocationId()).orElse(null)
-            : null;
-        Location dropoff = request.getDropoffLocationId() != null
-            ? locationRepository.findById(request.getDropoffLocationId()).orElse(null)
-            : null;
+        Location pickup = request.getPickupLocation();
+        Location dropoff = request.getDropoffLocation();
+//        Location pickup = request.getPickupLocationId() != null
+//            ? locationRepository.findById(request.getPickupLocationId()).orElse(null)
+//            : null;
+//        Location dropoff = request.getDropoffLocationId() != null
+//            ? locationRepository.findById(request.getDropoffLocationId()).orElse(null)
+//            : null;
 
         JoinRequestSession session = new JoinRequestSession(
             request.getSharedRideRequestId(),

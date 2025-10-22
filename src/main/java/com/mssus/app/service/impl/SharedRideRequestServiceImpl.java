@@ -121,12 +121,14 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .requestKind(RequestKind.BOOKING)
             .sharedRide(null)
             .rider(rider)
-            .pickupLocationId(quote.pickupLocationId())
-            .dropoffLocationId(quote.dropoffLocationId())
-            .pickupLat(quote.pickupLat())
-            .pickupLng(quote.pickupLng())
-            .dropoffLat(quote.dropoffLat())
-            .dropoffLng(quote.dropoffLng())
+            .pickupLocation(quote.pickupLocation())
+            .dropoffLocation(quote.dropoffLocation())
+//            .pickupLocationId(quote.pickupLocationId())
+//            .dropoffLocationId(quote.dropoffLocationId())
+//            .pickupLat(quote.pickupLat())
+//            .pickupLng(quote.pickupLng())
+//            .dropoffLat(quote.dropoffLat())
+//            .dropoffLng(quote.dropoffLng())
             .status(SharedRideRequestStatus.PENDING)
             .totalFare(fareAmount)
             .pricingConfig(pricingConfig)
@@ -246,12 +248,14 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .requestKind(RequestKind.JOIN_RIDE)
             .sharedRide(ride)
             .rider(rider)
-            .pickupLocationId(quote.pickupLocationId())
-            .dropoffLocationId(quote.dropoffLocationId())
-            .pickupLat(quote.pickupLat())
-            .pickupLng(quote.pickupLng())
-            .dropoffLat(quote.dropoffLat())
-            .dropoffLng(quote.dropoffLng())
+            .pickupLocation(quote.pickupLocation())
+            .dropoffLocation(quote.dropoffLocation())
+//            .pickupLocationId(quote.pickupLocationId())
+//            .dropoffLocationId(quote.dropoffLocationId())
+//            .pickupLat(quote.pickupLat())
+//            .pickupLng(quote.pickupLng())
+//            .dropoffLat(quote.dropoffLat())
+//            .dropoffLng(quote.dropoffLng())
             .status(SharedRideRequestStatus.PENDING)
             .totalFare(fareAmount)
             .pricingConfig(pricingConfig)
@@ -369,22 +373,25 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             LocalDateTime pickupTime = rideRequest.getPickupTime() == null ? now : rideRequest.getPickupTime();
             LocalDateTime scheduledTime = pickupTime.isAfter(now) ? pickupTime : now;
 
-            Integer startLocationId = ensureLocationExists(
-                rideRequest.getPickupLocationId(),
-                rideRequest.getPickupLat(),
-                rideRequest.getPickupLng(),
-                "Broadcast Pickup Location");
+//            Integer startLocationId = ensureLocationExists(
+//                rideRequest.getPickupLocationId(),
+//                rideRequest.getPickupLat(),
+//                rideRequest.getPickupLng(),
+//                "Broadcast Pickup Location");
+//
+//            Integer endLocationId = ensureLocationExists(
+//                rideRequest.getDropoffLocationId(),
+//                rideRequest.getDropoffLat(),
+//                rideRequest.getDropoffLng(),
+//                "Broadcast Dropoff Location");
 
-            Integer endLocationId = ensureLocationExists(
-                rideRequest.getDropoffLocationId(),
-                rideRequest.getDropoffLat(),
-                rideRequest.getDropoffLng(),
-                "Broadcast Dropoff Location");
+            Location startLocation = rideRequest.getPickupLocation();
+            Location endLocation = rideRequest.getDropoffLocation();
 
             SharedRide newRide = new SharedRide();
             newRide.setDriver(driver);
             newRide.setVehicle(vehicle);
-            newRide.setStatus(SharedRideStatus.SCHEDULED);  //TODO: Thoroughly consider this should be SCHEDULE or ONGOING
+            newRide.setStatus(SharedRideStatus.ONGOING);  //TODO: Thoroughly consider this should be SCHEDULE or ONGOING
             int capacity = vehicle.getCapacity() != null
                 ? vehicle.getCapacity()
                 : Optional.ofNullable(driver.getMaxPassengers()).orElse(1);
@@ -395,12 +402,14 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             newRide.setCurrentPassengers(1);
             newRide.setPricingConfig(rideRequest.getPricingConfig());
             newRide.setScheduledTime(scheduledTime);
-            newRide.setStartLocationId(startLocationId);
-            newRide.setEndLocationId(endLocationId);
-            newRide.setStartLat(rideRequest.getPickupLat());
-            newRide.setStartLng(rideRequest.getPickupLng());
-            newRide.setEndLat(rideRequest.getDropoffLat());
-            newRide.setEndLng(rideRequest.getDropoffLng());
+            newRide.setStartLocation(startLocation);
+            newRide.setEndLocation(endLocation);
+//            newRide.setStartLocationId(startLocationId);
+//            newRide.setEndLocationId(endLocationId);
+//            newRide.setStartLat(rideRequest.getPickupLat());
+//            newRide.setStartLng(rideRequest.getPickupLng());
+//            newRide.setEndLat(rideRequest.getDropoffLat());
+//            newRide.setEndLng(rideRequest.getDropoffLng());
             newRide.setCreatedAt(LocalDateTime.now());
 
             SharedRide savedRide = rideRepository.save(newRide);
@@ -794,96 +803,89 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 label + " coordinates are missing");
         }
 
-        Location location = new Location();
-        location.setName(label);
-        location.setLat(lat);
-        location.setLng(lng);
-        locationRepository.save(location);
-        return location.getLocationId();
+        return locationRepository.findByLatAndLng(lat, lng)
+            .map(Location::getLocationId)
+            .orElseGet(() -> {
+                Location newLocation = new Location();
+                newLocation.setName(label);
+                newLocation.setLat(lat);
+                newLocation.setLng(lng);
+                return locationRepository.save(newLocation).getLocationId();
+            });
     }
 
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request) {
-        SharedRideRequestResponse response = requestMapper.toResponse(request);
 
-        if (request.getPickupLocationId() != null) {
-            Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-            if (pickupLoc != null) {
-                response.setPickupLocationName(pickupLoc.getName());
-                response.setPickupLat(pickupLoc.getLat());
-                response.setPickupLng(pickupLoc.getLng());
-            } else {
-                response.setPickupLocationName("Unknown Location");
-                response.setPickupLat(request.getPickupLat());
-                response.setPickupLng(request.getPickupLng());
-            }
-        } else {
-            response.setPickupLocationName("Custom Pickup Location");
-            response.setPickupLat(request.getPickupLat());
-            response.setPickupLng(request.getPickupLng());
-        }
+//        if (request.getPickupLocationId() != null) {
+//            Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
+//            if (pickupLoc != null) {
+//                response.setPickupLocationName(pickupLoc.getName());
+//                response.setPickupLat(pickupLoc.getLat());
+//                response.setPickupLng(pickupLoc.getLng());
+//            } else {
+//                response.setPickupLocationName("Unknown Location");
+//                response.setPickupLat(request.getPickupLat());
+//                response.setPickupLng(request.getPickupLng());
+//            }
+//        } else {
+//            response.setPickupLocationName("Custom Pickup Location");
+//            response.setPickupLat(request.getPickupLat());
+//            response.setPickupLng(request.getPickupLng());
+//        }
+//
+//        if (request.getDropoffLocationId() != null) {
+//            Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
+//            if (dropoffLoc != null) {
+//                response.setDropoffLocationName(dropoffLoc.getName());
+//                response.setDropoffLat(dropoffLoc.getLat());
+//                response.setDropoffLng(dropoffLoc.getLng());
+//            } else {
+//                response.setDropoffLocationName("Unknown Location");
+//                response.setDropoffLat(request.getDropoffLat());
+//                response.setDropoffLng(request.getDropoffLng());
+//            }
+//        } else {
+//            response.setDropoffLocationName("Custom Dropoff Location");
+//            response.setDropoffLat(request.getDropoffLat());
+//            response.setDropoffLng(request.getDropoffLng());
+//        }
 
-        if (request.getDropoffLocationId() != null) {
-            Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-            if (dropoffLoc != null) {
-                response.setDropoffLocationName(dropoffLoc.getName());
-                response.setDropoffLat(dropoffLoc.getLat());
-                response.setDropoffLng(dropoffLoc.getLng());
-            } else {
-                response.setDropoffLocationName("Unknown Location");
-                response.setDropoffLat(request.getDropoffLat());
-                response.setDropoffLng(request.getDropoffLng());
-            }
-        } else {
-            response.setDropoffLocationName("Custom Dropoff Location");
-            response.setDropoffLat(request.getDropoffLat());
-            response.setDropoffLng(request.getDropoffLng());
-        }
-
-        return response;
+        return requestMapper.toResponse(request);
     }
 
     private BroadcastingRideRequestResponse toBroadcastingResponse(SharedRideRequest request) {
-        String pickupName = resolveLocationName(
-            request.getPickupLocationId(),
-            request.getPickupLat(),
-            request.getPickupLng(),
-            "Custom Pickup Location");
-
-        String dropoffName = resolveLocationName(
-            request.getDropoffLocationId(),
-            request.getDropoffLat(),
-            request.getDropoffLng(),
-            "Custom Dropoff Location");
-
-        LatLng pickupCoordinates = (request.getPickupLat() != null && request.getPickupLng() != null)
-            ? new LatLng(request.getPickupLat(), request.getPickupLng())
-            : null;
-
-        LatLng dropoffCoordinates = (request.getDropoffLat() != null && request.getDropoffLng() != null)
-            ? new LatLng(request.getDropoffLat(), request.getDropoffLng())
-            : null;
+//        String pickupName = resolveLocationName(
+//            request.getPickupLocationId(),
+//            request.getPickupLat(),
+//            request.getPickupLng(),
+//            "Custom Pickup Location");
+//
+//        String dropoffName = resolveLocationName(
+//            request.getDropoffLocationId(),
+//            request.getDropoffLat(),
+//            request.getDropoffLng(),
+//            "Custom Dropoff Location");
+//
+//        LatLng pickupCoordinates = (request.getPickupLat() != null && request.getPickupLng() != null)
+//            ? new LatLng(request.getPickupLat(), request.getPickupLng())
+//            : null;
+//
+//        LatLng dropoffCoordinates = (request.getDropoffLat() != null && request.getDropoffLng() != null)
+//            ? new LatLng(request.getDropoffLat(), request.getDropoffLng())
+//            : null;
 
         return new BroadcastingRideRequestResponse(
             request.getSharedRideRequestId(),
-            request.getRider() != null ? request.getRider().getRiderId() : null,
-            pickupName,
-            dropoffName,
-            pickupCoordinates,
-            dropoffCoordinates,
+            request.getTotalFare(),
+            request.getPickupLocation(),
+            request.getDropoffLocation(),
+//            pickupName,
+//            dropoffName,
+//            pickupCoordinates,
+//            dropoffCoordinates,
             request.getPickupTime() != null ? request.getPickupTime().format(ISO_DATE_TIME) : null
         );
     }
 
-    private String resolveLocationName(Integer locationId, Double lat, Double lng, String defaultName) {
-        if (locationId != null) {
-            return locationRepository.findById(locationId)
-                .map(Location::getName)
-                .orElse(defaultName);
-        }
-        if (lat != null && lng != null) {
-            return defaultName;
-        }
-        return "Unknown Location";
-    }
 
 }

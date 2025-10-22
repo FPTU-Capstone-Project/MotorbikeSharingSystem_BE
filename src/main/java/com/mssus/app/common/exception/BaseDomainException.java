@@ -32,6 +32,21 @@ public class BaseDomainException extends RuntimeException {
         this.context = context != null ? Collections.unmodifiableMap(new HashMap<>(context)) : Collections.emptyMap();
         this.errorEntry = errorEntry;
     }
+
+    /**
+     * Overrides the default getMessage() to ensure the message is always formatted with context.
+     * This makes the exception robust, as it can format the message just-in-time.
+     *
+     * @return The formatted error message.
+     */
+    @Override
+    public String getMessage() {
+        String rawMessage = super.getMessage();
+        if (errorEntry != null && context != null && !context.isEmpty()) {
+            return errorEntry.getFormattedMessage(context);
+        }
+        return rawMessage;
+    }
     
     /**
      * Create exception using error ID from catalog
@@ -131,6 +146,39 @@ public class BaseDomainException extends RuntimeException {
         return new BaseDomainException(errorId, message, null, null, errorEntry);
     }
     
+    /**
+     * Create exception using error ID and a map of named placeholders for message formatting.
+     * The context map is also stored in the exception.
+     * <p>
+     * Example:
+     * <pre>
+     * // errors.yaml: ride.validation.invalid-scheduled-time: "Chuyến xe tiếp theo phải sau {minTime}"
+     * throw BaseDomainException.withContext(
+     *     "ride.validation.invalid-scheduled-time",
+     *     Map.of("minTime", "23:20 22/10/2025")
+     * );
+     * </pre>
+     *
+     * @param errorId Error ID from the catalog.
+     * @param context A map where keys are placeholder names in the message template and values are the replacement values.
+     * @return BaseDomainException instance with a formatted message.
+     */
+    public static BaseDomainException withContext(String errorId, Map<String, Object> context) {
+        ErrorCatalogService catalogService = ApplicationContextHolder.getErrorCatalogService();
+        ErrorEntry errorEntry;
+        String message;
+
+        if (catalogService != null) {
+            errorEntry = catalogService.getErrorEntry(errorId);
+            message = errorEntry.getFormattedMessage(context);
+        } else {
+            errorEntry = createFallbackErrorEntry(errorId, "An error occurred with context.");
+            message = errorEntry.getMessageTemplate();
+        }
+
+        return new BaseDomainException(errorId, message, null, context, errorEntry);
+    }
+
     // Static factory methods for common error types
     
     public static BaseDomainException notFound(String resource) {

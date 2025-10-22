@@ -43,6 +43,11 @@ public class RideConfigurationProperties {
      * Automatic lifecycle enforcement configuration.
      */
     private AutoLifecycle autoLifecycle = new AutoLifecycle();
+
+    /**
+     * Ride constraints.
+     */
+    private RideConstraints rideConstraints = new RideConstraints();
     
     /**
      * Matching algorithm configuration.
@@ -203,6 +208,17 @@ public class RideConfigurationProperties {
          * Default: 15 minutes.
          */
         private Duration requestDropoffTimeout = Duration.ofMinutes(15);
+    }
+
+    @Data
+    public static class RideConstraints {
+        /**
+         * Minimum time interval between consecutive shared rides a driver can schedule.
+         * If a driver schedules a ride at 7:00 AM with 1-hour interval,
+         * they cannot create another ride before 8:00 AM.
+         * Default: 1 hour
+         */
+        private Duration minIntervalBetweenRides = Duration.ofHours(1);
     }
 }
 

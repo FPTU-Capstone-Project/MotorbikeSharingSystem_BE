@@ -538,6 +538,16 @@ errors:
     owner: ride-team
     remediation: "Ensure all ride requests are completed before starting the ride"
 
+  - id: ride.validation.invalid-scheduled-time
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Thời gian lên lịch cho chuyến đi chia sẻ không hợp lệ: {reason}"
+    domain: ride
+    category: validation
+    owner: ride-team
+    remediation: "Provide a valid scheduled time in the future"
+
   # Ride Operation Errors
   - id: ride.operation.wallet-hold-failed
     httpStatus: 402

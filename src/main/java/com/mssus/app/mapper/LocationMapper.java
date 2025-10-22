@@ -16,5 +16,6 @@ public interface LocationMapper {
     @Mapping(source = "name", target = "name")
     @Mapping(source = "lat", target = "lat")
     @Mapping(source = "lng", target = "lng")
+    @Mapping(source = "address", target = "address")
     LocationResponse toResponse(Location entity);
 }

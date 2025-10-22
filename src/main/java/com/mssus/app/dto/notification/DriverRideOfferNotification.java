@@ -27,6 +27,8 @@ public class DriverRideOfferNotification {
     Double pickupLng;
     Double dropoffLat;
     Double dropoffLng;
+    String pickupAddress;
+    String dropoffAddress;
     LocalDateTime pickupTime;
     BigDecimal totalFare;
     Float matchScore;

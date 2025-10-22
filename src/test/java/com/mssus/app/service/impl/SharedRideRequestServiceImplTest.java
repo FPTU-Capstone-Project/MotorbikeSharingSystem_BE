@@ -6,6 +6,7 @@ import com.mssus.app.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.request.wallet.RideConfirmHoldRequest;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
 import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
+import com.mssus.app.dto.response.LocationResponse;
 import com.mssus.app.dto.response.ride.BroadcastingRideRequestResponse;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
@@ -181,12 +182,14 @@ class SharedRideRequestServiceImplTest {
         rideRequest.setRider(rider);
         rideRequest.setRequestKind(RequestKind.BOOKING);
         rideRequest.setStatus(SharedRideRequestStatus.PENDING);
-        rideRequest.setPickupLat(10.762622);
-        rideRequest.setPickupLng(106.660172);
-        rideRequest.setDropoffLat(10.772622);
-        rideRequest.setDropoffLng(106.670172);
-        rideRequest.setPickupLocationId(1);
-        rideRequest.setDropoffLocationId(2);
+        rideRequest.setPickupLocation(pickupLocation);
+        rideRequest.setDropoffLocation(dropoffLocation);
+//        rideRequest.setPickupLat(10.762622);
+//        rideRequest.setPickupLng(106.660172);
+//        rideRequest.setDropoffLat(10.772622);
+//        rideRequest.setDropoffLng(106.670172);
+//        rideRequest.setPickupLocationId(1);
+//        rideRequest.setDropoffLocationId(2);
         rideRequest.setTotalFare(BigDecimal.valueOf(50000));
         rideRequest.setSubtotalFare(BigDecimal.valueOf(50000));
         rideRequest.setDiscountAmount(BigDecimal.ZERO);
@@ -208,12 +211,14 @@ class SharedRideRequestServiceImplTest {
         quote = new Quote(
             UUID.randomUUID(),
             1,
-            1,
-            2,
-            10.762622,
-            106.660172,
-            10.772622,
-            106.670172,
+            pickupLocation,
+            dropoffLocation,
+//            1,
+//            2,
+//            10.762622,
+//            106.660172,
+//            10.772622,
+//            106.670172,
             10500L,
             1800L,
             "encoded_polyline",
@@ -269,6 +274,21 @@ class SharedRideRequestServiceImplTest {
         RiderProfile rider = request.getRider();
         String riderName = rider != null && rider.getUser() != null ? rider.getUser().getFullName() : "Unknown Rider";
 
+        LocationResponse pickupLocation = new LocationResponse(
+            request.getPickupLocation().getLocationId(),
+            request.getPickupLocation().getName(),
+            request.getPickupLocation().getLat(),
+            request.getPickupLocation().getLng(),
+            request.getPickupLocation().getAddress()
+        );
+        LocationResponse dropoffLocation = new LocationResponse(
+            request.getDropoffLocation().getLocationId(),
+            request.getDropoffLocation().getName(),
+            request.getDropoffLocation().getLat(),
+            request.getDropoffLocation().getLng(),
+            request.getDropoffLocation().getAddress()
+        );
+
         return SharedRideRequestResponse.builder()
             .sharedRideRequestId(request.getSharedRideRequestId())
             .requestKind(request.getRequestKind().name())
@@ -276,12 +296,14 @@ class SharedRideRequestServiceImplTest {
             .riderId(rider != null ? rider.getRiderId() : null)
             .riderName(riderName)
             .status(request.getStatus().name())
-            .pickupLocationName(pickupLocation.getName())
-            .dropoffLocationName(dropoffLocation.getName())
-            .pickupLat(request.getPickupLat())
-            .pickupLng(request.getPickupLng())
-            .dropoffLat(request.getDropoffLat())
-            .dropoffLng(request.getDropoffLng())
+            .pickupLocation(pickupLocation)
+            .dropoffLocation(dropoffLocation)
+//            .pickupLocationName(pickupLocation.getName())
+//            .dropoffLocationName(dropoffLocation.getName())
+//            .pickupLat(request.getPickupLat())
+//            .pickupLng(request.getPickupLng())
+//            .dropoffLat(request.getDropoffLat())
+//            .dropoffLng(request.getDropoffLng())
             .fareAmount(request.getTotalFare())
             .originalFare(request.getSubtotalFare())
             .discountAmount(request.getDiscountAmount())
@@ -355,12 +377,14 @@ class SharedRideRequestServiceImplTest {
         Quote differentRiderQuote = new Quote(
             UUID.randomUUID(),
             999, // Different rider ID
-            1,
-            2,
-            10.762622,
-            106.660172,
-            10.772622,
-            106.670172,
+            pickupLocation,
+            dropoffLocation,
+//            1,
+//            2,
+//            10.762622,
+//            106.660172,
+//            10.772622,
+//            106.670172,
             10500L,
             1800L,
             "encoded_polyline",
@@ -557,12 +581,14 @@ class SharedRideRequestServiceImplTest {
         Quote differentRiderQuote = new Quote(
             UUID.randomUUID(),
             999,
-            1,
-            2,
-            10.762622,
-            106.660172,
-            10.772622,
-            106.670172,
+            pickupLocation,
+            dropoffLocation,
+//            1,
+//            2,
+//            10.762622,
+//            106.660172,
+//            10.772622,
+//            106.670172,
             10500L,
             1800L,
             "encoded_polyline",
@@ -1307,12 +1333,15 @@ class SharedRideRequestServiceImplTest {
         Quote zeroFareQuote = new Quote(
             UUID.randomUUID(),
             1,
-            1,
-            2,
-            10.762622,
-            106.660172,
-            10.772622,
-            106.670172,
+            pickupLocation,
+            dropoffLocation,
+
+//            1,
+//            2,
+//            10.762622,
+//            106.660172,
+//            10.772622,
+//            106.670172,
             0L, // Zero distance
             0L, // Zero duration
             "encoded_polyline",

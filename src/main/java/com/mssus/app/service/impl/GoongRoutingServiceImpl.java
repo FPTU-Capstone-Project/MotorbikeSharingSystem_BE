@@ -88,6 +88,25 @@ public class GoongRoutingServiceImpl implements RoutingService {
         );
     }
 
+    @Override
+    public String getAddressFromCoordinates(double lat, double lon) {
+        String url = String.format(Locale.US, "https://rsapi.goong.io/Geocode?latlng=%f,%f&api_key=%s",
+            lat, lon, API_KEY);
+
+        try {
+            ResponseEntity<GoongGeocodeResponse> resp = restTemplate.getForEntity(url, GoongGeocodeResponse.class);
+
+            if (resp.getBody() == null || resp.getBody().results == null || resp.getBody().results.isEmpty()) {
+                return "Address not found";
+            }
+
+            return resp.getBody().results.get(0).formatted_address;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to get address from coordinates: " + e.getMessage());
+        }
+    }
+
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     static class GoongResponse {
         public List<Route> routes;
@@ -121,5 +140,25 @@ public class GoongRoutingServiceImpl implements RoutingService {
             }
         }
     }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    static class GoongGeocodeResponse {
+        public List<GeocodeResult> results;
+        public String status;
+
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        static class GeocodeResult {
+            public String formatted_address;
+            public List<AddressComponent> address_components;
+            public String place_id;
+
+            @JsonIgnoreProperties(ignoreUnknown = true)
+            static class AddressComponent {
+                public String long_name;
+                public String short_name;
+            }
+        }
+    }
+
 
 }

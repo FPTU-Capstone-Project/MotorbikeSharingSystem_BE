@@ -605,10 +605,10 @@ WHERE email = 'driver1@example.com';
 
 -- Locations
 INSERT INTO locations (name, lat, lng, address)
-VALUES ('Tòa S2.02 Vinhomes Grand Park', 10.8386317, 106.8318038, NULL),
-       ('FPT University - HCMC Campus', 10.841480, 106.809844, NULL),
-       ('Tòa S6.02 Vinhomes Grand Park', 10.8426113, 106.8374642, NULL),
-       ('Sảnh C6-C5, Ký túc xá Khu B ĐHQG TP.HCM', 10.8833471, 106.7795158, NULL);
+VALUES ('Tòa S2.02 Vinhomes Grand Park', 10.8386317, 106.8318038, 'N/A'),
+       ('FPT University - HCMC Campus', 10.841480, 106.809844, 'N/A'),
+       ('Tòa S6.02 Vinhomes Grand Park', 10.8426113, 106.8374642, 'N/A'),
+       ('Sảnh C6-C5, Ký túc xá Khu B ĐHQG TP.HCM', 10.8833471, 106.7795158, 'N/A');
 
 -- Vehicle for John Doe
 INSERT INTO vehicles (driver_id,
@@ -749,7 +749,7 @@ SELECT 'TOPUP',
 FROM system_txn g;
 
 INSERT INTO locations (name, lat, lng, address)
-VALUES ('Nhà Văn Hóa Sinh Viên', 10.8753395, 106.8000331, NULL);
+VALUES ('Nhà Văn Hóa Sinh Viên', 10.8753395, 106.8000331, 'N/A');
 
 
 -- ============================================================================

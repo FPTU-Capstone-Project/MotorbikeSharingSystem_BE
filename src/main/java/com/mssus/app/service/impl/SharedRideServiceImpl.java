@@ -2,6 +2,7 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
+import com.mssus.app.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
 import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
@@ -10,10 +11,12 @@ import com.mssus.app.dto.request.ride.StartRideReqRequest;
 import com.mssus.app.dto.request.wallet.RideCompleteSettlementRequest;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
 import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
+import com.mssus.app.dto.response.LocationResponse;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.*;
 import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.entity.*;
+import com.mssus.app.mapper.LocationMapper;
 import com.mssus.app.mapper.SharedRideMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
@@ -33,9 +36,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +61,8 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final RideTrackingService rideTrackingService;
     private final NotificationService notificationService;
     private final RideFundCoordinatingService rideFundCoordinatingService;
+    private final LocationMapper locationMapper;
+    private final RideConfigurationProperties rideConfig;
 
 
     @Override
@@ -64,13 +71,11 @@ public class SharedRideServiceImpl implements SharedRideService {
         String username = authentication.getName();
         log.info("Driver {} creating new shared ride", username);
 
-        // Get authenticated driver and active config
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
 
-        // Validate vehicle ownership
         Vehicle vehicle = vehicleRepository.findByDriver_DriverId(driver.getDriverId())
             .orElseThrow(() -> BaseDomainException.formatted("ride.validation.vehicle-not-found"));
 
@@ -79,32 +84,46 @@ public class SharedRideServiceImpl implements SharedRideService {
                 "You don't own this vehicle");
         }
 
-        // Handle locations: Fetch if IDs provided, else use ad-hoc coords
-        Location startLoc = null;
-        Location endLoc = null;
-        double startLat, startLng, endLat, endLng;
+        Optional<SharedRide> latestRide = rideRepository.findLatestScheduledRideByDriverId(driver.getDriverId());
+        if (latestRide.isPresent()) {
+            LocalDateTime lastScheduledTime = latestRide.get().getScheduledTime();
+            LocalDateTime minAllowedTime = lastScheduledTime.plus(rideConfig.getRideConstraints().getMinIntervalBetweenRides());
 
-        if (request.startLocationId() != null) {
-            startLoc = locationRepository.findById(request.startLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "Start location not found"));
-            startLat = startLoc.getLat();
-            startLng = startLoc.getLng();
-        } else {
-            startLat = request.startLatLng().latitude();
-            startLng = request.startLatLng().longitude();
+            String formattedTime = minAllowedTime.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"));
+
+            throw BaseDomainException.withContext(
+                "ride.validation.invalid-scheduled-time",
+                Map.of("reason", "Chuyến xe tiếp theo phải sau " + formattedTime)
+            );
+
         }
 
-        if (request.endLocationId() != null) {
-            endLoc = locationRepository.findById(request.endLocationId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-                    "End location not found"));
-            endLat = endLoc.getLat();
-            endLng = endLoc.getLng();
-        } else {
-            endLat = request.endLatLng().latitude();
-            endLng = request.endLatLng().longitude();
-        }
+
+        Location startLoc = findOrCreateLocation(request.startLocationId(), request.startLatLng(), "Start");
+        Location endLoc = findOrCreateLocation(request.endLocationId(), request.endLatLng(), "End");
+
+//
+//        if (request.startLocationId() != null) {
+//            startLoc = locationRepository.findById(request.startLocationId())
+//                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+//                    "Start location not found"));
+//            startLat = startLoc.getLat();
+//            startLng = startLoc.getLng();
+//        } else {
+//            startLat = request.startLatLng().latitude();
+//            startLng = request.startLatLng().longitude();
+//        }
+//
+//        if (request.endLocationId() != null) {
+//            endLoc = locationRepository.findById(request.endLocationId())
+//                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+//                    "End location not found"));
+//            endLat = endLoc.getLat();
+//            endLng = endLoc.getLng();
+//        } else {
+//            endLat = request.endLatLng().latitude();
+//            endLng = request.endLatLng().longitude();
+//        }
 
         PricingConfig pricingConfig = pricingConfigRepository.findActive(Instant.now())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
@@ -112,7 +131,9 @@ public class SharedRideServiceImpl implements SharedRideService {
         // Validate route via RoutingService (using extracted coords)
         // TODO: For MVP, log validation only. In production, reject invalid routes.
         try {
-            RouteResponse routeResponse = routingService.getRoute(startLat, startLng, endLat, endLng);
+            RouteResponse routeResponse = routingService.getRoute(
+                startLoc.getLat(), startLoc.getLng(),
+                endLoc.getLat(), endLoc.getLng());
             log.info("Route validated - distance: {} m, duration: {} s",
                 routeResponse.distance(), routeResponse.time());
 
@@ -120,13 +141,15 @@ public class SharedRideServiceImpl implements SharedRideService {
             SharedRide ride = new SharedRide();
             ride.setDriver(driver);
             ride.setVehicle(vehicle);
-            ride.setStartLat(startLat);
-            ride.setStartLng(startLng);
-            ride.setEndLat(endLat);
-            ride.setEndLng(endLng);
+            ride.setStartLocation(startLoc);
+            ride.setEndLocation(endLoc);
+//            ride.setStartLat(startLat);
+//            ride.setStartLng(startLng);
+//            ride.setEndLat(endLat);
+//            ride.setEndLng(endLng);
             ride.setPricingConfig(pricingConfig);
-            ride.setStartLocationId(request.startLocationId());
-            ride.setEndLocationId(request.endLocationId());
+//            ride.setStartLocationId(request.startLocationId());
+//            ride.setEndLocationId(request.endLocationId());
             ride.setStatus(SharedRideStatus.SCHEDULED);
             ride.setMaxPassengers(1);
             ride.setCurrentPassengers(0);
@@ -139,7 +162,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             log.info("Ride created successfully - ID: {}, driver: {}, scheduled: {}",
                 savedRide.getSharedRideId(), driver.getDriverId(), savedRide.getScheduledTime());
 
-            return buildRideResponse(savedRide, startLoc, endLoc);
+            return buildRideResponse(savedRide/*, startLoc, endLoc*/);
 
         } catch (Exception e) {
             log.error("Route validation failed for start: {}, end: {}", request.startLocationId(),
@@ -155,10 +178,12 @@ public class SharedRideServiceImpl implements SharedRideService {
         SharedRide ride = rideRepository.findById(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
-        Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
-        Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+//        Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
+//        Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+//
+//        return buildRideResponse(ride, startLoc, endLoc);
 
-        return buildRideResponse(ride, startLoc, endLoc);
+        return buildRideResponse(ride);
     }
 
     @Override
@@ -176,11 +201,10 @@ public class SharedRideServiceImpl implements SharedRideService {
             ridePage = rideRepository.findByDriverDriverIdOrderByScheduledTimeDesc(driverId, pageable);
         }
 
-        return ridePage.map(ride -> {
-            Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
-            Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
-            return buildRideResponse(ride, startLoc, endLoc);
-        });
+        //            Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
+        //            Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+        //            return buildRideResponse(ride, startLoc, endLoc);
+        return ridePage.map(this::buildRideResponse);
     }
 
     @Override
@@ -202,11 +226,10 @@ public class SharedRideServiceImpl implements SharedRideService {
             ridePage = rideRepository.findByDriverDriverIdOrderByScheduledTimeDesc(driverId, pageable);
         }
 
-        return ridePage.map(ride -> {
-            Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
-            Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
-            return buildRideResponse(ride, startLoc, endLoc);
-        });
+        //            Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
+        //            Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+        //            return buildRideResponse(ride, startLoc, endLoc);
+        return ridePage.map(this::buildRideResponse);
     }
 
     @Override
@@ -219,11 +242,10 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         Page<SharedRide> ridePage = rideRepository.findAvailableRides(start, end, pageable);
 
-        return ridePage.map(ride -> {
-            Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
-            Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
-            return buildRideResponse(ride, startLoc, endLoc);
-        });
+        //            Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
+        //            Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+        //            return buildRideResponse(ride, startLoc, endLoc);
+        return ridePage.map(this::buildRideResponse);
     }
 
     @Override
@@ -232,14 +254,12 @@ public class SharedRideServiceImpl implements SharedRideService {
         String username = authentication.getName();
         log.info("Driver {} starting ride {}", username, request.rideId());
 
-        // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(request.rideId())
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", request.rideId()));
 
-        LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
-            .orElse(new LatLng(ride.getStartLat(), ride.getStartLng())); // Fallback to start loc
+//        LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
+//            .orElse(new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng())); // Fallback to start loc
 
-        // Validate driver ownership
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
@@ -249,31 +269,30 @@ public class SharedRideServiceImpl implements SharedRideService {
             throw BaseDomainException.of("ride.unauthorized.not-owner");
         }
 
-        // Validate state
         if (ride.getStatus() != SharedRideStatus.SCHEDULED) {
             throw BaseDomainException.of("ride.validation.invalid-state",
                 Map.of("currentState", ride.getStatus()));
         }
 
         // Ensure ride has at least one confirmed request
-        List<SharedRideRequest> confirmedRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
-            request.rideId(), SharedRideRequestStatus.CONFIRMED);
+//        List<SharedRideRequest> confirmedRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
+//            request.rideId(), SharedRideRequestStatus.CONFIRMED);
+//
+//        if (confirmedRequests.isEmpty()) {
+//            throw BaseDomainException.of("ride.validation.invalid-state",
+//                "Cannot start ride without confirmed passengers");
+//        }
 
-        if (confirmedRequests.isEmpty()) {
-            throw BaseDomainException.of("ride.validation.invalid-state",
-                "Cannot start ride without confirmed passengers");
-        }
-
-        double distanceFromDriverCurrentLocToRiderPickup = PolylineDistance.haversineMeters(
-            driverCurrentLoc.latitude(),
-            driverCurrentLoc.longitude(),
-            confirmedRequests.stream().findFirst().get().getPickupLat(),
-            confirmedRequests.stream().findFirst().get().getPickupLng());
-
-        if (distanceFromDriverCurrentLocToRiderPickup > 0.1) {
-            throw BaseDomainException.of("ride.validation.too-far-from-pickup",
-                "Driver is too far from the pickup location to start the ride");
-        }
+//        double distanceFromDriverCurrentLocToRiderPickup = PolylineDistance.haversineMeters(
+//            driverCurrentLoc.latitude(),
+//            driverCurrentLoc.longitude(),
+//            confirmedRequests.stream().findFirst().get().getPickupLat(),
+//            confirmedRequests.stream().findFirst().get().getPickupLng());
+//
+//        if (distanceFromDriverCurrentLocToRiderPickup > 0.1) {
+//            throw BaseDomainException.of("ride.validation.too-far-from-pickup",
+//                "Driver is too far from the pickup location to start the ride");
+//        }
 
         ride.setStatus(SharedRideStatus.ONGOING);
         ride.setStartedAt(LocalDateTime.now());
@@ -290,7 +309,7 @@ public class SharedRideServiceImpl implements SharedRideService {
                 driver.getUser(),
                 NotificationType.RIDE_STARTED,
                 "Ride Started",
-                "Your ride has been started successfully with " + confirmedRequests.size() + " confirmed passengers.",
+                "Your ride has been started successfully.",
                 null,
                 Priority.MEDIUM,
                 DeliveryMethod.PUSH,
@@ -301,12 +320,13 @@ public class SharedRideServiceImpl implements SharedRideService {
             log.warn("Failed to notify driver for ride start {}: {}", ride.getSharedRideId(), ex.getMessage());
         }
 
-        log.info("Ride {} started successfully with {} confirmed passengers awaiting pickup",
-            request.rideId(), confirmedRequests.size());
+//        log.info("Ride {} started successfully with {} confirmed passengers awaiting pickup",
+//            request.rideId(), confirmedRequests.size());
 
-        Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
-        Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
-        return buildRideResponse(ride, startLoc, endLoc);
+//        Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
+//        Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+//        return buildRideResponse(ride, startLoc, endLoc);
+        return buildRideResponse(ride);
     }
 
     @Override
@@ -324,14 +344,12 @@ public class SharedRideServiceImpl implements SharedRideService {
             .orElseThrow(() -> BaseDomainException.formatted(
                 "ride-request.not-found.resource", request.rideRequestId()));
 
-        // Validate association
         if (rideRequest.getSharedRide() == null
             || !rideRequest.getSharedRide().getSharedRideId().equals(ride.getSharedRideId())) {
             throw BaseDomainException.of("ride.validation.invalid-state",
                 "Ride request does not belong to the specified ride");
         }
 
-        // Validate driver ownership
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
@@ -352,13 +370,13 @@ public class SharedRideServiceImpl implements SharedRideService {
         }
 
         LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
-            .orElse(new LatLng(ride.getStartLat(), ride.getStartLng()));
+            .orElse(new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng()));
 
         double distanceToPickup = PolylineDistance.haversineMeters(
             driverCurrentLoc.latitude(),
             driverCurrentLoc.longitude(),
-            rideRequest.getPickupLat(),
-            rideRequest.getPickupLng());
+            rideRequest.getPickupLocation().getLat(),
+            rideRequest.getPickupLocation().getLng());
 
         if (distanceToPickup > 100) {
             throw BaseDomainException.of("ride.validation.too-far-from-pickup",
@@ -369,7 +387,6 @@ public class SharedRideServiceImpl implements SharedRideService {
         rideRequest.setActualPickupTime(LocalDateTime.now());
         requestRepository.save(rideRequest);
 
-        // Send notification to driver
         try {
             notificationService.sendNotification(
                 driver.getUser(),
@@ -402,12 +419,15 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         log.info("Ride request {} for ride {} is now ONGOING", request.rideRequestId(), request.rideId());
 
-        Location pickupLoc = rideRequest.getPickupLocationId() != null
-            ? locationRepository.findById(rideRequest.getPickupLocationId()).orElse(null)
-            : null;
-        Location dropoffLoc = rideRequest.getDropoffLocationId() != null
-            ? locationRepository.findById(rideRequest.getDropoffLocationId()).orElse(null)
-            : null;
+//        Location pickupLoc = rideRequest.getPickupLocationId() != null
+//            ? locationRepository.findById(rideRequest.getPickupLocationId()).orElse(null)
+//            : null;
+//        Location dropoffLoc = rideRequest.getDropoffLocationId() != null
+//            ? locationRepository.findById(rideRequest.getDropoffLocationId()).orElse(null)
+//            : null;
+
+        LocationResponse pickupLoc = locationMapper.toResponse(rideRequest.getPickupLocation());
+        LocationResponse dropoffLoc = locationMapper.toResponse(rideRequest.getDropoffLocation());
 
         return SharedRideRequestResponse.builder()
             .sharedRideRequestId(rideRequest.getSharedRideRequestId())
@@ -415,14 +435,16 @@ public class SharedRideServiceImpl implements SharedRideService {
             .requestKind(rideRequest.getRequestKind().name())
             .riderId(rideRequest.getRider().getRiderId())
             .riderName(rideRequest.getRider().getUser().getFullName())
-            .pickupLocationId(rideRequest.getPickupLocationId())
-            .pickupLocationName(pickupLoc != null ? pickupLoc.getName() : null)
-            .dropoffLocationId(rideRequest.getDropoffLocationId())
-            .dropoffLocationName(dropoffLoc != null ? dropoffLoc.getName() : null)
-            .pickupLat(rideRequest.getPickupLat())
-            .pickupLng(rideRequest.getPickupLng())
-            .dropoffLat(rideRequest.getDropoffLat())
-            .dropoffLng(rideRequest.getDropoffLng())
+            .pickupLocation(pickupLoc)
+            .dropoffLocation(dropoffLoc)
+//            .pickupLocationId(rideRequest.getPickupLocationId())
+//            .pickupLocationName(pickupLoc != null ? pickupLoc.getName() : null)
+//            .dropoffLocationId(rideRequest.getDropoffLocationId())
+//            .dropoffLocationName(dropoffLoc != null ? dropoffLoc.getName() : null)
+//            .pickupLat(rideRequest.getPickupLat())
+//            .pickupLng(rideRequest.getPickupLng())
+//            .dropoffLat(rideRequest.getDropoffLat())
+//            .dropoffLng(rideRequest.getDropoffLng())
             .status(rideRequest.getStatus().name())
             .fareAmount(rideRequest.getTotalFare())
             .originalFare(rideRequest.getSubtotalFare())
@@ -443,16 +465,14 @@ public class SharedRideServiceImpl implements SharedRideService {
         String username = authentication.getName();
         log.info("Driver {} completing ride request {}", username, request.rideRequestId());
 
-        // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
         SharedRideRequest rideRequest = requestRepository.findById(request.rideRequestId())
             .orElseThrow(() -> BaseDomainException.formatted("ride-request.not-found.resource", request.rideRequestId()));
 
         LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
-            .orElse(new LatLng(ride.getStartLat(), ride.getStartLng()));
+            .orElse(new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng())); // Fallback to start loc
 
-        // Validate driver ownership
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
@@ -474,7 +494,7 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
             driverCurrentLoc.longitude(),
-            rideRequest.getDropoffLat(), rideRequest.getDropoffLng()) > 100) {
+            rideRequest.getDropoffLocation().getLat(), rideRequest.getDropoffLocation().getLng()) > 100) {
             log.warn("Driver {} is too far from the request's dropoff location to complete request{}",
                 driver.getDriverId(), rideRequest.getSharedRideRequestId());
 
@@ -493,10 +513,12 @@ public class SharedRideServiceImpl implements SharedRideService {
                 actualDistance = (float) rideTrackingService.computeDistanceFromPoints(track.getGpsPoints());
                 log.debug("Computed actual distance for ride {} from GPS: {} km", rideId, actualDistance);
             } else {
-                // Fallback to routing query
                 RouteResponse actualRoute = routingService.getRoute(
-                    ride.getStartLat(), ride.getStartLng(),
-                    ride.getEndLat(), ride.getEndLng());
+                    ride.getStartLocation().getLat(),
+                    ride.getStartLocation().getLng(),
+                    ride.getEndLocation().getLat(),
+                    ride.getEndLocation().getLng()
+                );
                 actualDistance = (float) (actualRoute.distance() / 1000.0);
                 log.debug("Computed actual distance for ride {} via routing fallback: {} km", rideId, actualDistance);
             }
@@ -591,14 +613,13 @@ public class SharedRideServiceImpl implements SharedRideService {
         String username = authentication.getName();
         log.info("Driver {} completing ride {}", username, request.rideId());
 
-        // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
         LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
-            .orElse(new LatLng(ride.getStartLat(), ride.getStartLng()));
+            .orElse(new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng())); // Fallback to start loc
 
-        // Validate driver ownership
+
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
@@ -608,7 +629,6 @@ public class SharedRideServiceImpl implements SharedRideService {
             throw BaseDomainException.of("ride.unauthorized.not-owner");
         }
 
-        // Validate state
         if (ride.getStatus() != SharedRideStatus.ONGOING) {
             throw BaseDomainException.of("ride.validation.invalid-state",
                 Map.of("currentState", ride.getStatus()));
@@ -621,21 +641,21 @@ public class SharedRideServiceImpl implements SharedRideService {
                 "Cannot complete ride while requests are still awaiting pickup/dropoff");
         }
 
-        if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
-            driverCurrentLoc.longitude(),
-            ride.getEndLat(), ride.getEndLng()) > 100) {
-            log.warn("Driver {} is too far from the end location to complete ride {}",
-                driver.getDriverId(), rideId);
-            // TODO: consider rejecting completion.
-        }
+//        if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
+//            driverCurrentLoc.longitude(),
+//            ride.getEndLat(), ride.getEndLng()) > 100) {
+//            log.warn("Driver {} is too far from the end location to complete ride {}",
+//                driver.getDriverId(), rideId);
+//            // TODO: consider rejecting completion.
+//        }
 
-        // Compute actual duration from timestamps
+
         LocalDateTime now = LocalDateTime.now();
         Integer actualDuration = (int) java.time.Duration.between(ride.getStartedAt(), now).toMinutes();
         log.debug("Computed actual duration for ride {}: {} min (from {} to {})",
             rideId, actualDuration, ride.getStartedAt(), now);
 
-        // Compute actual distance from GPS track (primary) or fallback to routing
+
         Float actualDistance;
         try {
             RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId).orElse(null);
@@ -643,10 +663,12 @@ public class SharedRideServiceImpl implements SharedRideService {
                 actualDistance = (float) rideTrackingService.computeDistanceFromPoints(track.getGpsPoints());
                 log.debug("Computed actual distance for ride {} from GPS: {} km", rideId, actualDistance);
             } else {
-                // Fallback to routing query
                 RouteResponse actualRoute = routingService.getRoute(
-                    ride.getStartLat(), ride.getStartLng(),
-                    ride.getEndLat(), ride.getEndLng());
+                    ride.getStartLocation().getLat(),
+                    ride.getStartLocation().getLng(),
+                    ride.getEndLocation().getLat(),
+                    ride.getEndLocation().getLng()
+                );
                 actualDistance = (float) (actualRoute.distance() / 1000.0);
                 log.debug("Computed actual distance for ride {} via routing fallback: {} km", rideId, actualDistance);
             }
@@ -659,13 +681,13 @@ public class SharedRideServiceImpl implements SharedRideService {
         List<SharedRideRequest> rideRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
             rideId,
             SharedRideRequestStatus.COMPLETED);
-
-        List<SharedRideRequest> ongoingRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
-            rideId, SharedRideRequestStatus.ONGOING);
-
-        if (!ongoingRequests.isEmpty()) {
-            throw BaseDomainException.of("ride.validation.incomplete-requests");
-        }
+//
+//        List<SharedRideRequest> ongoingRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
+//            rideId, SharedRideRequestStatus.ONGOING);
+//
+//        if (!ongoingRequests.isEmpty()) {
+//            throw BaseDomainException.of("ride.validation.incomplete-requests");
+//        }
 
         BigDecimal totalFareCollected = BigDecimal.ZERO;
         BigDecimal platformCommission = BigDecimal.ZERO;
@@ -703,14 +725,13 @@ public class SharedRideServiceImpl implements SharedRideService {
             log.warn("Failed to stop tracking for completed ride {}: {}", ride.getSharedRideId(), trackingEx.getMessage());
         }
 
-        // Send notification to driver
         try {
             notificationService.sendNotification(
                 driver.getUser(),
                 NotificationType.RIDE_COMPLETED,
                 "Ride Completed",
                 String.format("Your ride has been completed. Total earnings: %s VND from %d passenger(s).",
-                    driverEarnings.toString(), completedRequestIds.size()),
+                    driverEarnings, completedRequestIds.size()),
                 null,
                 Priority.MEDIUM,
                 DeliveryMethod.PUSH,
@@ -743,11 +764,9 @@ public class SharedRideServiceImpl implements SharedRideService {
         String username = authentication.getName();
         log.info("User {} cancelling ride {} - reason: {}", username, rideId, reason);
 
-        // Get ride with pessimistic lock
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
-        // Validate ownership or admin role
         User user = userRepository.findByEmail(username)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
 
@@ -763,8 +782,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             }
         }
 
-        // Validate state
-        if (ride.getStatus() != SharedRideStatus.SCHEDULED) {
+        if (ride.getStatus() != SharedRideStatus.SCHEDULED && ride.getStatus() != SharedRideStatus.ONGOING) {
             throw BaseDomainException.of("ride.validation.invalid-state",
                 Map.of("currentState", ride.getStatus()));
         }
@@ -773,52 +791,80 @@ public class SharedRideServiceImpl implements SharedRideService {
         List<SharedRideRequest> confirmedRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
             rideId, SharedRideRequestStatus.CONFIRMED);
 
-        for (SharedRideRequest request : confirmedRequests) {
-            try {
-                RideHoldReleaseRequest releaseRequest = RideHoldReleaseRequest.builder()
-                    .riderId(request.getRider().getRiderId())
-                    .rideRequestId(request.getSharedRideRequestId())
-                    .note("Ride cancelled - Request #" + request.getSharedRideRequestId())
-                    .build();
+        if (!confirmedRequests.isEmpty()) {
+            for (SharedRideRequest request : confirmedRequests) {
+                try {
+                    RideHoldReleaseRequest releaseRequest = RideHoldReleaseRequest.builder()
+                        .riderId(request.getRider().getRiderId())
+                        .rideRequestId(request.getSharedRideRequestId())
+                        .note("Ride cancelled - Request #" + request.getSharedRideRequestId())
+                        .build();
 
-                rideFundCoordinatingService.releaseRideFunds(releaseRequest);
+                    rideFundCoordinatingService.releaseRideFunds(releaseRequest);
 
-                // Update request status
-                request.setStatus(SharedRideRequestStatus.CANCELLED);
-                requestRepository.save(request);
+                    request.setStatus(SharedRideRequestStatus.CANCELLED);
+                    requestRepository.save(request);
 
-                log.info("Released hold for request {} - amount: {}",
-                    request.getSharedRideRequestId(), request.getTotalFare());
+                    log.info("Released hold for request {} - amount: {}",
+                        request.getSharedRideRequestId(), request.getTotalFare());
 
-            } catch (Exception e) {
-                log.error("Failed to release hold for request {}: {}",
-                    request.getSharedRideRequestId(), e.getMessage(), e);
-                // Continue with other requests
+                } catch (Exception e) {
+                    log.error("Failed to release hold for request {}: {}",
+                        request.getSharedRideRequestId(), e.getMessage(), e);
+                }
             }
         }
 
-        // Update ride status
         ride.setStatus(SharedRideStatus.CANCELLED);
         rideRepository.save(ride);
 
         log.info("Ride {} cancelled successfully", rideId);
 
-        Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
-        Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
-        return buildRideResponse(ride, startLoc, endLoc);
+//        Location startLoc = locationRepository.findById(ride.getStartLocationId()).orElse(null);
+//        Location endLoc = locationRepository.findById(ride.getEndLocationId()).orElse(null);
+//        return buildRideResponse(ride, startLoc, endLoc);
+        return buildRideResponse(ride);
     }
 
-    private SharedRideResponse buildRideResponse(SharedRide ride, Location startLoc, Location endLoc) {
-        SharedRideResponse response = rideMapper.toResponse(ride);
+    private SharedRideResponse buildRideResponse(SharedRide ride/*, Location startLoc, Location endLoc*/) {
 
-        if (startLoc != null) {
-            response.setStartLocationName(startLoc.getName());
-        }
-        if (endLoc != null) {
-            response.setEndLocationName(endLoc.getName());
+//        if (startLoc != null) {
+//            response.setStartLocationName(startLoc.getName());
+//        }
+//        if (endLoc != null) {
+//            response.setEndLocationName(endLoc.getName());
+//        }
+
+        return rideMapper.toResponse(ride);
+    }
+
+    private Location findOrCreateLocation(Integer locationId, LatLng latLng, String pointType) {
+        if (locationId != null && latLng == null) {
+            return locationRepository.findById(locationId)
+                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
+                    pointType + " location not found with ID: " + locationId));
         }
 
-        return response;
+        if (locationId == null && latLng != null) {
+            return locationRepository.findByLatAndLng(latLng.latitude(), latLng.longitude())
+                .orElseGet(() -> {
+                    Location newLocation = new Location();
+                    newLocation.setName(null);
+                    newLocation.setLat(latLng.latitude());
+                    newLocation.setLng(latLng.longitude());
+                    newLocation.setAddress(routingService.getAddressFromCoordinates(
+                        latLng.latitude(), latLng.longitude()));
+                    newLocation.setCreatedAt(LocalDateTime.now());
+                    newLocation.setIsPoi(false);
+                    return locationRepository.save(newLocation);
+                });
+        }
+
+        if (locationId != null) { // and latLng is not null
+            throw BaseDomainException.of("ride.validation.invalid-location", "Provide either " + pointType.toLowerCase() + "LocationId or " + pointType.toLowerCase() + "LatLng, not both");
+        }
+
+        throw BaseDomainException.of("ride.validation.invalid-location", "Either " + pointType.toLowerCase() + "LocationId or " + pointType.toLowerCase() + "LatLng must be provided");
     }
 }
 

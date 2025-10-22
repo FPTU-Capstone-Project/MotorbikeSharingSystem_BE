@@ -85,5 +85,11 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
         "WHERE r.status = 'ONGOING' AND r.startedAt IS NOT NULL AND r.startedAt <= :cutoff")
     List<SharedRide> findOngoingForAutoCompletion(@Param("cutoff") LocalDateTime cutoff);
 
+    @Query("SELECT r FROM SharedRide r " +
+        "WHERE r.driver.driverId = :driverId " +
+        "ORDER BY r.scheduledTime DESC")
+    Optional<SharedRide> findLatestScheduledRideByDriverId(@Param("driverId") Integer driverId);
+
+
 }
 

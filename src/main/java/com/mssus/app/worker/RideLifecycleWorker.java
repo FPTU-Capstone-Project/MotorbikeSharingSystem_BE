@@ -252,6 +252,8 @@ public class RideLifecycleWorker {
 
         try {
             var driver = request.getSharedRide() != null ? request.getSharedRide().getDriver() : null;
+            var pickup = request.getPickupLocation();
+            var dropoff = request.getDropoffLocation();
             if (driver != null && driver.getUser() != null) {
                 realTimeNotificationService.notifyDriverOffer(
                     driver,
@@ -262,10 +264,14 @@ public class RideLifecycleWorker {
                         .driverName(driver.getUser().getFullName())
                         .riderId(request.getRider().getRiderId())
                         .riderName(request.getRider().getUser().getFullName())
-                        .pickupLat(request.getPickupLat())
-                        .pickupLng(request.getPickupLng())
-                        .dropoffLat(request.getDropoffLat())
-                        .dropoffLng(request.getDropoffLng())
+                        .pickupLocationName(pickup.getName())
+                        .dropoffLocationName(pickup.getName())
+                        .pickupAddress(pickup.getAddress())
+                        .dropoffAddress(dropoff.getAddress())
+                        .pickupLat(pickup.getLat())
+                        .pickupLng(pickup.getLng())
+                        .dropoffLat(dropoff.getLat())
+                        .dropoffLng(dropoff.getLng())
                         .pickupTime(request.getPickupTime())
                         .totalFare(request.getTotalFare())
                         .broadcast(Boolean.TRUE)

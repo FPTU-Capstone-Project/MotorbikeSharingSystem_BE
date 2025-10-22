@@ -2,6 +2,7 @@ package com.mssus.app.dto.response.ride;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.mssus.app.dto.response.LocationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,37 +49,45 @@ public class SharedRideRequestResponse {
     @Schema(description = "Rider's average rating", example = "4.9")
     private Float riderRating;
 
-    @JsonProperty("pickup_location_id")
-    @Schema(description = "Pickup location ID", example = "5")
-    private Integer pickupLocationId;
+    @JsonProperty("pickup_location")
+    @Schema(description = "Pickup location details in JSON format")
+    private LocationResponse pickupLocation;
 
-    @JsonProperty("pickup_location_name")
-    @Schema(description = "Pickup location name", example = "Landmark 81")
-    private String pickupLocationName;
+    @JsonProperty("dropoff_location")
+    @Schema(description = "Dropoff location details in JSON format")
+    private LocationResponse dropoffLocation;
 
-    @JsonProperty("dropoff_location_id")
-    @Schema(description = "Dropoff location ID", example = "6")
-    private Integer dropoffLocationId;
-
-    @JsonProperty("dropoff_location_name")
-    @Schema(description = "Dropoff location name", example = "Bitexco Tower")
-    private String dropoffLocationName;
-
-    @JsonProperty("pickup_lat")
-    @Schema(description = "Pickup latitude", example = "10.7769")
-    private Double pickupLat;
-
-    @JsonProperty("pickup_lng")
-    @Schema(description = "Pickup longitude", example = "106.7009")
-    private Double pickupLng;
-
-    @JsonProperty("dropoff_lat")
-    @Schema(description = "Dropoff latitude", example = "10.7722")
-    private Double dropoffLat;
-
-    @JsonProperty("dropoff_lng")
-    @Schema(description = "Dropoff longitude", example = "106.7040")
-    private Double dropoffLng;
+//    @JsonProperty("pickup_location_id")
+//    @Schema(description = "Pickup location ID", example = "5")
+//    private Integer pickupLocationId;
+//
+//    @JsonProperty("pickup_location_name")
+//    @Schema(description = "Pickup location name", example = "Landmark 81")
+//    private String pickupLocationName;
+//
+//    @JsonProperty("dropoff_location_id")
+//    @Schema(description = "Dropoff location ID", example = "6")
+//    private Integer dropoffLocationId;
+//
+//    @JsonProperty("dropoff_location_name")
+//    @Schema(description = "Dropoff location name", example = "Bitexco Tower")
+//    private String dropoffLocationName;
+//
+//    @JsonProperty("pickup_lat")
+//    @Schema(description = "Pickup latitude", example = "10.7769")
+//    private Double pickupLat;
+//
+//    @JsonProperty("pickup_lng")
+//    @Schema(description = "Pickup longitude", example = "106.7009")
+//    private Double pickupLng;
+//
+//    @JsonProperty("dropoff_lat")
+//    @Schema(description = "Dropoff latitude", example = "10.7722")
+//    private Double dropoffLat;
+//
+//    @JsonProperty("dropoff_lng")
+//    @Schema(description = "Dropoff longitude", example = "106.7040")
+//    private Double dropoffLng;
 
     @Schema(description = "Request status (PENDING, CONFIRMED, ONGOING, COMPLETED, CANCELLED, EXPIRED)", example = "PENDING")
     private String status;

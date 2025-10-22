@@ -90,9 +90,9 @@ class RideMatchingServiceImplTest {
         // Arrange
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -133,8 +133,7 @@ class RideMatchingServiceImplTest {
     @DisplayName("Should handle request with invalid coordinates")
     void should_handleInvalidCoordinates_when_findingMatches() {
         // Arrange
-        testRequest.setPickupLat(null);
-        testRequest.setPickupLng(null);
+        testRequest.setPickupLocation(null);
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
 
@@ -166,9 +165,9 @@ class RideMatchingServiceImplTest {
         SharedRide ride2 = createTestRide(2, "Driver 2", 4.5f);
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide, ride2));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -188,9 +187,9 @@ class RideMatchingServiceImplTest {
         testRide.setCurrentPassengers(testRide.getMaxPassengers());
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -222,9 +221,9 @@ class RideMatchingServiceImplTest {
         testRide.setVehicle(null);
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -253,15 +252,24 @@ class RideMatchingServiceImplTest {
     @DisplayName("Should handle very large distance values")
     void should_handleLargeDistanceValues_when_findingMatches() {
         // Arrange
-        testRequest.setPickupLat(90.0);
-        testRequest.setPickupLng(180.0);
-        testRequest.setDropoffLat(-90.0);
-        testRequest.setDropoffLng(-180.0);
+//        testRequest.setPickupLat(90.0);
+//        testRequest.setPickupLng(180.0);
+//        testRequest.setDropoffLat(-90.0);
+//        testRequest.setDropoffLng(-180.0);
+        testPickupLocation = new Location();
+        testPickupLocation.setLocationId(1);
+        testPickupLocation.setLat(90.0);
+        testPickupLocation.setLng(180.0);
+
+        testDropoffLocation = new Location();
+        testDropoffLocation.setLocationId(2);
+        testDropoffLocation.setLat(-90.0);
+        testDropoffLocation.setLng(-180.0);
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -279,9 +287,9 @@ class RideMatchingServiceImplTest {
         testRequest.setTotalFare(BigDecimal.ZERO);
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -302,9 +310,9 @@ class RideMatchingServiceImplTest {
         testRide.setStatus(status);
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -323,9 +331,9 @@ class RideMatchingServiceImplTest {
         testDriver.setRatingAvg(rating);
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
-        when(locationRepository.findById(testRequest.getPickupLocationId()))
+        when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
             .thenReturn(Optional.of(testPickupLocation));
-        when(locationRepository.findById(testRequest.getDropoffLocationId()))
+        when(locationRepository.findById(testRequest.getDropoffLocation().getLocationId()))
             .thenReturn(Optional.of(testDropoffLocation));
 
         // Act
@@ -375,10 +383,12 @@ class RideMatchingServiceImplTest {
         testRide.setMaxPassengers(2);
         testRide.setCurrentPassengers(0);
         testRide.setScheduledTime(LocalDateTime.now().plusHours(1));
-        testRide.setStartLat(10.762622);
-        testRide.setStartLng(106.660172);
-        testRide.setEndLat(10.7769);
-        testRide.setEndLng(106.7009);
+        testRide.setStartLocation(testPickupLocation);
+        testRide.setEndLocation(testDropoffLocation);
+//        testRide.setStartLat(10.762622);
+//        testRide.setStartLng(106.660172);
+//        testRide.setEndLat(10.7769);
+//        testRide.setEndLng(106.7009);
         testRide.setEstimatedDistance(15.5f);
         testRide.setEstimatedDuration(30);
 
@@ -398,12 +408,14 @@ class RideMatchingServiceImplTest {
         // Create test request
         testRequest = SharedRideRequest.builder()
             .sharedRideRequestId(1)
-            .pickupLocationId(1)
-            .dropoffLocationId(2)
-            .pickupLat(10.762622)
-            .pickupLng(106.660172)
-            .dropoffLat(10.7769)
-            .dropoffLng(106.7009)
+            .pickupLocation(testPickupLocation)
+            .dropoffLocation(testDropoffLocation)
+//            .pickupLocationId(1)
+//            .dropoffLocationId(2)
+//            .pickupLat(10.762622)
+//            .pickupLng(106.660172)
+//            .dropoffLat(10.7769)
+//            .dropoffLng(106.7009)
             .pickupTime(LocalDateTime.now().plusHours(1))
             .totalFare(new BigDecimal("25.50"))
             .distanceMeters(15000)
@@ -439,6 +451,18 @@ class RideMatchingServiceImplTest {
             .ratingAvg(rating)
             .build();
 
+        Location startLocation = new Location();
+        startLocation.setLocationId(1);
+        startLocation.setName("Start Location " + rideId);
+        startLocation.setLat(10.762622);
+        startLocation.setLng(106.660172);
+
+        Location endLocation = new Location();
+        endLocation.setLocationId(2);
+        endLocation.setName("End Location " + rideId);
+        endLocation.setLat(10.7769);
+        endLocation.setLng(106.7009);
+
         SharedRide ride = new SharedRide();
         ride.setSharedRideId(rideId);
         ride.setDriver(driver);
@@ -448,10 +472,12 @@ class RideMatchingServiceImplTest {
         ride.setMaxPassengers(2);
         ride.setCurrentPassengers(0);
         ride.setScheduledTime(LocalDateTime.now().plusHours(1));
-        ride.setStartLat(10.762622);
-        ride.setStartLng(106.660172);
-        ride.setEndLat(10.7769);
-        ride.setEndLng(106.7009);
+        ride.setStartLocation(startLocation);
+        ride.setEndLocation(endLocation);
+//        ride.setStartLat(10.762622);
+//        ride.setStartLng(106.660172);
+//        ride.setEndLat(10.7769);
+//        ride.setEndLng(106.7009);
         ride.setEstimatedDistance(15.5f);
         ride.setEstimatedDuration(30);
         return ride;

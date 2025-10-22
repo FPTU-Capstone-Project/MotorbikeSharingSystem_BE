@@ -56,8 +56,8 @@ class LocationServiceImplTest {
         return location;
     }
 
-    private LocationResponse createTestLocationResponse(Integer locationId, String name, Double lat, Double lng) {
-        return new LocationResponse(locationId, name, lat, lng);
+    private LocationResponse createTestLocationResponse(Integer locationId, String name, Double lat, Double lng, String address) {
+        return new LocationResponse(locationId, name, lat, lng, address);
     }
 
     // Tests for getAppPOIs method
@@ -71,8 +71,8 @@ class LocationServiceImplTest {
         );
 
         List<LocationResponse> expectedResponses = List.of(
-                createTestLocationResponse(1, "FPT University", 10.841480, 106.809844),
-                createTestLocationResponse(2, "Student Culture House", 10.8753395, 106.8000331)
+                createTestLocationResponse(1, "FPT University", 10.841480, 106.809844, "FPT University, District 9"),
+                createTestLocationResponse(2, "Student Culture House", 10.8753395, 106.8000331, "Student Culture House, District 9")
         );
 
         when(locationRepository.findAll()).thenReturn(locations);
@@ -114,7 +114,7 @@ class LocationServiceImplTest {
     void should_handleSingleLocation_when_repositoryHasOneLocation() {
         // Arrange
         Location location = createTestLocation(1, "Test Location", 10.0, 106.0, "Test Address");
-        LocationResponse expectedResponse = createTestLocationResponse(1, "Test Location", 10.0, 106.0);
+        LocationResponse expectedResponse = createTestLocationResponse(1, "Test Location", 10.0, 106.0, "Test Address");
 
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(locationMapper.toResponse(location)).thenReturn(expectedResponse);
@@ -139,7 +139,7 @@ class LocationServiceImplTest {
                 .toList();
 
         List<LocationResponse> expectedResponses = Stream.iterate(1, i -> i <= 100, i -> i + 1)
-                .map(i -> createTestLocationResponse(i, "Location " + i, 10.0 + i * 0.001, 106.0 + i * 0.001))
+                .map(i -> createTestLocationResponse(i, "Location " + i, 10.0 + i * 0.001, 106.0 + i * 0.001, "Address " + i))
                 .toList();
 
         when(locationRepository.findAll()).thenReturn(locations);
@@ -165,7 +165,7 @@ class LocationServiceImplTest {
             String name, Double lat, Double lng, String address) {
         // Arrange
         Location location = createTestLocation(1, name, lat, lng, address);
-        LocationResponse expectedResponse = createTestLocationResponse(1, name, lat, lng);
+        LocationResponse expectedResponse = createTestLocationResponse(1, name, lat, lng, address);
 
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(locationMapper.toResponse(location)).thenReturn(expectedResponse);
@@ -192,7 +192,7 @@ class LocationServiceImplTest {
         location.setLng(null);
         location.setAddress(null);
 
-        LocationResponse expectedResponse = new LocationResponse(1, null, null, null);
+        LocationResponse expectedResponse = new LocationResponse(1, null, null, null, null);
 
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(locationMapper.toResponse(location)).thenReturn(expectedResponse);
@@ -265,7 +265,7 @@ class LocationServiceImplTest {
         // Arrange
         Location location1 = createTestLocation(1, "Location 1", 10.0, 106.0, "Address 1");
         Location location2 = createTestLocation(2, "Location 2", 11.0, 107.0, "Address 2");
-        LocationResponse response1 = createTestLocationResponse(1, "Location 1", 10.0, 106.0);
+        LocationResponse response1 = createTestLocationResponse(1, "Location 1", 10.0, 106.0, "Address 1");
 
         when(locationRepository.findAll()).thenReturn(List.of(location1, location2));
         when(locationMapper.toResponse(location1)).thenReturn(response1);
@@ -295,9 +295,9 @@ class LocationServiceImplTest {
         );
 
         List<LocationResponse> expectedResponses = List.of(
-                createTestLocationResponse(3, "Location C", 10.3, 106.3),
-                createTestLocationResponse(1, "Location A", 10.1, 106.1),
-                createTestLocationResponse(2, "Location B", 10.2, 106.2)
+                createTestLocationResponse(3, "Location C", 10.3, 106.3, "Address C"),
+                createTestLocationResponse(1, "Location A", 10.1, 106.1, "Address A"),
+                createTestLocationResponse(2, "Location B", 10.2, 106.2, "Address B")
         );
 
         when(locationRepository.findAll()).thenReturn(locations);
@@ -323,7 +323,7 @@ class LocationServiceImplTest {
         Location location = createTestLocation(1, "Extreme Location", 
                 Double.MAX_VALUE, Double.MIN_VALUE, "Extreme Address");
         LocationResponse expectedResponse = createTestLocationResponse(1, "Extreme Location", 
-                Double.MAX_VALUE, Double.MIN_VALUE);
+                Double.MAX_VALUE, Double.MIN_VALUE, "Extreme Address");
 
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(locationMapper.toResponse(location)).thenReturn(expectedResponse);
@@ -345,7 +345,7 @@ class LocationServiceImplTest {
         // Arrange
         String longName = "A".repeat(1000);
         Location location = createTestLocation(1, longName, 10.0, 106.0, "Test Address");
-        LocationResponse expectedResponse = createTestLocationResponse(1, longName, 10.0, 106.0);
+        LocationResponse expectedResponse = createTestLocationResponse(1, longName, 10.0, 106.0, "Test Address");
 
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(locationMapper.toResponse(location)).thenReturn(expectedResponse);

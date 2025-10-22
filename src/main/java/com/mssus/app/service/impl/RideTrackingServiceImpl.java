@@ -106,9 +106,9 @@ public class RideTrackingServiceImpl implements RideTrackingService {
 
         // Compute partials for response (current dist from all points; ETA via routing)
         double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
-        int etaMinutes = computeEta(ride, track.getGpsPoints());  // Stub: Routing to end
+//        int etaMinutes = computeEta(ride, track.getGpsPoints());  // Stub: Routing to end
 
-        return new TrackingResponse(currentDistanceKm, etaMinutes, "OK");
+        return new TrackingResponse(currentDistanceKm, "OK");
     }
 
     private void validatePoints(List<LocationPoint> points) {
@@ -147,20 +147,20 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         return totalDist;
     }
 
-    private int computeEta(SharedRide ride, JsonNode pointsNode) {
-        // Last point to end location, via routing (traffic-aware)
-        if (pointsNode.isEmpty()) return (int) (ride.getEstimatedDuration() * 0.8);  // Optimistic fallback
-        JsonNode lastPoint = pointsNode.get(pointsNode.size() - 1);
-        double lastLat = lastPoint.get("lat").asDouble();
-        double lastLng = lastPoint.get("lng").asDouble();
-        try {
-            RouteResponse etaRoute = routingService.getRoute(lastLat, lastLng, ride.getEndLat(), ride.getEndLng());
-            return (int) Math.ceil(etaRoute.time() / 60.0);
-        } catch (Exception e) {
-            log.warn("ETA routing failed for ride {}: {}", ride.getSharedRideId(), e.getMessage());
-            return ride.getEstimatedDuration();  // Fallback
-        }
-    }
+//    private int computeEta(SharedRide ride, JsonNode pointsNode) {
+//        // Last point to end location, via routing (traffic-aware)
+//        if (pointsNode.isEmpty()) return (int) (ride.getEstimatedDuration() * 0.8);  // Optimistic fallback
+//        JsonNode lastPoint = pointsNode.get(pointsNode.size() - 1);
+//        double lastLat = lastPoint.get("lat").asDouble();
+//        double lastLng = lastPoint.get("lng").asDouble();
+//        try {
+//            RouteResponse etaRoute = routingService.getRoute(lastLat, lastLng, ride.getEndLat(), ride.getEndLng());
+//            return (int) Math.ceil(etaRoute.time() / 60.0);
+//        } catch (Exception e) {
+//            log.warn("ETA routing failed for ride {}: {}", ride.getSharedRideId(), e.getMessage());
+//            return ride.getEstimatedDuration();  // Fallback
+//        }
+//    }
 
     // Get latest position from track (with staleness check)
     @Override

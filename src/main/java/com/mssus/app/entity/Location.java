@@ -16,7 +16,7 @@ public class Location {
     @Column(name = "location_id")
     private Integer locationId;
 
-    @Column(nullable = false)
+    @Column
     private String name;
 
     @Column(nullable = false)
@@ -25,8 +25,11 @@ public class Location {
     @Column(nullable = false)
     private Double lng;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT", nullable = false)
     private String address;
+
+    @Column(nullable = false)
+    private Boolean isPoi = true;
 
     @CreatedDate
     private LocalDateTime createdAt;

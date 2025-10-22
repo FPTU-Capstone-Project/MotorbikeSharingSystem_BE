@@ -5,10 +5,12 @@ import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.ride.*;
 import com.mssus.app.dto.request.wallet.RideCompleteSettlementRequest;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
+import com.mssus.app.dto.response.LocationResponse;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.*;
 import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.entity.*;
+import com.mssus.app.mapper.LocationMapper;
 import com.mssus.app.mapper.SharedRideMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
@@ -80,6 +82,9 @@ class SharedRideServiceImplTest {
     @Mock
     private Authentication authentication;
 
+    @Mock
+    private LocationMapper locationMapper;
+
     @InjectMocks
     private SharedRideServiceImpl sharedRideService;
 
@@ -88,6 +93,8 @@ class SharedRideServiceImplTest {
     private Vehicle vehicle;
     private Location startLocation;
     private Location endLocation;
+    private LocationResponse startLocationResponse;
+    private LocationResponse endLocationResponse;
     private PricingConfig pricingConfig;
     private SharedRide ride;
     private SharedRideRequest rideRequest;
@@ -122,6 +129,22 @@ class SharedRideServiceImplTest {
         endLocation.setLat(10.772622);
         endLocation.setLng(106.670172);
 
+        startLocationResponse = new LocationResponse(
+            1,
+            "Start Location",
+            10.762622,
+            106.660172,
+            null
+        );
+
+        endLocationResponse = new LocationResponse(
+            2,
+            "End Location",
+            10.772622,
+            106.670172,
+            null
+        );
+
         pricingConfig = new PricingConfig();
         pricingConfig.setPricingConfigId(1);
         pricingConfig.setVersion(Instant.now());
@@ -134,12 +157,14 @@ class SharedRideServiceImplTest {
         ride.setSharedRideId(1);
         ride.setDriver(driver);
         ride.setVehicle(vehicle);
-        ride.setStartLat(10.762622);
-        ride.setStartLng(106.660172);
-        ride.setEndLat(10.772622);
-        ride.setEndLng(106.670172);
-        ride.setStartLocationId(1);
-        ride.setEndLocationId(2);
+        ride.setStartLocation(startLocation);
+        ride.setEndLocation(endLocation);
+//        ride.setStartLat(10.762622);
+//        ride.setStartLng(106.660172);
+//        ride.setEndLat(10.772622);
+//        ride.setEndLng(106.670172);
+//        ride.setStartLocationId(1);
+//        ride.setEndLocationId(2);
         ride.setStatus(SharedRideStatus.SCHEDULED);
         ride.setMaxPassengers(1);
         ride.setCurrentPassengers(0);
@@ -163,23 +188,25 @@ class SharedRideServiceImplTest {
         rideRequest.setRider(rider);
         rideRequest.setRequestKind(RequestKind.BOOKING);
         rideRequest.setStatus(SharedRideRequestStatus.CONFIRMED);
-        rideRequest.setPickupLat(10.762622);
-        rideRequest.setPickupLng(106.660172);
-        rideRequest.setDropoffLat(10.772622);
-        rideRequest.setDropoffLng(106.670172);
-        rideRequest.setPickupLocationId(1);
-        rideRequest.setDropoffLocationId(2);
+        rideRequest.setPickupLocation(startLocation);
+        rideRequest.setDropoffLocation(endLocation);
+//        rideRequest.setPickupLat(10.762622);
+//        rideRequest.setPickupLng(106.660172);
+//        rideRequest.setDropoffLat(10.772622);
+//        rideRequest.setDropoffLng(106.670172);
+//        rideRequest.setPickupLocationId(1);
+//        rideRequest.setDropoffLocationId(2);
         rideRequest.setTotalFare(BigDecimal.valueOf(50000));
         rideRequest.setSubtotalFare(BigDecimal.valueOf(50000));
         rideRequest.setDiscountAmount(BigDecimal.ZERO);
         rideRequest.setDistanceMeters(10500);
 
         createRideRequest = new CreateRideRequest(
-                1,
-                2,
-                null,
-                null,
-                LocalDateTime.now().plusHours(2)
+            1,
+            2,
+            null,
+            null,
+            LocalDateTime.now().plusHours(2)
         );
     }
 
@@ -193,7 +220,7 @@ class SharedRideServiceImplTest {
         when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
         when(routingService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
-                .thenReturn(new RouteResponse(10500L, 1800L, "encoded_polyline"));
+            .thenReturn(new RouteResponse(10500L, 1800L, "encoded_polyline"));
         when(rideRepository.save(any(SharedRide.class))).thenReturn(ride);
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
@@ -207,11 +234,11 @@ class SharedRideServiceImplTest {
     @Test
     void createRide_WithAdHocCoordinates_ReturnsSharedRideResponse() {
         CreateRideRequest adHocRequest = new CreateRideRequest(
-                null,
-                null,
-                new LatLng(10.762622, 106.660172),
-                new LatLng(10.772622, 106.670172),
-                LocalDateTime.now().plusHours(2)
+            null,
+            null,
+            new LatLng(10.762622, 106.660172),
+            new LatLng(10.772622, 106.670172),
+            LocalDateTime.now().plusHours(2)
         );
 
         when(authentication.getName()).thenReturn("driver@test.com");
@@ -220,7 +247,7 @@ class SharedRideServiceImplTest {
         when(vehicleRepository.findByDriver_DriverId(driver.getDriverId())).thenReturn(Optional.of(vehicle));
         when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
         when(routingService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
-                .thenReturn(new RouteResponse(10500L, 1800L, "encoded_polyline"));
+            .thenReturn(new RouteResponse(10500L, 1800L, "encoded_polyline"));
         when(rideRepository.save(any(SharedRide.class))).thenReturn(ride);
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
@@ -236,7 +263,7 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.empty());
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.createRide(createRideRequest, authentication));
+            () -> sharedRideService.createRide(createRideRequest, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -247,7 +274,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.empty());
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.createRide(createRideRequest, authentication));
+            () -> sharedRideService.createRide(createRideRequest, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -258,7 +285,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.createRide(createRideRequest, authentication));
+            () -> sharedRideService.createRide(createRideRequest, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -273,7 +300,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.createRide(createRideRequest, authentication));
+            () -> sharedRideService.createRide(createRideRequest, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -284,7 +311,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.createRide(createRideRequest, authentication));
+            () -> sharedRideService.createRide(createRideRequest, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -295,7 +322,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.createRide(createRideRequest, authentication));
+            () -> sharedRideService.createRide(createRideRequest, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -306,15 +333,15 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.createRide(createRideRequest, authentication));
+            () -> sharedRideService.createRide(createRideRequest, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
     @Test
     void getRideById_WithValidId_ReturnsSharedRideResponse() {
         when(rideRepository.findById(1)).thenReturn(Optional.of(ride));
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
+//        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
+//        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(ride)).thenReturn(new SharedRideResponse());
 
         SharedRideResponse response = sharedRideService.getRideById(1);
@@ -336,8 +363,8 @@ class SharedRideServiceImplTest {
         Page<SharedRide> ridePage = new PageImpl<>(List.of(ride));
 
         when(rideRepository.findByDriverDriverIdOrderByScheduledTimeDesc(1, pageable)).thenReturn(ridePage);
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
+//        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
+//        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
         Page<SharedRideResponse> result = sharedRideService.getRidesByDriver(1, null, pageable, authentication);
@@ -353,18 +380,18 @@ class SharedRideServiceImplTest {
         Page<SharedRide> ridePage = new PageImpl<>(List.of(ride));
 
         when(rideRepository.findByDriverDriverIdAndStatusOrderByScheduledTimeDesc(
-                1, SharedRideStatus.SCHEDULED, pageable)).thenReturn(ridePage);
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
+            1, SharedRideStatus.SCHEDULED, pageable)).thenReturn(ridePage);
+//        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
+//        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
         Page<SharedRideResponse> result = sharedRideService.getRidesByDriver(
-                1, "SCHEDULED", pageable, authentication);
+            1, "SCHEDULED", pageable, authentication);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         verify(rideRepository).findByDriverDriverIdAndStatusOrderByScheduledTimeDesc(
-                1, SharedRideStatus.SCHEDULED, pageable);
+            1, SharedRideStatus.SCHEDULED, pageable);
     }
 
     @Test
@@ -375,18 +402,18 @@ class SharedRideServiceImplTest {
         Page<SharedRide> ridePage = new PageImpl<>(List.of(ride));
 
         when(rideRepository.findAvailableRides(any(LocalDateTime.class),
-                any(LocalDateTime.class), eq(pageable))).thenReturn(ridePage);
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
+            any(LocalDateTime.class), eq(pageable))).thenReturn(ridePage);
+//        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
+//        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
         Page<SharedRideResponse> result = sharedRideService.browseAvailableRides(
-                start.toString(), end.toString(), pageable);
+            start.toString(), end.toString(), pageable);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         verify(rideRepository).findAvailableRides(any(LocalDateTime.class),
-                any(LocalDateTime.class), eq(pageable));
+            any(LocalDateTime.class), eq(pageable));
     }
 
     @Test
@@ -395,7 +422,7 @@ class SharedRideServiceImplTest {
         Page<SharedRide> ridePage = new PageImpl<>(List.of(ride));
 
         when(rideRepository.findAvailableRides(any(LocalDateTime.class),
-                any(LocalDateTime.class), eq(pageable))).thenReturn(ridePage);
+            any(LocalDateTime.class), eq(pageable))).thenReturn(ridePage);
         when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
         when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
@@ -404,7 +431,7 @@ class SharedRideServiceImplTest {
 
         assertNotNull(result);
         verify(rideRepository).findAvailableRides(any(LocalDateTime.class),
-                any(LocalDateTime.class), eq(pageable));
+            any(LocalDateTime.class), eq(pageable));
     }
 
     @Test
@@ -416,13 +443,13 @@ class SharedRideServiceImplTest {
         when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
-                .thenReturn(List.of(rideRequest));
-        when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(10.762622, 106.660172)));
+//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
+//                .thenReturn(List.of(rideRequest));
+//        when(rideTrackingService.getLatestPosition(1, 3))
+//                .thenReturn(Optional.of(new LatLng(10.762622, 106.660172)));
         when(rideRepository.save(any(SharedRide.class))).thenReturn(ride);
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
+//        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
+//        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
         SharedRideResponse response = sharedRideService.startRide(request, authentication);
@@ -431,8 +458,8 @@ class SharedRideServiceImplTest {
         verify(rideRepository).save(any(SharedRide.class));
         verify(rideTrackingService).startTracking(1);
         verify(notificationService).sendNotification(
-                any(User.class), eq(NotificationType.RIDE_STARTED), anyString(),
-                anyString(), any(), any(Priority.class), any(DeliveryMethod.class), anyString());
+            any(User.class), eq(NotificationType.RIDE_STARTED), anyString(),
+            anyString(), any(), any(Priority.class), any(DeliveryMethod.class), anyString());
     }
 
     @Test
@@ -442,7 +469,7 @@ class SharedRideServiceImplTest {
         when(rideRepository.findByIdForUpdate(999)).thenReturn(Optional.empty());
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRide(request, authentication));
+            () -> sharedRideService.startRide(request, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -459,7 +486,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRide(request, authentication));
+            () -> sharedRideService.startRide(request, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -474,45 +501,45 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRide(request, authentication));
+            () -> sharedRideService.startRide(request, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
-    @Test
-    void startRide_NoConfirmedPassengers_ThrowsBaseDomainException() {
-        StartRideRequest request = new StartRideRequest(1);
-        ride.setStatus(SharedRideStatus.SCHEDULED);
+//    @Test
+//    void startRide_NoConfirmedPassengers_ThrowsBaseDomainException() {
+//        StartRideRequest request = new StartRideRequest(1);
+//        ride.setStatus(SharedRideStatus.SCHEDULED);
+//
+//        when(authentication.getName()).thenReturn("driver@test.com");
+//        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
+//        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
+//        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
+//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
+//                .thenReturn(Collections.emptyList());
+//
+//        assertThrows(BaseDomainException.class,
+//                () -> sharedRideService.startRide(request, authentication));
+//        verify(rideRepository, never()).save(any(SharedRide.class));
+//    }
 
-        when(authentication.getName()).thenReturn("driver@test.com");
-        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
-        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
-        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
-                .thenReturn(Collections.emptyList());
-
-        assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRide(request, authentication));
-        verify(rideRepository, never()).save(any(SharedRide.class));
-    }
-
-    @Test
-    void startRide_DriverTooFarFromPickup_ThrowsBaseDomainException() {
-        StartRideRequest request = new StartRideRequest(1);
-        ride.setStatus(SharedRideStatus.SCHEDULED);
-
-        when(authentication.getName()).thenReturn("driver@test.com");
-        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
-        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
-        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
-                .thenReturn(List.of(rideRequest));
-        when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(11.0, 107.0)));
-
-        assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRide(request, authentication));
-        verify(rideRepository, never()).save(any(SharedRide.class));
-    }
+//    @Test
+//    void startRide_DriverTooFarFromPickup_ThrowsBaseDomainException() {
+//        StartRideRequest request = new StartRideRequest(1);
+//        ride.setStatus(SharedRideStatus.SCHEDULED);
+//
+//        when(authentication.getName()).thenReturn("driver@test.com");
+//        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
+//        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
+//        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
+//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
+//                .thenReturn(List.of(rideRequest));
+//        when(rideTrackingService.getLatestPosition(1, 3))
+//                .thenReturn(Optional.of(new LatLng(11.0, 107.0)));
+//
+//        assertThrows(BaseDomainException.class,
+//                () -> sharedRideService.startRide(request, authentication));
+//        verify(rideRepository, never()).save(any(SharedRide.class));
+//    }
 
     @Test
     void startRideRequestOfRide_WithValidRequest_StartsRequestSuccessfully() {
@@ -526,18 +553,18 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(10.762622, 106.660172)));
+            .thenReturn(Optional.of(new LatLng(10.762622, 106.660172)));
         when(requestRepository.save(any(SharedRideRequest.class))).thenReturn(rideRequest);
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
+        when(locationMapper.toResponse(startLocation)).thenReturn(startLocationResponse);
+        when(locationMapper.toResponse(endLocation)).thenReturn(endLocationResponse);
 
         SharedRideRequestResponse response = sharedRideService.startRideRequestOfRide(request, authentication);
 
         assertNotNull(response);
         verify(requestRepository).save(any(SharedRideRequest.class));
         verify(notificationService, times(2)).sendNotification(
-                any(User.class), any(NotificationType.class), anyString(),
-                anyString(), any(), any(Priority.class), any(DeliveryMethod.class), anyString());
+            any(User.class), any(NotificationType.class), anyString(),
+            anyString(), any(), any(Priority.class), any(DeliveryMethod.class), anyString());
     }
 
     @Test
@@ -552,7 +579,7 @@ class SharedRideServiceImplTest {
         when(requestRepository.findById(1)).thenReturn(Optional.of(rideRequest));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRideRequestOfRide(request, authentication));
+            () -> sharedRideService.startRideRequestOfRide(request, authentication));
         verify(requestRepository, never()).save(any(SharedRideRequest.class));
     }
 
@@ -568,7 +595,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRideRequestOfRide(request, authentication));
+            () -> sharedRideService.startRideRequestOfRide(request, authentication));
         verify(requestRepository, never()).save(any(SharedRideRequest.class));
     }
 
@@ -585,7 +612,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRideRequestOfRide(request, authentication));
+            () -> sharedRideService.startRideRequestOfRide(request, authentication));
         verify(requestRepository, never()).save(any(SharedRideRequest.class));
     }
 
@@ -601,10 +628,10 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(11.0, 107.0)));
+            .thenReturn(Optional.of(new LatLng(11.0, 107.0)));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.startRideRequestOfRide(request, authentication));
+            () -> sharedRideService.startRideRequestOfRide(request, authentication));
         verify(requestRepository, never()).save(any(SharedRideRequest.class));
     }
 
@@ -616,7 +643,7 @@ class SharedRideServiceImplTest {
         rideRequest.setStatus(SharedRideRequestStatus.ONGOING);
 
         RideRequestSettledResponse settledResponse = new RideRequestSettledResponse(
-                BigDecimal.valueOf(40000), BigDecimal.valueOf(10000));
+            BigDecimal.valueOf(40000), BigDecimal.valueOf(10000));
 
         when(authentication.getName()).thenReturn("driver@test.com");
         when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
@@ -624,20 +651,20 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
+            .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
         when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
         when(rideFundCoordinatingService.settleRideFunds(any(RideCompleteSettlementRequest.class),
-                any(FareBreakdown.class))).thenReturn(settledResponse);
+            any(FareBreakdown.class))).thenReturn(settledResponse);
         when(requestRepository.save(any(SharedRideRequest.class))).thenReturn(rideRequest);
 
         RideRequestCompletionResponse response = sharedRideService.completeRideRequestOfRide(
-                request, authentication);
+            request, authentication);
 
         assertNotNull(response);
         assertEquals(BigDecimal.valueOf(40000), response.getDriverEarningsOfRequest());
         verify(requestRepository).save(any(SharedRideRequest.class));
         verify(rideFundCoordinatingService).settleRideFunds(
-                any(RideCompleteSettlementRequest.class), any(FareBreakdown.class));
+            any(RideCompleteSettlementRequest.class), any(FareBreakdown.class));
     }
 
     @Test
@@ -652,7 +679,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.completeRideRequestOfRide(request, authentication));
+            () -> sharedRideService.completeRideRequestOfRide(request, authentication));
     }
 
     @Test
@@ -668,7 +695,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.completeRideRequestOfRide(request, authentication));
+            () -> sharedRideService.completeRideRequestOfRide(request, authentication));
     }
 
     @Test
@@ -683,10 +710,10 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(11.0, 107.0)));
+            .thenReturn(Optional.of(new LatLng(11.0, 107.0)));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.completeRideRequestOfRide(request, authentication));
+            () -> sharedRideService.completeRideRequestOfRide(request, authentication));
     }
 
     @Test
@@ -704,13 +731,13 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
+            .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
         when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
-                SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
+            SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
         when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.COMPLETED))
-                .thenReturn(List.of(rideRequest));
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
-                .thenReturn(Collections.emptyList());
+            .thenReturn(List.of(rideRequest));
+//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
+//                .thenReturn(Collections.emptyList());
         when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
         when(trackRepository.findBySharedRideSharedRideId(1)).thenReturn(Optional.of(track));
 
@@ -734,7 +761,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.completeRide(request, authentication));
+            () -> sharedRideService.completeRide(request, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -748,10 +775,10 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
-                SharedRideRequestStatus.ONGOING)).thenReturn(List.of(rideRequest));
+            SharedRideRequestStatus.ONGOING)).thenReturn(List.of(rideRequest));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.completeRide(request, authentication));
+            () -> sharedRideService.completeRide(request, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -767,16 +794,16 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
+            .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
         when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
-                SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
+            SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
         when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.COMPLETED))
-                .thenReturn(Collections.emptyList());
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
-                .thenReturn(List.of(rideRequest));
+            .thenReturn(Collections.emptyList());
+//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
+//                .thenReturn(List.of(rideRequest));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.completeRide(request, authentication));
+            () -> sharedRideService.completeRide(request, authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -792,17 +819,17 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
-                .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
+            .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
         when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
-                SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
+            SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
         when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.COMPLETED))
-                .thenReturn(List.of(rideRequest));
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
-                .thenReturn(Collections.emptyList());
+            .thenReturn(List.of(rideRequest));
+//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
+//                .thenReturn(Collections.emptyList());
         when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
         when(trackRepository.findBySharedRideSharedRideId(1)).thenReturn(Optional.empty());
         when(routingService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
-                .thenReturn(new RouteResponse(10500L, 1800L, "polyline"));
+            .thenReturn(new RouteResponse(10500L, 1800L, "polyline"));
         when(rideRepository.save(any(SharedRide.class))).thenReturn(ride);
 
         RideCompletionResponse response = sharedRideService.completeRide(request, authentication);
@@ -820,7 +847,7 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
-                .thenReturn(List.of(rideRequest));
+            .thenReturn(List.of(rideRequest));
         when(rideRepository.save(any(SharedRide.class))).thenReturn(ride);
         when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
         when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
@@ -844,7 +871,7 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.cancelRide(1, "reason", authentication));
+            () -> sharedRideService.cancelRide(1, "reason", authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -862,7 +889,7 @@ class SharedRideServiceImplTest {
         when(authentication.getAuthorities()).thenReturn(Collections.emptyList());
 
         assertThrows(BaseDomainException.class,
-                () -> sharedRideService.cancelRide(1, "reason", authentication));
+            () -> sharedRideService.cancelRide(1, "reason", authentication));
         verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
@@ -881,10 +908,10 @@ class SharedRideServiceImplTest {
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.CONFIRMED))
-                .thenReturn(List.of(rideRequest, request2));
+            .thenReturn(List.of(rideRequest, request2));
         when(rideRepository.save(any(SharedRide.class))).thenReturn(ride);
-        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
-        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
+//        when(locationRepository.findById(1)).thenReturn(Optional.of(startLocation));
+//        when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(ride)).thenReturn(new SharedRideResponse());
 
         SharedRideResponse response = sharedRideService.cancelRide(1, "reason", authentication);

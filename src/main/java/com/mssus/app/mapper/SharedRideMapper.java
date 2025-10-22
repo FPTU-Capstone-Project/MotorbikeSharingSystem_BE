@@ -15,8 +15,8 @@ public interface SharedRideMapper {
     @Mapping(source = "vehicle.plateNumber", target = "vehiclePlate")
     @Mapping(source = "status", target = "status")
     @Mapping(target = "availableSeats", expression = "java(ride.getMaxPassengers() - ride.getCurrentPassengers())")
-    @Mapping(target = "startLocationName", ignore = true) // Set manually in service layer
-    @Mapping(target = "endLocationName", ignore = true)   // Set manually in service layer
+    @Mapping(source = "startLocation", target = "startLocation") // Set manually in service layer
+    @Mapping(source = "endLocation", target = "endLocation")   // Set manually in service layer
     SharedRideResponse toResponse(SharedRide ride);
 
     @Mapping(source = "driver.driverId", target = "driverId")
@@ -27,8 +27,8 @@ public interface SharedRideMapper {
     @Mapping(target = "driverRating", ignore = true)      // Set manually in service layer
     @Mapping(target = "vehicleModel", ignore = true)      // Set manually in service layer
     @Mapping(target = "vehiclePlate", ignore = true)      // Set manually in service layer
-    @Mapping(target = "startLocationName", ignore = true) // Set manually in service layer
-    @Mapping(target = "endLocationName", ignore = true)   // Set manually in service layer
+//    @Mapping(target = "startLocationName", ignore = true) // Set manually in service layer
+//    @Mapping(target = "endLocationName", ignore = true)   // Set manually in service layer
     SharedRideResponse toLightweightResponse(SharedRide ride);
 }
 

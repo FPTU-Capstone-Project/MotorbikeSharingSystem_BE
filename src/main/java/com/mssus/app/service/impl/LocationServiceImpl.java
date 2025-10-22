@@ -20,7 +20,7 @@ public class LocationServiceImpl implements LocationService {
 
     @Override
     public List<LocationResponse> getAppPOIs() {
-        List<Location> locations = locationRepository.findAll();
+        List<Location> locations = locationRepository.findByIsPoiTrue();
 
         return locations.stream()
             .map(locationMapper::toResponse)

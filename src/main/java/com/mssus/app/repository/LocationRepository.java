@@ -26,5 +26,7 @@ public interface LocationRepository extends JpaRepository<Location, Integer> {
             @Param("maxLng") Double maxLng);
 
     boolean existsById(Integer locationId);
+
+    List<Location> findByIsPoiTrue();
 }
 
