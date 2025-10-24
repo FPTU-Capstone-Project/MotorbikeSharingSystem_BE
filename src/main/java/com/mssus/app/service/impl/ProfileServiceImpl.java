@@ -6,7 +6,9 @@ import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
 import com.mssus.app.dto.response.*;
+import com.mssus.app.dto.sos.EmergencyContactResponse;
 import com.mssus.app.service.AuthService;
+import com.mssus.app.service.EmergencyContactService;
 import com.mssus.app.service.FPTAIService;
 import org.json.JSONArray;
 import org.springframework.data.domain.Page;
@@ -54,6 +56,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final JwtService jwtService;
     private final FileUploadService fileUploadService;
     private final FPTAIService fptaiService;
+    private final EmergencyContactService emergencyContactService;
 
 
     @Override
@@ -62,8 +65,12 @@ public class ProfileServiceImpl implements ProfileService {
         User user = userRepository.findByEmailWithProfiles(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
 
+        List<EmergencyContactResponse> emergencyContacts = emergencyContactService.getContacts(user);
+
         if (UserType.ADMIN.equals(user.getUserType())) {
-            return userMapper.toAdminProfileResponse(user);
+            UserProfileResponse response = userMapper.toAdminProfileResponse(user);
+            response.setEmergencyContacts(emergencyContacts);
+            return response;
         }
 
         String activeProfile = Optional.ofNullable(authService.getUserContext(user.getUserId()))
@@ -84,12 +91,14 @@ public class ProfileServiceImpl implements ProfileService {
                 UserProfileResponse response = userMapper.toDriverProfileResponse(user);
                 response.setAvailableProfiles(availableProfiles);
                 response.setActiveProfile(activeProfile);
+                response.setEmergencyContacts(emergencyContacts);
                 yield response;
             }
             case RIDER -> {
                 UserProfileResponse response = userMapper.toRiderProfileResponse(user);
                 response.setAvailableProfiles(availableProfiles);
                 response.setActiveProfile(activeProfile);
+                response.setEmergencyContacts(emergencyContacts);
                 yield response;
             }
         };

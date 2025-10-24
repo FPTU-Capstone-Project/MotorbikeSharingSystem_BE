@@ -4,6 +4,7 @@ import com.mssus.app.common.enums.OtpFor;
 import com.mssus.app.common.enums.PaymentMethod;
 import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.exception.BaseDomainException;
+import com.mssus.app.config.properties.SosConfigurationProperties;
 import com.mssus.app.dto.request.GetOtpRequest;
 import com.mssus.app.dto.request.OtpRequest;
 import com.mssus.app.dto.response.OtpResponse;
@@ -14,8 +15,10 @@ import com.mssus.app.entity.User;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.RiderProfileRepository;
 import com.mssus.app.service.EmailService;
+import com.mssus.app.service.EmergencyContactService;
 import com.mssus.app.service.OtpService;
 import com.mssus.app.util.OtpUtil;
+import com.mssus.app.dto.sos.EmergencyContactRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,8 @@ public class OtpServiceImpl implements OtpService {
     private final UserRepository userRepository;
     private final RiderProfileRepository riderProfileRepository;
     private final EmailService emailService;
+    private final EmergencyContactService emergencyContactService;
+    private final SosConfigurationProperties sosConfig;
 
     @Override
     public OtpResponse requestOtp(GetOtpRequest request) {
@@ -143,7 +148,7 @@ public class OtpServiceImpl implements OtpService {
 
             if (Boolean.TRUE.equals(user.getPhoneVerified())) {
                 riderProfileRepository.findByUserUserId(user.getUserId())
-                    .or(() -> {
+                    .orElseGet(() -> {
                         RiderProfile rp = RiderProfile.builder()
                             .user(user)
                             .status(RiderProfileStatus.PENDING)
@@ -151,13 +156,12 @@ public class OtpServiceImpl implements OtpService {
                             .totalSpent(java.math.BigDecimal.ZERO)
                             .preferredPaymentMethod(PaymentMethod.WALLET)
                             .createdAt(java.time.LocalDateTime.now())
-                            .emergencyContact("113")
                             .build();
                         riderProfileRepository.save(rp);
                         log.info("Rider profile created in PENDING for userId={}", user.getUserId());
-                        return java.util.Optional.of(rp);
-                    })
-                    .ifPresent(rp -> {});
+                        return rp;
+                    });
+                ensureFallbackContact(user);
             }
         } else {
             log.warn("User email verification attempted but user not in EMAIL_VERIFYING state: {}", user.getEmail());
@@ -178,21 +182,44 @@ public class OtpServiceImpl implements OtpService {
         
         if (Boolean.TRUE.equals(user.getEmailVerified())) {
             riderProfileRepository.findByUserUserId(user.getUserId())
-                .or(() -> {
+                .orElseGet(() -> {
                     RiderProfile rp = RiderProfile.builder()
                         .user(user)
                         .status(RiderProfileStatus.PENDING)
                         .totalRides(0)
                         .totalSpent(java.math.BigDecimal.ZERO)
-                        .preferredPaymentMethod(com.mssus.app.common.enums.PaymentMethod.WALLET)
+                        .preferredPaymentMethod(PaymentMethod.WALLET)
                         .createdAt(java.time.LocalDateTime.now())
-                        .emergencyContact("113")
                         .build();
                     riderProfileRepository.save(rp);
                     log.info("Rider profile created in PENDING for userId={}", user.getUserId());
-                    return java.util.Optional.of(rp);
-                })
-                .ifPresent(rp -> {});
+                    return rp;
+                });
+            ensureFallbackContact(user);
+        }
+    }
+
+    private void ensureFallbackContact(User user) {
+        if (user == null || user.getUserId() == null) {
+            return;
+        }
+
+        if (!emergencyContactService.getContacts(user).isEmpty()) {
+            return;
+        }
+
+        EmergencyContactRequest request = EmergencyContactRequest.builder()
+            .name("Emergency Hotline")
+            .phone(sosConfig.getFallbackEmergencyNumber())
+            .relationship("Fallback")
+            .primary(true)
+            .build();
+
+        try {
+            emergencyContactService.createContact(user, request);
+            log.info("Fallback emergency contact seeded for user {}", user.getUserId());
+        } catch (Exception ex) {
+            log.warn("Failed to seed fallback emergency contact for user {}: {}", user.getUserId(), ex.getMessage());
         }
     }
 

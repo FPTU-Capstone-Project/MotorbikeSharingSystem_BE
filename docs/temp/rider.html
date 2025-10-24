@@ -1,87 +1,335 @@
 <!DOCTYPE html>
-<meta charset="utf-8"/>
-<title>Rider Test</title>
+<meta charset="utf-8" />
+<title>Rider Demo Console</title>
 <body>
-<h3>Rider</h3>
-<button id="connect">Connect WS (SockJS)</button>
-<button id="connect-native">Connect WS (Native)</button>
-<button id="create">Create AI Booking</button>
+<h2>Rider Demo Console</h2>
+
+<section>
+  <h3>Authentication</h3>
+  <label>Email <input id="loginEmail" value="john.doe@example.com" size="25" /></label>
+  <label>Password <input id="loginPassword" value="Password1!" type="password" size="15" /></label>
+  <label>Profile
+    <select id="loginProfile">
+      <option value="rider" selected>Rider</option>
+      <option value="driver">Driver</option>
+    </select>
+  </label>
+  <button id="login">Login</button>
+</section>
+
+<section>
+  <label>Base URL <input id="base" value="http://localhost:8080" size="30" /></label>
+  <label>JWT <input id="jwt" value="PUT_RIDER_TOKEN_HERE" size="60" /></label>
+  <button id="connect">Connect WS</button>
+</section>
+
+<section>
+  <h3>State</h3>
+  <label>Quote ID <input id="quoteId" size="38" /></label>
+  <label>Ride Request ID <input id="requestId" size="8" /></label>
+  <label>Ride ID <input id="rideId" size="8" /></label>
+</section>
+
+<section>
+  <h3>Quote & Booking</h3>
+  <label>Pickup Lat <input id="pickupLat" value="10.84290" size="10" /></label>
+  <label>Pickup Lng <input id="pickupLng" value="106.81954" size="10" /></label>
+  <label>Drop Lat <input id="dropLat" size="10" /></label>
+  <label>Drop Lng <input id="dropLng" size="10" /></label>
+  <label>Pickup Location ID <input id="pickupLocationId" size="4" /></label>
+  <label>Drop Location ID <input id="dropLocationId" value="12" size="4" /></label>
+  <label>Desired Pickup (ISO) <input id="desiredPickup" size="20" /></label>
+  <button id="generateQuote">Generate Quote</button>
+  <button id="createAiBooking">Create AI Booking</button>
+</section>
+
+<section>
+  <h3>Join Existing Ride</h3>
+  <label>Target Ride ID <input id="joinRideId" size="8" /></label>
+  <button id="browseRides">Browse Available Rides</button>
+  <button id="createJoinRequest">Create Join Request</button>
+</section>
+
+<section>
+  <h3>Request Monitoring</h3>
+  <button id="getRequest">Get Request Detail</button>
+  <button id="cancelRequest">Cancel Request</button>
+</section>
+
+<section>
+  <h3>Broadcast Marketplace</h3>
+  <button id="listBroadcastingRequests">List Broadcasting Requests</button>
+</section>
+
+<section>
+  <h3>SOS Alerts</h3>
+  <label>Alert ID <input id="sosAlertId" size="8" /></label>
+  <label>Alert Type
+    <select id="sosAlertType">
+      <option value="">(auto)</option>
+      <option value="EMERGENCY">EMERGENCY</option>
+      <option value="ACCIDENT">ACCIDENT</option>
+      <option value="BREAKDOWN">BREAKDOWN</option>
+      <option value="SAFETY_CONCERN">SAFETY_CONCERN</option>
+      <option value="OTHER">OTHER</option>
+    </select>
+  </label>
+  <label>Lat <input id="sosLat" value="10.84148" size="10" /></label>
+  <label>Lng <input id="sosLng" value="106.809844" size="10" /></label>
+  <label>Description <input id="sosDescription" value="Need assistance" size="40" /></label>
+  <label><input type="checkbox" id="sosForceFallback" /> Force fallback call</label>
+  <button id="triggerSos">Trigger SOS</button>
+  <label>Status Filter <input id="sosStatusFilter" placeholder="ACTIVE,ESCALATED..." size="20" /></label>
+  <button id="listMyAlerts">List My Alerts</button>
+  <button id="getAlertDetail">Get Alert Detail</button>
+  <button id="getAlertTimeline">Get Alert Timeline</button>
+</section>
+
+<section>
+  <h3>Emergency Contacts</h3>
+  <label>Contact ID <input id="contactId" size="8" /></label>
+  <label>Name <input id="contactName" value="Mai Anh" size="15" /></label>
+  <label>Phone <input id="contactPhone" value="+84901111222" size="15" /></label>
+  <label>Relationship <input id="contactRelationship" value="Sister" size="10" /></label>
+  <label><input type="checkbox" id="contactPrimary" /> Primary</label>
+  <button id="listContacts">List Contacts</button>
+  <button id="createContact">Create Contact</button>
+  <button id="updateContact">Update Contact</button>
+  <button id="setPrimaryContact">Set Primary</button>
+  <button id="deleteContact">Delete Contact</button>
+</section>
+
 <pre id="log"></pre>
+
 <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
 <script>
-    const BASE = "http://localhost:8080";
-    const JWT =
-        "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInByb2ZpbGVfc3RhdHVzIjp7IkRSSVZFUiI6IkFDVElWRSIsIlJJREVSIjoiQUNUSVZFIn0sImlzcyI6Im1zc3VzLmFwaSIsInByb2ZpbGVzIjpbIlJJREVSIiwiRFJJVkVSIl0sImFjdGl2ZV9wcm9maWxlIjoicmlkZXIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzYwNzk0OTI1LCJleHAiOjE3NjA3OTg1MjV9.xlsfaPN1gDwRnx00blUGKB8-nfF5cqy9fs_NqlOCJbs";
-    const log = (m) => (document.getElementById("log").textContent += m + "\n");
+  const $ = (id) => document.getElementById(id);
+  const log = (msg) => $("log").textContent += `[${new Date().toISOString()}] ${msg}\n`;
 
-    let stomp;
+  const state = { stomp: null };
+  const parseFloatOrNull = (value) => {
+    const num = parseFloat(value);
+    return Number.isFinite(num) ? num : null;
+  };
+  const parseIntOrNull = (value) => {
+    const num = parseInt(value, 10);
+    return Number.isFinite(num) ? num : null;
+  };
+  const trimOrNull = (value) => {
+    if (value === undefined || value === null) return null;
+    const trimmed = String(value).trim();
+    return trimmed.length ? trimmed : null;
+  };
 
-    document.getElementById("connect").onclick = () => {
-        const sock = new SockJS(
-            BASE +
-            "/ws?token=" + encodeURIComponent(JWT)
-        );
-        stomp = Stomp.over(sock);
-        stomp.connect(
-            {Authorization: "Bearer " + JWT},
-            () => {
-                log("Rider WS connected (SockJS)");
-                // Rider user-queue for matching status
-                stomp.subscribe("/user/queue/ride-matching", (msg) => {
-                    log("Rider receive: " + msg.body);
-                });
-                stomp.subscribe("/user/queue/notifications", (msg) => {
-                    log("General notification: " + msg.body);
-                });
-            },
-            (err) => log("Rider WS error: " + err)
-        );
+  async function api(path, method = "GET", body) {
+    const base = $("base").value;
+    const jwt = $("jwt").value.trim();
+    const headers = { Authorization: "Bearer " + jwt };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const res = await fetch(base + path, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let payload = null;
+    try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
+    log(`${method} ${path} -> ${res.status} ${text}`);
+    return { res, payload };
+  }
+
+  $("login").onclick = async () => {
+    const body = {
+      email: $("loginEmail").value,
+      password: $("loginPassword").value,
+      targetProfile: $("loginProfile").value,
     };
+    const { res, payload } = await api("/api/v1/auth/login", "POST", body);
+    if (res.ok && payload?.access_token) {
+      $("jwt").value = payload.access_token;
+      log("Login successful. Token populated.");
+    } else {
+      log("Login failed.");
+    }
+  };
 
-    document.getElementById("connect-native").onclick = () => {
-        const ws = new WebSocket(
-            "ws://localhost:8080/ws-native?token=" + encodeURIComponent(JWT)
-            // "ws://localhost:8080/ws-native"
-        );
-        stomp = Stomp.over(ws);
-        stomp.connect(
-            {Authorization: "Bearer " + JWT},
-            () => {
-                log("Rider WS connected (Native)");
-                // Rider user-queue for matching status
-                stomp.subscribe("/user/queue/ride-matching", (msg) => {
-                    log("Rider receive: " + msg.body);
-                });
-                stomp.subscribe("/user/queue/notifications", (msg) => {
-                    log("General notification: " + msg.body);
-                });
-            },
-            (err) => log("Rider WS error: " + err)
-        );
-    };
+  $("connect").onclick = () => {
+    const base = $("base").value;
+    const jwt = $("jwt").value.trim();
+    const sock = new SockJS(base + "/ws?token=" + encodeURIComponent(jwt));
+    state.stomp = Stomp.over(sock);
+    state.stomp.connect(
+      { Authorization: "Bearer " + jwt },
+      () => {
+        log("WebSocket connected");
+        state.stomp.subscribe("/user/queue/ride-matching", (msg) => log("Ride matching: " + msg.body));
+        state.stomp.subscribe("/user/queue/sos", (msg) => log("SOS: " + msg.body));
+        state.stomp.subscribe("/user/queue/notifications", (msg) => log("Notification: " + msg.body));
+      },
+      (err) => log("WS error: " + err)
+    );
+  };
 
-    document.getElementById("create").onclick = async () => {
-        // ASSUMPTION: You already have a quoteId and optional pickup/dropoff IDs/time.
-        // Fill these with your test values:
-        const body = {
-            quoteId: "17eaf914-315b-40d1-b487-a9077e9699da", // <- put a real quoteId
-            // pickupLocationId: 10,         // optional if quote stores coords
-            // dropoffLocationId: 11,        // optional if quote stores coords
-            // desiredPickupTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // +1 day and 5 min
-            notes: "helmet pls",
-        };
-        const res = await fetch(BASE + "/api/v1/ride-requests", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: "Bearer " + JWT,
-            },
-            body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        log("Create AI booking: " + res.status + " " + JSON.stringify(data));
-        // data is initial proposals snapshot; real-time continues via WS
+  $("generateQuote").onclick = async () => {
+    const body = {
+      pickup: { latitude: parseFloat($("pickupLat").value), longitude: parseFloat($("pickupLng").value) },
+      dropoff: { latitude: parseFloat($("dropLat").value), longitude: parseFloat($("dropLng").value) },
+      pickupLocationId: parseInt($("pickupLocationId").value, 10),
+      dropoffLocationId: parseInt($("dropLocationId").value, 10),
     };
+    const { payload } = await api("/api/v1/quotes", "POST", body);
+    if (payload?.id || payload?.quoteId) {
+      const quoteId = payload.id ?? payload.quoteId;
+      $("quoteId").value = quoteId;
+      log("Quote stored: " + quoteId);
+    }
+  };
+
+  $("createAiBooking").onclick = async () => {
+    const quoteId = $("quoteId").value.trim();
+    if (!quoteId) return log("Quote ID required.");
+    const desiredPickup = $("desiredPickup").value || null;
+    const body = {
+      quoteId,
+      desiredPickupTime: desiredPickup,
+      notes: "Helmet please",
+    };
+    const { payload } = await api("/api/v1/ride-requests", "POST", body);
+    if (payload?.sharedRideRequestId) {
+      $("requestId").value = payload.sharedRideRequestId;
+      log("AI booking created: " + payload.sharedRideRequestId);
+    }
+  };
+
+  $("browseRides").onclick = async () => {
+    const start = new Date(Date.now() - 15 * 60 * 1000).toISOString().split(".")[0];
+    const end = new Date(Date.now() + 60 * 60 * 1000).toISOString().split(".")[0];
+    const { payload } = await api(`/api/v1/rides/available?startTime=${start}&endTime=${end}&page=0&pageSize=5`);
+    if (payload?.data?.length) {
+      const ride = payload.data[0];
+      $("joinRideId").value = ride.sharedRideId;
+      log("Loaded ride " + ride.sharedRideId + " into Target Ride ID");
+    }
+  };
+
+  $("createJoinRequest").onclick = async () => {
+    const rideId = $("joinRideId").value;
+    const quoteId = $("quoteId").value.trim();
+    if (!rideId || !quoteId) return log("Ride ID and Quote ID required.");
+    const body = {
+      quoteId,
+      desiredPickupTime: $("desiredPickup").value || null,
+      notes: "Joining via console",
+    };
+    const { payload } = await api(`/api/v1/ride-requests/rides/${rideId}`, "POST", body);
+    if (payload?.sharedRideRequestId) {
+      $("requestId").value = payload.sharedRideRequestId;
+      $("rideId").value = rideId;
+      log("Join request created: " + payload.sharedRideRequestId);
+    }
+  };
+
+  $("getRequest").onclick = async () => {
+    const reqId = $("requestId").value;
+    if (!reqId) return log("Request ID required.");
+    await api(`/api/v1/ride-requests/${reqId}`);
+  };
+
+  $("cancelRequest").onclick = async () => {
+    const reqId = $("requestId").value;
+    if (!reqId) return log("Request ID required.");
+    await api(`/api/v1/ride-requests/${reqId}`, "DELETE");
+  };
+
+  $("listBroadcastingRequests").onclick = async () => {
+    await api("/api/v1/ride-requests/broadcasting");
+  };
+
+  $("triggerSos").onclick = async () => {
+    const body = {
+      sharedRideId: parseIntOrNull($("rideId").value),
+      currentLat: parseFloatOrNull($("sosLat").value),
+      currentLng: parseFloatOrNull($("sosLng").value),
+      description: trimOrNull($("sosDescription").value),
+      forceFallbackCall: $("sosForceFallback").checked,
+    };
+    const type = $("sosAlertType").value;
+    if (type) body.alertType = type;
+    const { payload } = await api("/api/v1/sos/alerts", "POST", body);
+    if (payload?.sosId) {
+      $("sosAlertId").value = payload.sosId;
+      log("SOS alert created: " + payload.sosId);
+    }
+  };
+
+  $("listMyAlerts").onclick = async () => {
+    const status = trimOrNull($("sosStatusFilter").value);
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    await api(`/api/v1/sos/alerts/me${query}`);
+  };
+
+  $("getAlertDetail").onclick = async () => {
+    const alertId = $("sosAlertId").value.trim();
+    if (!alertId) return log("Alert ID required.");
+    await api(`/api/v1/sos/alerts/${alertId}`);
+  };
+
+  $("getAlertTimeline").onclick = async () => {
+    const alertId = $("sosAlertId").value.trim();
+    if (!alertId) return log("Alert ID required.");
+    await api(`/api/v1/sos/alerts/${alertId}/timeline`);
+  };
+
+  $("listContacts").onclick = async () => {
+    const { payload } = await api("/api/v1/sos/contacts");
+    if (Array.isArray(payload) && payload.length) {
+      const primary = payload.find((c) => c.primary) ?? payload[0];
+      $("contactId").value = primary.contactId;
+      $("contactName").value = primary.name;
+      $("contactPhone").value = primary.phone;
+      $("contactRelationship").value = primary.relationship ?? "";
+      $("contactPrimary").checked = Boolean(primary.primary);
+    }
+  };
+
+  $("createContact").onclick = async () => {
+    const body = {
+      name: trimOrNull($("contactName").value),
+      phone: trimOrNull($("contactPhone").value),
+      relationship: trimOrNull($("contactRelationship").value),
+      primary: $("contactPrimary").checked,
+    };
+    const { payload } = await api("/api/v1/sos/contacts", "POST", body);
+    if (payload?.contactId) {
+      $("contactId").value = payload.contactId;
+      log("Contact created: " + payload.contactId);
+    }
+  };
+
+  $("updateContact").onclick = async () => {
+    const contactId = $("contactId").value.trim();
+    if (!contactId) return log("Contact ID required.");
+    const body = {
+      name: trimOrNull($("contactName").value),
+      phone: trimOrNull($("contactPhone").value),
+      relationship: trimOrNull($("contactRelationship").value),
+      primary: $("contactPrimary").checked,
+    };
+    await api(`/api/v1/sos/contacts/${contactId}`, "PUT", body);
+  };
+
+  $("setPrimaryContact").onclick = async () => {
+    const contactId = $("contactId").value.trim();
+    if (!contactId) return log("Contact ID required.");
+    await api(`/api/v1/sos/contacts/${contactId}/primary`, "POST");
+    $("contactPrimary").checked = true;
+  };
+
+  $("deleteContact").onclick = async () => {
+    const contactId = $("contactId").value.trim();
+    if (!contactId) return log("Contact ID required.");
+    await api(`/api/v1/sos/contacts/${contactId}`, "DELETE");
+  };
 </script>
 </body>

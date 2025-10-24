@@ -146,6 +146,36 @@ public class MatchingResponseAssembler {
             .build();
     }
 
+    public RiderMatchStatusNotification toRiderJoinRequestSuccess(SharedRideRequest request) {
+        if (request.getSharedRide() == null || request.getSharedRide().getDriver() == null) {
+            return RiderMatchStatusNotification.builder()
+                .requestId(request.getSharedRideRequestId())
+                .status("JOIN_REQUEST_ACCEPTED")
+                .message("Your request to join the ride has been accepted.")
+                .build();
+        }
+
+        var ride = request.getSharedRide();
+        var driver = ride.getDriver();
+        var vehicle = ride.getVehicle();
+
+        return RiderMatchStatusNotification.builder()
+            .requestId(request.getSharedRideRequestId())
+            .status("JOIN_REQUEST_ACCEPTED")
+            .message(String.format("Driver %s accepted your request to join ride #%d.",
+                driver.getUser().getFullName(), ride.getSharedRideId()))
+            .rideId(ride.getSharedRideId())
+            .driverId(driver.getDriverId())
+            .driverName(driver.getUser().getFullName())
+            .driverRating(driver.getRatingAvg())
+            .vehicleModel(vehicle != null ? vehicle.getModel() : null)
+            .vehiclePlate(vehicle != null ? vehicle.getPlateNumber() : null)
+            .estimatedPickupTime(request.getEstimatedPickupTime())
+            .estimatedDropoffTime(request.getEstimatedDropoffTime())
+            .totalFare(request.getTotalFare())
+            .build();
+    }
+
     public RiderMatchStatusNotification toRiderLifecycleUpdate(SharedRideRequest request,
                                                                String status,
                                                                String message) {

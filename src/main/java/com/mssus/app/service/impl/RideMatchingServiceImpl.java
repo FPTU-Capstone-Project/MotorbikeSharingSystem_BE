@@ -14,7 +14,7 @@ import com.mssus.app.repository.SharedRideRepository;
 import com.mssus.app.service.RideMatchingService;
 import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.RoutingService;
-import com.mssus.app.util.PolylineDistance;
+import com.mssus.app.util.GeoUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -280,13 +279,13 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
     private ProximityCheck checkProximity(LocationPair request, LocationPair ride) {
         log.debug(">> checkProximity(request={}, ride={})", request, ride);
-        double pickupDistance = PolylineDistance.haversineMeters(
+        double pickupDistance = GeoUtil.haversineMeters(
             request.pickup().getLat(), request.pickup().getLng(),
             ride.pickup().getLat(), ride.pickup().getLng()
         ) / 1000.0; // convert to km
         log.debug("Pickup distance: {} km", pickupDistance);
 
-        double dropoffDistance = PolylineDistance.haversineMeters(
+        double dropoffDistance = GeoUtil.haversineMeters(
             request.dropoff().getLat(), request.dropoff().getLng(),
             ride.dropoff().getLat(), ride.dropoff().getLng()
         ) / 1000.0;
@@ -360,12 +359,12 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
     private DetourCalculation calculateDetourFallback(LocationPair ride, LocationPair request) {
         log.debug(">> calculateDetourFallback(ride={}, request={})", ride, request);
-        double pickupProximity = PolylineDistance.haversineMeters(
+        double pickupProximity = GeoUtil.haversineMeters(
             request.pickup().getLat(), request.pickup().getLng(),
             ride.pickup().getLat(), ride.pickup().getLng()
         );
 
-        double dropoffProximity = PolylineDistance.haversineMeters(
+        double dropoffProximity = GeoUtil.haversineMeters(
             request.dropoff().getLat(), request.dropoff().getLng(),
             ride.dropoff().getLat(), ride.dropoff().getLng()
         );

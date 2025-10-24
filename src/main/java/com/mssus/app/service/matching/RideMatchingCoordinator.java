@@ -136,13 +136,6 @@ public class RideMatchingCoordinator {
         Location pickup = request.getPickupLocation();
         Location dropoff = request.getDropoffLocation();
 
-//        Location pickup = request.getPickupLocationId() != null
-//            ? locationRepository.findById(request.getPickupLocationId()).orElse(null)
-//            : null;
-//        Location dropoff = request.getDropoffLocationId() != null
-//            ? locationRepository.findById(request.getDropoffLocationId()).orElse(null)
-//            : null;
-
         MatchingSession session = new MatchingSession(
             request.getSharedRideRequestId(),
             selector,
@@ -205,7 +198,7 @@ public class RideMatchingCoordinator {
             dropoff,
             Instant.now().plus(rideConfig.getRequestAcceptTimeout()));
 
-        sessions.put(requestId, new MatchingSession(session));
+        sessions.put(requestId, MatchingSession.forJoinRequest(session));
 
         // Send notification to the specific driver
         sendJoinRequestNotification(session, request);
@@ -280,25 +273,31 @@ public class RideMatchingCoordinator {
             decisionGateway.cancelOffer(request.getSharedRideRequestId());
         }
 
-        if (request.getStatus() == SharedRideRequestStatus.PENDING) {
-            // Use CANCELLED for explicit rejections, EXPIRED for timeouts.
-            request.setStatus("Driver response timeout".equals(reason) ? SharedRideRequestStatus.EXPIRED : SharedRideRequestStatus.CANCELLED);
-            requestRepository.save(request);
+        SharedRideRequest latest = requestRepository.findById(request.getSharedRideRequestId())
+            .orElse(request);
 
-            // Release wallet hold
-            releaseRequestHold(request, reason);
-
-            // Notify rider of failure
-            try {
-                notificationService.notifyRiderStatus(
-                    request.getRider().getUser(),
-                    responseAssembler.toRiderJoinRequestFailed(request, reason));
-            } catch (Exception e) {
-                log.error("Failed to send join request failure notification", e);
-            }
+        if (latest.getStatus() != SharedRideRequestStatus.PENDING) {
+            log.info("Join request {} failure ignored - status {}", latest.getSharedRideRequestId(), latest.getStatus());
+            return;
         }
 
-        log.info("Join request {} failed - {}", request.getSharedRideRequestId(), reason);
+        // Use CANCELLED for explicit rejections, EXPIRED for timeouts.
+        latest.setStatus("Driver response timeout".equals(reason) ? SharedRideRequestStatus.EXPIRED : SharedRideRequestStatus.CANCELLED);
+        requestRepository.save(latest);
+
+        // Release wallet hold
+        releaseRequestHold(latest, reason);
+
+        // Notify rider of failure
+        try {
+            notificationService.notifyRiderStatus(
+                latest.getRider().getUser(),
+                responseAssembler.toRiderJoinRequestFailed(latest, reason));
+        } catch (Exception e) {
+            log.error("Failed to send join request failure notification", e);
+        }
+
+        log.info("Join request {} failed - {}", latest.getSharedRideRequestId(), reason);
     }
 
     private record JoinRequestSession(int requestId, int rideId, int driverId, Location pickupLocation,
@@ -334,6 +333,43 @@ public class RideMatchingCoordinator {
         return allowed;
     }
 
+    public boolean beginJoinAcceptance(Integer requestId, Integer rideId, Integer driverId) {
+        MatchingSession session = sessions.get(requestId);
+        if (session == null || !session.isJoinRequest()) {
+            return false;
+        }
+
+        JoinRequestSession joinSession;
+        boolean locked;
+        synchronized (session) {
+            joinSession = session.joinSession();
+            if (joinSession == null || joinSession.rideId() != rideId || joinSession.driverId() != driverId) {
+                return false;
+            }
+
+            if (joinSession.isExpired()) {
+                session.markExpired();
+                sessions.remove(requestId, session);
+                return false;
+            }
+
+            locked = session.markJoinAwaitingConfirmation(driverId);
+        }
+
+        if (!locked) {
+            return false;
+        }
+
+        boolean allowed = decisionGateway.beginAcceptance(requestId, rideId, driverId);
+        if (!allowed) {
+            synchronized (session) {
+                session.resumeMatching();
+            }
+        }
+
+        return allowed;
+    }
+
     public void completeDriverAcceptance(Integer requestId) {
         MatchingSession session = sessions.remove(requestId);
         decisionGateway.completeAcceptance(requestId);
@@ -343,8 +379,18 @@ public class RideMatchingCoordinator {
 
         session.markCompleted();
         requestRepository.findById(requestId).ifPresent(req -> {
-            if (req.getStatus() == SharedRideRequestStatus.CONFIRMED &&
-                session.currentCandidate() != null) {
+            if (req.getStatus() != SharedRideRequestStatus.CONFIRMED) {
+                return;
+            }
+
+            if (session.isJoinRequest()) {
+                notificationService.notifyRiderStatus(
+                    req.getRider().getUser(),
+                    responseAssembler.toRiderJoinRequestSuccess(req));
+                return;
+            }
+
+            if (session.currentCandidate() != null) {
                 notificationService.notifyRiderStatus(
                     req.getRider().getUser(),
                     responseAssembler.toRiderMatchSuccess(req, session.currentCandidate()));
@@ -717,6 +763,24 @@ public class RideMatchingCoordinator {
 
         boolean isJoinRequest() {
             return joinSession != null;
+        }
+
+        JoinRequestSession joinSession() {
+            return joinSession;
+        }
+
+        synchronized boolean markJoinAwaitingConfirmation(int driverId) {
+            if (!isJoinRequest()) {
+                return false;
+            }
+            if (phase.get() != Phase.MATCHING) {
+                return false;
+            }
+            if (joinSession == null || joinSession.driverId() != driverId) {
+                return false;
+            }
+            phase.set(Phase.AWAITING_CONFIRMATION);
+            return true;
         }
 
         synchronized Optional<RideMatchProposalResponse> advance() {

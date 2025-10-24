@@ -327,7 +327,7 @@ public class SharedRideController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/rides/{rideId}/track")
+    @PostMapping("/{rideId}/track")
     public ResponseEntity<TrackingResponse> trackRide(
         @PathVariable Integer rideId,
         @RequestBody List<LocationPoint> points,

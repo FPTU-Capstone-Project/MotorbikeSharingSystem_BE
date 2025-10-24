@@ -10,10 +10,11 @@ import java.util.List;
 public interface RoutingService {
     RouteResponse getRoute(double fromLat, double fromLon, double toLat, double toLon);
 
-    // Add this method
     RouteResponse getMultiStopRoute(List<LatLng> waypoints, LocalDateTime departureTime);
 
     String getAddressFromCoordinates(double lat, double lon);
+
+    int getEstimatedTravelTimeMinutes(double fromLat, double fromLon, double toLat, double toLon);
 
 }
 

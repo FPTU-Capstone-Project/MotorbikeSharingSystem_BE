@@ -83,33 +83,33 @@ VALUES
 -- =====================================================
 -- 2. RIDER PROFILES
 -- =====================================================
-INSERT INTO rider_profiles (rider_id, emergency_contact, total_rides, total_spent, status, preferred_payment_method,
+INSERT INTO rider_profiles (rider_id, total_rides, total_spent, status, preferred_payment_method,
                             created_at)
-SELECT user_id, '0988777666', 25, 825000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id, 25, 825000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'nguyen.van.a@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, '0977666555', 12, 432000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id, 12, 432000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'tran.thi.b@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, '0966555444', 35, 1120000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id,  35, 1120000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'le.van.c@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, '0955444333', 8, 256000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id, 8, 256000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'pham.thi.d@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, '0944333222', 18, 612000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id, 18, 612000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'hoang.van.e@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, '0933222111', 42, 1386000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id, 42, 1386000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'vo.van.f@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id, '0922111000', 28, 896000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id, 28, 896000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'dang.thi.g@student.hcmut.edu.vn';
 
@@ -562,8 +562,8 @@ VALUES ('john.doe@example.com',
 ON CONFLICT (email) DO NOTHING;
 
 -- Rider profile for John Doe
-INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method, created_at)
-SELECT user_id, '0901234567', 'WALLET', NOW()
+INSERT INTO rider_profiles (rider_id, preferred_payment_method, created_at)
+SELECT user_id, 'WALLET', NOW()
 FROM users
 WHERE email = 'john.doe@example.com';
 
@@ -592,8 +592,8 @@ VALUES ('driver1@example.com',
 ON CONFLICT (email) DO NOTHING;
 
 -- Rider profile for Driver 1
-INSERT INTO rider_profiles (rider_id, emergency_contact, preferred_payment_method, created_at)
-SELECT user_id, '0901234567', 'WALLET', NOW()
+INSERT INTO rider_profiles (rider_id, preferred_payment_method, created_at)
+SELECT user_id, 'WALLET', NOW()
 FROM users
 WHERE email = 'driver1@example.com';
 
@@ -684,6 +684,89 @@ WHERE u.email = 'john.doe@example.com'
                   WHERE w.user_id = u.user_id);
 
 WITH transaction_group AS (SELECT '550e8400-e29b-41d4-a716-446655440001'::uuid AS group_id),
+     system_txn AS (
+         INSERT INTO transactions (
+                                   type,
+                                   group_id,
+                                   direction,
+                                   actor_kind,
+                                   actor_user_id,
+                                   system_wallet,
+                                   amount,
+                                   currency,
+                                   status,
+                                   psp_ref,
+                                   note,
+                                   created_at
+             )
+             SELECT 'TOPUP',
+                    group_id,
+                    'IN',
+                    'SYSTEM',
+                    NULL,
+                    'MASTER',
+                    300000,
+                    'VND',
+                    'SUCCESS',
+                    'PSP-TEST-300K-001',
+                    'PSP Inflow - Test wallet funding',
+                    now()
+             FROM transaction_group
+             RETURNING group_id)
+INSERT
+INTO transactions (type,
+                   group_id,
+                   direction,
+                   actor_kind,
+                   actor_user_id,
+                   rider_user_id,
+                   amount,
+                   currency,
+                   status,
+                   before_avail,
+                   after_avail,
+                   before_pending,
+                   after_pending,
+                   psp_ref,
+                   note,
+                   created_at)
+SELECT 'TOPUP',
+       g.group_id,
+       'IN',
+       'USER',
+       2, -- actor_user_id
+       1, -- rider_user_id
+       300000,
+       'VND',
+       'SUCCESS',
+       0,
+       300000,
+       0,
+       0,
+       'PSP-TEST-300K-001',
+       'Test wallet funding - 300,000 VND top-up',
+       now()
+FROM system_txn g;
+
+INSERT INTO wallets (user_id, shadow_balance, pending_balance, total_topped_up, total_spent, is_active, last_synced_at,
+                     created_at, updated_at, version)
+SELECT u.user_id,
+       300000, -- shadow_balance
+       0,      -- pending_balance
+       300000, -- total_topped_up
+       0,      -- total_spent
+       true,   -- is_active
+       now(),  -- last_synced_at
+       now(),  -- created_at
+       now(),  -- updated_at
+       0       -- version
+FROM users u
+WHERE u.email = 'driver1@example.com'
+  AND NOT EXISTS (SELECT 1
+                  FROM wallets w
+                  WHERE w.user_id = u.user_id);
+
+WITH transaction_group AS (SELECT '550e8400-e29b-41d4-a716-446655440002'::uuid AS group_id),
      system_txn AS (
          INSERT INTO transactions (
                                    type,

@@ -201,7 +201,7 @@ public class RideConfigurationProperties {
          * Maximum time a confirmed request can wait for pickup before auto-start (minutes).
          * Default: 5 minutes.
          */
-        private Duration requestPickupTimeout = Duration.ofMinutes(15);
+        private Duration requestPickupTimeout = Duration.ofMinutes(30);
 
         /**
          * Maximum time an ongoing request can remain active before auto-completion (minutes).

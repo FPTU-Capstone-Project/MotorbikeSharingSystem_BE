@@ -19,8 +19,7 @@ public record CreateRideRequest(
         LatLng startLatLng,
 
         LatLng endLatLng,
-        
-        @NotNull(message = "Scheduled time is required")
+
         @Future(message = "Scheduled time must be in the future")
         @Schema(description = "Scheduled departure time (ISO 8601)", example = "2025-10-05T08:00:00", required = true)
         LocalDateTime scheduledDepartureTime

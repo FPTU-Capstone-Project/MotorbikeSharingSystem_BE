@@ -10,7 +10,6 @@ import com.mssus.app.dto.request.ride.StartRideRequest;
 import com.mssus.app.dto.request.ride.StartRideReqRequest;
 import com.mssus.app.dto.request.wallet.RideCompleteSettlementRequest;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
-import com.mssus.app.dto.request.wallet.WalletReleaseRequest;
 import com.mssus.app.dto.response.LocationResponse;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.*;
@@ -20,11 +19,9 @@ import com.mssus.app.mapper.LocationMapper;
 import com.mssus.app.mapper.SharedRideMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
-import com.mssus.app.service.pricing.PricingService;
 import com.mssus.app.service.pricing.model.FareBreakdown;
 import com.mssus.app.service.pricing.model.MoneyVnd;
-import com.mssus.app.service.pricing.model.SettlementResult;
-import com.mssus.app.util.PolylineDistance;
+import com.mssus.app.util.GeoUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -55,7 +52,7 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final UserRepository userRepository;
     private final SharedRideMapper rideMapper;
     private final RoutingService routingService;
-//    private final BookingWalletService bookingWalletService;
+    private final RealTimeNotificationService realTimeNotificationService;
     private final PricingConfigRepository pricingConfigRepository;
     private final RideTrackRepository trackRepository;
     private final RideTrackingService rideTrackingService;
@@ -86,50 +83,37 @@ public class SharedRideServiceImpl implements SharedRideService {
 
         Optional<SharedRide> latestRide = rideRepository.findLatestScheduledRideByDriverId(driver.getDriverId());
         if (latestRide.isPresent()) {
-            LocalDateTime lastScheduledTime = latestRide.get().getScheduledTime();
-            LocalDateTime minAllowedTime = lastScheduledTime.plus(rideConfig.getRideConstraints().getMinIntervalBetweenRides());
+            SharedRide lastRide = latestRide.get();
+            LocalDateTime referenceTime = lastRide.getScheduledTime();
 
-            String formattedTime = minAllowedTime.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"));
+            if (lastRide.getStatus() == SharedRideStatus.COMPLETED && lastRide.getCompletedAt() != null) {
+                referenceTime = lastRide.getCompletedAt();
+            }
 
-            throw BaseDomainException.withContext(
-                "ride.validation.invalid-scheduled-time",
-                Map.of("reason", "Chuyến xe tiếp theo phải sau " + formattedTime)
-            );
+            LocalDateTime minAllowedTimeForNewRide = referenceTime.plus(rideConfig.getRideConstraints().getMinIntervalBetweenRides());
 
+            LocalDateTime newRideStartTime = request.scheduledDepartureTime() != null
+                ? request.scheduledDepartureTime()
+                : LocalDateTime.now();
+
+            boolean isLastRideActive = lastRide.getStatus() != SharedRideStatus.COMPLETED
+                && lastRide.getStatus() != SharedRideStatus.CANCELLED;
+
+            if (newRideStartTime.isBefore(minAllowedTimeForNewRide) && isLastRideActive) {
+                String formattedTime = minAllowedTimeForNewRide.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"));
+                throw BaseDomainException.withContext(
+                    "ride.validation.invalid-scheduled-time",
+                    Map.of("reason", "Chuyến xe tiếp theo phải sau " + formattedTime)
+                );
+            }
         }
-
 
         Location startLoc = findOrCreateLocation(request.startLocationId(), request.startLatLng(), "Start");
         Location endLoc = findOrCreateLocation(request.endLocationId(), request.endLatLng(), "End");
 
-//
-//        if (request.startLocationId() != null) {
-//            startLoc = locationRepository.findById(request.startLocationId())
-//                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-//                    "Start location not found"));
-//            startLat = startLoc.getLat();
-//            startLng = startLoc.getLng();
-//        } else {
-//            startLat = request.startLatLng().latitude();
-//            startLng = request.startLatLng().longitude();
-//        }
-//
-//        if (request.endLocationId() != null) {
-//            endLoc = locationRepository.findById(request.endLocationId())
-//                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
-//                    "End location not found"));
-//            endLat = endLoc.getLat();
-//            endLng = endLoc.getLng();
-//        } else {
-//            endLat = request.endLatLng().latitude();
-//            endLng = request.endLatLng().longitude();
-//        }
-
         PricingConfig pricingConfig = pricingConfigRepository.findActive(Instant.now())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
 
-        // Validate route via RoutingService (using extracted coords)
-        // TODO: For MVP, log validation only. In production, reject invalid routes.
         try {
             RouteResponse routeResponse = routingService.getRoute(
                 startLoc.getLat(), startLoc.getLng(),
@@ -137,30 +121,36 @@ public class SharedRideServiceImpl implements SharedRideService {
             log.info("Route validated - distance: {} m, duration: {} s",
                 routeResponse.distance(), routeResponse.time());
 
-            // Create and populate ride entity
             SharedRide ride = new SharedRide();
             ride.setDriver(driver);
             ride.setVehicle(vehicle);
             ride.setStartLocation(startLoc);
             ride.setEndLocation(endLoc);
-//            ride.setStartLat(startLat);
-//            ride.setStartLng(startLng);
-//            ride.setEndLat(endLat);
-//            ride.setEndLng(endLng);
             ride.setPricingConfig(pricingConfig);
-//            ride.setStartLocationId(request.startLocationId());
-//            ride.setEndLocationId(request.endLocationId());
-            ride.setStatus(SharedRideStatus.SCHEDULED);
+            ride.setStatus(request.scheduledDepartureTime() != null
+                ? SharedRideStatus.SCHEDULED
+                : SharedRideStatus.ONGOING
+            );
             ride.setMaxPassengers(1);
             ride.setCurrentPassengers(0);
-            ride.setScheduledTime(request.scheduledDepartureTime());
+            ride.setScheduledTime(request.scheduledDepartureTime() != null
+                ? request.scheduledDepartureTime()
+                : LocalDateTime.now());
             ride.setEstimatedDuration((int) Math.ceil(routeResponse.time() / 60.0)); // in minutes
             ride.setEstimatedDistance((float) routeResponse.distance() / 1000); // in km
             ride.setCreatedAt(LocalDateTime.now());
+            ride.setStartedAt(request.scheduledDepartureTime() == null
+                ? LocalDateTime.now()
+                : null
+            );
 
             SharedRide savedRide = rideRepository.save(ride);
             log.info("Ride created successfully - ID: {}, driver: {}, scheduled: {}",
                 savedRide.getSharedRideId(), driver.getDriverId(), savedRide.getScheduledTime());
+
+            if (request.scheduledDepartureTime() == null) {
+                rideTrackingService.startTracking(savedRide.getSharedRideId());
+            }
 
             return buildRideResponse(savedRide/*, startLoc, endLoc*/);
 
@@ -372,7 +362,7 @@ public class SharedRideServiceImpl implements SharedRideService {
         LatLng driverCurrentLoc = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 3)
             .orElse(new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng()));
 
-        double distanceToPickup = PolylineDistance.haversineMeters(
+        double distanceToPickup = GeoUtil.haversineMeters(
             driverCurrentLoc.latitude(),
             driverCurrentLoc.longitude(),
             rideRequest.getPickupLocation().getLat(),
@@ -395,14 +385,15 @@ public class SharedRideServiceImpl implements SharedRideService {
                 "You have started picking up passenger " + rideRequest.getRider().getUser().getFullName(),
                 null,
                 Priority.MEDIUM,
-                DeliveryMethod.PUSH,
-                "/queue/ride-offers"
+                DeliveryMethod.IN_APP,
+                null
             );
         } catch (Exception ex) {
             log.warn("Failed to notify driver for pickup start (request {}): {}", request.rideRequestId(), ex.getMessage());
         }
 
         try {
+
             notificationService.sendNotification(
                 rideRequest.getRider().getUser(),
                 NotificationType.REQUEST_STARTED,
@@ -410,8 +401,8 @@ public class SharedRideServiceImpl implements SharedRideService {
                 "Your driver has started the pickup process. Please be ready at the pickup location.",
                 null,
                 Priority.HIGH,
-                DeliveryMethod.PUSH,
-                "/queue/ride-matching"
+                DeliveryMethod.IN_APP,
+                null
             );
         } catch (Exception ex) {
             log.warn("Failed to notify rider for pickup start (request {}): {}", request.rideRequestId(), ex.getMessage());
@@ -492,7 +483,7 @@ public class SharedRideServiceImpl implements SharedRideService {
                 Map.of("currentState", rideRequest.getStatus()));
         }
 
-        if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
+        if (GeoUtil.haversineMeters(driverCurrentLoc.latitude(),
             driverCurrentLoc.longitude(),
             rideRequest.getDropoffLocation().getLat(), rideRequest.getDropoffLocation().getLng()) > 100) {
             log.warn("Driver {} is too far from the request's dropoff location to complete request{}",
@@ -538,7 +529,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             MoneyVnd.VND(rideRequest.getSubtotalFare()),
             MoneyVnd.VND(rideRequest.getTotalFare()),
             activePricingConfig.getSystemCommissionRate()
-            );
+        );
         RideRequestSettledResponse requestSettledResponse = null;
 
         try {
@@ -560,6 +551,7 @@ public class SharedRideServiceImpl implements SharedRideService {
         } catch (Exception e) {
             log.error("Failed to capture fare for request {}: {}",
                 rideRequest.getSharedRideRequestId(), e.getMessage(), e);
+            throw BaseDomainException.of("ride-request.settlement.failed");
         }
 
         BigDecimal driverEarnings = requestSettledResponse.driverEarnings() == null
@@ -573,8 +565,8 @@ public class SharedRideServiceImpl implements SharedRideService {
                 "You have successfully completed the ride for passenger " + rideRequest.getRider().getUser().getFullName(),
                 null,
                 Priority.MEDIUM,
-                DeliveryMethod.PUSH,
-                "/queue/ride-offers"
+                DeliveryMethod.IN_APP,
+                null
             );
         } catch (Exception ex) {
             log.warn("Failed to notify driver for request completion {}: {}", request.rideRequestId(), ex.getMessage());
@@ -588,8 +580,8 @@ public class SharedRideServiceImpl implements SharedRideService {
                 "Your ride has been completed successfully. Thank you for using our service!",
                 null,
                 Priority.HIGH,
-                DeliveryMethod.PUSH,
-                "/queue/ride-matching"
+                DeliveryMethod.IN_APP,
+                null
             );
         } catch (Exception ex) {
             log.warn("Failed to notify rider for request completion {}: {}", request.rideRequestId(), ex.getMessage());
@@ -839,32 +831,36 @@ public class SharedRideServiceImpl implements SharedRideService {
     }
 
     private Location findOrCreateLocation(Integer locationId, LatLng latLng, String pointType) {
-        if (locationId != null && latLng == null) {
+        boolean hasId = locationId != null;
+        boolean hasCoords = latLng != null && latLng.latitude() != null && latLng.longitude() != null;
+
+        if (hasId && !hasCoords) {
             return locationRepository.findById(locationId)
                 .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
                     pointType + " location not found with ID: " + locationId));
         }
 
-        if (locationId == null && latLng != null) {
+        if (!hasId && hasCoords) {
             return locationRepository.findByLatAndLng(latLng.latitude(), latLng.longitude())
                 .orElseGet(() -> {
                     Location newLocation = new Location();
                     newLocation.setName(null);
                     newLocation.setLat(latLng.latitude());
                     newLocation.setLng(latLng.longitude());
-                    newLocation.setAddress(routingService.getAddressFromCoordinates(
-                        latLng.latitude(), latLng.longitude()));
+                    newLocation.setAddress(
+                        routingService.getAddressFromCoordinates(latLng.latitude(), latLng.longitude()));
                     newLocation.setCreatedAt(LocalDateTime.now());
                     newLocation.setIsPoi(false);
                     return locationRepository.save(newLocation);
                 });
         }
 
-        if (locationId != null) { // and latLng is not null
-            throw BaseDomainException.of("ride.validation.invalid-location", "Provide either " + pointType.toLowerCase() + "LocationId or " + pointType.toLowerCase() + "LatLng, not both");
+        if (hasId) {
+            throw BaseDomainException.of("ride.validation.invalid-location",
+                "Provide either " + pointType.toLowerCase() + "LocationId or " + pointType.toLowerCase()
+                    + "LatLng, not both");
         }
 
         throw BaseDomainException.of("ride.validation.invalid-location", "Either " + pointType.toLowerCase() + "LocationId or " + pointType.toLowerCase() + "LatLng must be provided");
     }
 }
-

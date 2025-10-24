@@ -1,6 +1,7 @@
 package com.mssus.app;
 
 import com.mssus.app.config.properties.RideConfigurationProperties;
+import com.mssus.app.config.properties.SosConfigurationProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -9,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableJpaAuditing
-@EnableConfigurationProperties({RideConfigurationProperties.class})
+@EnableConfigurationProperties({RideConfigurationProperties.class, SosConfigurationProperties.class})
 @EnableScheduling
 public class MssusAccountServiceApplication {
 

@@ -1,96 +1,486 @@
 <!DOCTYPE html>
-<meta charset="utf-8" />
-<title>Driver Test</title>
+<meta charset="utf-8"/>
+<title>Driver Demo Console</title>
 <body>
-  <h3>Driver</h3>
-  <label>requestId <input id="requestId" value="" /></label>
-  <label>rideId <input id="rideId" value="" /></label>
-  <label>vehicleId <input id="vehicleId" value="1" /></label>
-  <button id="connect">Connect WS</button>
-  <button id="accept">Accept Current Offer</button>
-  <button id="acceptBroadcast">Accept Broadcast Offer</button>
-  <pre id="log"></pre>
-  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
-  <script>
-    const BASE = "http://localhost:8080";
-    const JWT =
-      "eyJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl92ZXJzaW9uIjoxLCJzdWIiOiJkcml2ZXIxQGV4YW1wbGUuY29tIiwicHJvZmlsZV9zdGF0dXMiOnsiRFJJVkVSIjoiQUNUSVZFIiwiUklERVIiOiJBQ1RJVkUifSwiaXNzIjoibXNzdXMuYXBpIiwicHJvZmlsZXMiOlsiUklERVIiLCJEUklWRVIiXSwiYWN0aXZlX3Byb2ZpbGUiOiJkcml2ZXIiLCJlbWFpbCI6ImRyaXZlcjFAZXhhbXBsZS5jb20iLCJpYXQiOjE3NjA3OTQ5NjUsImV4cCI6MTc2MDc5ODU2NX0.8ORvnbRyqmD4w_BSwKIunTr76Zzky7ygc6GT4NAzpLE";
-    const log = (m) => (document.getElementById("log").textContent += m + "\n");
+<h2>Driver Demo Console</h2>
+<section>
+    <h3>Authentication</h3>
+    <label>Email <input id="loginEmail" value="driver1@example.com" size="25"/></label>
+    <label>Password <input id="loginPassword" value="Password1!" type="password" size="15"/></label>
+    <label>Profile
+        <select id="loginProfile">
+            <option value="rider">Rider</option>
+            <option value="driver" selected>Driver</option>
+        </select>
+    </label>
+    <button id="login">Login</button>
+</section>
 
-    let stomp, lastOffer;
+<section>
+    <label>Base URL <input id="base" value="http://localhost:8080" size="30"/></label>
+    <label>JWT <input id="jwt" value="PUT_DRIVER_TOKEN_HERE" size="60"/></label>
+    <button id="connect">Connect WS</button>
+</section>
 
-    document.getElementById("connect").onclick = () => {
-      const sock = new SockJS(
-        BASE +
-          "/ws?token=" + encodeURIComponent(JWT)
-      );
-      stomp = Stomp.over(sock);
-      stomp.connect(
-        { Authorization: "Bearer " + JWT },
-        () => {
-          log("Driver WS connected");
-          stomp.subscribe("/user/queue/ride-offers", (msg) => {
-            log("Driver offer: " + msg.body);
-            lastOffer = JSON.parse(msg.body);
-            document.getElementById("requestId").value = lastOffer.requestId;
-            document.getElementById("rideId").value = lastOffer.rideId ?? "";
-            if (lastOffer.broadcast) {
-              log("Broadcast offer detected. Use 'Accept Broadcast Offer' and supply vehicleId.");
-            }
-          });
-          stomp.subscribe("/user/queue/notifications", (msg) => {
-            log("General notification: " + msg.body);
-          });
-        },
-        (err) => log("Driver WS error: " + err)
-      );
+<section>
+    <h3>State</h3>
+    <label>Ride ID <input id="rideId" size="8"/></label>
+    <label>Request ID <input id="requestId" size="8"/></label>
+    <!--    <label>Vehicle ID <input id="vehicleId" value="4001" size="6" /></label>-->
+</section>
+
+<section>
+    <h3>Create & Manage Ride</h3>
+    <label>Start Location ID <input id="startLocationId" value="11" size="4"/></label>
+    <label>End Location ID <input id="endLocationId" value="12" size="4"/></label>
+    <label>Scheduled Time (ISO) <input id="scheduledTime" placeholder="2025-10-25T06:30:00" size="20"/></label>
+    <button id="createRide">Create Ride</button>
+    <button id="startRide">Start Ride</button>
+    <button id="completeRide">Complete Ride</button>
+    <button id="cancelRide">Cancel Ride</button>
+    <button id="fetchRide">Fetch Ride Detail</button>
+</section>
+
+<section>
+    <h3>Requests & Broadcast</h3>
+    <button id="acceptOffer">Accept Current Offer</button>
+    <button id="acceptBroadcast">Accept Broadcast Offer</button>
+    <button id="listBroadcast">List Broadcasting Requests</button>
+</section>
+
+<section>
+    <h3>Pickup & Drop-off Lifecycle</h3>
+    <label>Pickup Lat <input id="pickupLat" value="10.84148" size="10"/></label>
+    <label>Pickup Lng <input id="pickupLng" value="106.809844" size="10"/></label>
+    <label>Drop Lat <input id="dropLat" value="10.8426113" size="10"/></label>
+    <label>Drop Lng <input id="dropLng" value="106.8374642" size="10"/></label>
+    <button id="sendTrack">Send Mock Tracking Near Pickup</button>
+    <button id="sendTrackDropoff">Send Mock Tracking Near Dropoff</button>
+    <button id="startRequest">Mark Request ONGOING</button>
+    <button id="completeRequest">Complete Request</button>
+</section>
+
+<section>
+    <h3>SOS Alerts</h3>
+    <label>Alert ID <input id="sosAlertId" size="8"/></label>
+    <label>Alert Type
+        <select id="sosAlertType">
+            <option value="">(auto)</option>
+            <option value="EMERGENCY">EMERGENCY</option>
+            <option value="ACCIDENT">ACCIDENT</option>
+            <option value="BREAKDOWN">BREAKDOWN</option>
+            <option value="SAFETY_CONCERN">SAFETY_CONCERN</option>
+            <option value="OTHER">OTHER</option>
+        </select>
+    </label>
+    <label>Lat <input id="sosLat" value="10.845" size="10"/></label>
+    <label>Lng <input id="sosLng" value="106.813" size="10"/></label>
+    <label>Description <input id="sosDescription" value="Need assistance" size="40"/></label>
+    <label><input type="checkbox" id="sosForceFallback"/> Force fallback call</label>
+    <button id="triggerSos">Trigger SOS</button>
+    <label>Status Filter <input id="sosStatusFilter" placeholder="ACTIVE,ESCALATED..." size="20"/></label>
+    <button id="listMyAlerts">List My Alerts</button>
+    <button id="getAlertDetail">Get Alert Detail</button>
+    <button id="getAlertTimeline">Get Alert Timeline</button>
+</section>
+
+<section>
+    <h3>Emergency Contacts</h3>
+    <label>Contact ID <input id="contactId" size="8"/></label>
+    <label>Name <input id="contactName" value="Trong Le" size="15"/></label>
+    <label>Phone <input id="contactPhone" value="+84906667788" size="15"/></label>
+    <label>Relationship <input id="contactRelationship" value="Brother" size="10"/></label>
+    <label><input type="checkbox" id="contactPrimary"/> Primary</label>
+    <button id="listContacts">List Contacts</button>
+    <button id="createContact">Create Contact</button>
+    <button id="updateContact">Update Contact</button>
+    <button id="setPrimaryContact">Set Primary</button>
+    <button id="deleteContact">Delete Contact</button>
+</section>
+
+<pre id="log"></pre>
+
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+<script>
+    const $ = (id) => document.getElementById(id);
+    const log = (msg) => {
+        $("log").textContent += `[${new Date().toISOString()}] ${msg}\n`;
+    };
+    const nowIso = () => new Date().toISOString().split(".")[0];
+
+    const state = {
+        stomp: null,
+        lastOffer: null,
+    };
+    const parseFloatOrNull = (value) => {
+        const num = parseFloat(value);
+        return Number.isFinite(num) ? num : null;
+    };
+    const parseIntOrNull = (value) => {
+        const num = parseInt(value, 10);
+        return Number.isFinite(num) ? num : null;
+    };
+    const trimOrNull = (value) => {
+        if (value === undefined || value === null) return null;
+        const trimmed = String(value).trim();
+        return trimmed.length ? trimmed : null;
     };
 
-    document.getElementById("accept").onclick = async () => {
-      if (!lastOffer) return log("No offer to accept.");
-      const reqId = document.getElementById("requestId").value;
-      const rideId = parseInt(document.getElementById("rideId").value, 10);
-      const body = {
-        rideId,
-      };
-      const res = await fetch(`${BASE}/api/v1/ride-requests/${reqId}/accept`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + JWT,
-        },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      log("Accept result: " + res.status + " " + JSON.stringify(data));
-    };
-
-    document.getElementById("acceptBroadcast").onclick = async () => {
-      if (!lastOffer || !lastOffer.broadcast) {
-        return log("No broadcast offer to accept.");
-      }
-      const reqId = document.getElementById("requestId").value;
-      const vehicleId = parseInt(document.getElementById("vehicleId").value, 10);
-      if (!vehicleId) {
-        return log("Vehicle ID is required to accept broadcast offer.");
-      }
-      const body = {
-        vehicleId,
-      };
-      const res = await fetch(
-        `${BASE}/api/v1/ride-requests/${reqId}/broadcast/accept`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + JWT,
-          },
-          body: JSON.stringify(body),
+    async function api(path, method = "GET", body) {
+        const base = $("base").value;
+        const jwt = $("jwt").value.trim();
+        const headers = {
+            Authorization: "Bearer " + jwt,
+        };
+        if (body !== undefined) {
+            headers["Content-Type"] = "application/json";
         }
-      );
-      const data = await res.json();
-      log("Broadcast accept result: " + res.status + " " + JSON.stringify(data));
+        const res = await fetch(base + path, {
+            method,
+            headers,
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+        let payload = null;
+        const text = await res.text();
+        try {
+            payload = text ? JSON.parse(text) : null;
+        } catch (err) {
+            payload = text;
+        }
+        log(`${method} ${path} -> ${res.status} ${text}`);
+        return {res, payload};
+    }
+
+    $("login").onclick = async () => {
+        const body = {
+            email: $("loginEmail").value,
+            password: $("loginPassword").value,
+            targetProfile: $("loginProfile").value,
+        };
+        const {res, payload} = await api("/api/v1/auth/login", "POST", body);
+        if (res.ok && payload?.access_token) {
+            $("jwt").value = payload.access_token;
+            log("Login successful. Token populated.");
+        } else {
+            log("Login failed.");
+        }
     };
-  </script>
+
+
+    $("connect").onclick = () => {
+        const base = $("base").value;
+        const jwt = $("jwt").value.trim();
+        const sock = new SockJS(base + "/ws?token=" + encodeURIComponent(jwt));
+        state.stomp = Stomp.over(sock);
+        state.stomp.connect(
+            {Authorization: "Bearer " + jwt},
+            () => {
+                log("WebSocket connected");
+                state.stomp.subscribe("/user/queue/ride-offers", (msg) => {
+                    log("Offer: " + msg.body);
+                    const payload = JSON.parse(msg.body);
+                    state.lastOffer = payload;
+                    $("requestId").value = payload.requestId ?? "";
+                    $("rideId").value = payload.rideId ?? $("rideId").value;
+                    if (payload.broadcast) {
+                        log("Broadcast flag detected - use Accept Broadcast with vehicleId.");
+                    }
+                });
+                state.stomp.subscribe("/user/queue/sos", (msg) => log("SOS: " + msg.body));
+                state.stomp.subscribe("/user/queue/notifications", (msg) =>
+                    log("Notification: " + msg.body)
+                );
+            },
+            (err) => log("WS error: " + err)
+        );
+    };
+
+    $("createRide").onclick = async () => {
+        const body = {
+            startLocationId: parseInt($("startLocationId").value, 10),
+            endLocationId: parseInt($("endLocationId").value, 10),
+            startLatLng: null,
+            endLatLng: null,
+            scheduledDepartureTime: $("scheduledTime").value,
+        };
+        const {payload} = await api("/api/v1/rides", "POST", body);
+        if (payload?.sharedRideId) {
+            $("rideId").value = payload.sharedRideId;
+        }
+    };
+
+    $("fetchRide").onclick = async () => {
+        const rideId = $("rideId").value;
+        if (!rideId) return log("Ride ID required.");
+        await api(`/api/v1/rides/${rideId}`);
+    };
+
+    $("startRide").onclick = async () => {
+        const rideId = $("rideId").value;
+        if (!rideId) return log("Ride ID required.");
+        await api(`/api/v1/rides/${rideId}/start`, "POST", {rideId: parseInt(rideId, 10)});
+    };
+
+    $("completeRide").onclick = async () => {
+        const rideId = $("rideId").value;
+        if (!rideId) return log("Ride ID required.");
+        await api(`/api/v1/rides/${rideId}/complete`, "POST", {rideId: parseInt(rideId, 10)});
+    };
+
+    $("cancelRide").onclick = async () => {
+        const rideId = $("rideId").value;
+        if (!rideId) return log("Ride ID required.");
+        await api(`/api/v1/rides/${rideId}?reason=Demo+cancel`, "DELETE");
+    };
+
+    $("acceptOffer").onclick = async () => {
+        if (!state.lastOffer) return log("No offer captured yet.");
+        const reqId = $("requestId").value || state.lastOffer.requestId;
+        const rideId = parseInt($("rideId").value || state.lastOffer.rideId, 10);
+        await api(`/api/v1/ride-requests/${reqId}/accept`, "POST", {rideId});
+    };
+
+    $("acceptBroadcast").onclick = async () => {
+        // if (!state.lastOffer || !state.lastOffer.broadcast) {
+        //   return log("No broadcast offer available.");
+        // }
+        const reqId = $("requestId").value || state.lastOffer.requestId;
+        const body = {
+            startLocationId: 11,
+            startLatLng: {latitude: null, longitude: null},
+        };
+        await api(
+            `/api/v1/ride-requests/${reqId}/broadcast/accept`,
+            "POST",
+            body
+        );
+    };
+
+    $("listBroadcast").onclick = async () => {
+        const {payload} = await api("/api/v1/ride-requests/broadcasting");
+        if (Array.isArray(payload) && payload.length > 0) {
+            const first = payload[0];
+            $("requestId").value = first.rideRequestId;
+            log("First broadcasting request loaded into Request ID field.");
+        }
+    };
+
+    // $("sendTrack").onclick = async () => {
+    //   const rideId = $("rideId").value;
+    //   if (!rideId) return log("Ride ID required.");
+    //   const startLat = parseFloat($("pickupLat").value);
+    //   const startLng = parseFloat($("pickupLng").value);
+    //   const dropLat = parseFloat($("dropLat").value);
+    //   const dropLng = parseFloat($("dropLng").value);
+    //   const payload = [
+    //     { lat: startLat, lng: startLng, timestamp: nowIso() },
+    //     { lat: startLat + 0.0002, lng: startLng + 0.0002, timestamp: nowIso() },
+    //     { lat: dropLat, lng: dropLng, timestamp: nowIso() }
+    //   ];
+    //   await api(`/api/v1/rides/${rideId}/track`, "POST", payload);
+    // };
+
+    $("sendTrack").onclick = async () => {
+        const rideId = $("rideId").value;
+        if (!rideId) return log("Ride ID required.");
+        const routeCoords = [
+            [10.83876, 106.83176], [10.83860, 106.83131], [10.83951, 106.83099],
+            [10.83906, 106.82977], [10.83922, 106.82971], [10.83938, 106.82968],
+            [10.83981, 106.82943], [10.84133, 106.82911], [10.84028, 106.82942],
+            [10.84133, 106.82894], [10.84123, 106.82867], [10.84239, 106.82815],
+            [10.84183, 106.82786], [10.84163, 106.82749], [10.84126, 106.82684],
+            [10.84121, 106.82676], [10.84115, 106.82666], [10.84108, 106.82652],
+            [10.84103, 106.82630], [10.84101, 106.82617], [10.84102, 106.82597],
+            [10.84106, 106.82576], [10.84108, 106.82557], [10.84115, 106.82504],
+            [10.84120, 106.82454], [10.84130, 106.82332], [10.84133, 106.82271],
+            [10.84137, 106.82251], [10.84138, 106.82251], [10.84141, 106.82209],
+            [10.84142, 106.82189], [10.84146, 106.82176], [10.84149, 106.82163],
+            [10.84169, 106.82132], [10.84186, 106.82107], [10.84192, 106.82098],
+            [10.84205, 106.82079], [10.84219, 106.82058], [10.84252, 106.82009]
+        ];
+
+        const now = new Date();
+        const startTime = now.getTime() - (now.getTimezoneOffset() * 60000);
+        let timeOffsetMillis = 0;
+        const payload = routeCoords.map(coords => {
+            const incrementMillis = (Math.floor(Math.random() * 4) + 4) * 1000;
+            timeOffsetMillis += incrementMillis;
+
+            return {
+                lat: coords[0],
+                lng: coords[1],
+                timestamp: new Date(startTime + timeOffsetMillis).toISOString()
+            };
+        });
+        log("Sending " + payload.length + " tracking points...");
+
+        await api(`/api/v1/rides/${rideId}/track`, "POST", payload);
+    };
+
+    $("sendTrackDropoff").onclick = async () => {
+        const rideId = $("rideId").value;
+        if (!rideId) return log("Ride ID required.");
+        const routeCoords = [
+            [10.84314, 106.81920],
+            [10.84326, 106.81903],
+            [10.84344, 106.81882],
+            [10.84355, 106.81871],
+            [10.84357, 106.81869],
+            [10.84423, 106.81818],
+            [10.84479, 106.81774],
+            [10.84497, 106.81747],
+            [10.84435, 106.81709],
+            [10.84413, 106.81677],
+            [10.84390, 106.81645],
+            [10.84370, 106.81610],
+            [10.84363, 106.81610],
+            [10.84353, 106.81598],
+            [10.84341, 106.81586],
+            [10.84409, 106.81486],
+            [10.84371, 106.81438],
+            [10.84296, 106.81520],
+            [10.84217, 106.81446],
+            [10.84188, 106.81413],
+            [10.84100, 106.81336],
+            [10.84078, 106.81316],
+            [10.84071, 106.81258],
+            [10.83962, 106.81208],
+            [10.83956, 106.81197],
+            [10.83949, 106.81188],
+            [10.83940, 106.81169],
+            [10.83936, 106.81155],
+            [10.83937, 106.81150],
+            [10.83937, 106.81146],
+            [10.83937, 106.81142],
+            [10.83936, 106.81139],
+            [10.83952, 106.81114],
+            [10.83968, 106.81092],
+            [10.84108, 106.80945]
+        ];
+
+        const now = new Date();
+        const startTime = now.getTime() - (now.getTimezoneOffset() * 60000);
+        let timeOffsetMillis = 0;
+        const payload = routeCoords.map(coords => {
+            const incrementMillis = (Math.floor(Math.random() * 10) + 4) * 1000;
+            timeOffsetMillis += incrementMillis;
+
+            return {
+                lat: coords[0],
+                lng: coords[1],
+                timestamp: new Date(startTime + timeOffsetMillis).toISOString()
+            };
+        });
+        log("Sending " + payload.length + " tracking points...");
+
+        await api(`/api/v1/rides/${rideId}/track`, "POST", payload);
+    };
+
+    $("startRequest").onclick = async () => {
+        const rideId = parseInt($("rideId").value, 10);
+        const reqId = parseInt($("requestId").value, 10);
+        if (!rideId || !reqId) return log("Ride ID and Request ID required.");
+        await api("/api/v1/rides/start-ride-request", "POST", {
+            rideId,
+            rideRequestId: reqId,
+        });
+    };
+
+    $("completeRequest").onclick = async () => {
+        const rideId = parseInt($("rideId").value, 10);
+        const reqId = parseInt($("requestId").value, 10);
+        if (!rideId || !reqId) return log("Ride ID and Request ID required.");
+        await api("/api/v1/rides/complete-ride-request", "POST", {
+            rideId,
+            rideRequestId: reqId,
+        });
+    };
+
+    $("triggerSos").onclick = async () => {
+        const body = {
+            sharedRideId: parseIntOrNull($("rideId").value),
+            currentLat: parseFloatOrNull($("sosLat").value),
+            currentLng: parseFloatOrNull($("sosLng").value),
+            description: trimOrNull($("sosDescription").value),
+            forceFallbackCall: $("sosForceFallback").checked,
+        };
+        const type = $("sosAlertType").value;
+        if (type) body.alertType = type;
+        const {payload} = await api("/api/v1/sos/alerts", "POST", body);
+        if (payload?.sosId) {
+            $("sosAlertId").value = payload.sosId;
+            log("SOS alert created: " + payload.sosId);
+        }
+    };
+
+    $("listMyAlerts").onclick = async () => {
+        const status = trimOrNull($("sosStatusFilter").value);
+        const query = status ? `?status=${encodeURIComponent(status)}` : "";
+        await api(`/api/v1/sos/alerts/me${query}`);
+    };
+
+    $("getAlertDetail").onclick = async () => {
+        const alertId = $("sosAlertId").value.trim();
+        if (!alertId) return log("Alert ID required.");
+        await api(`/api/v1/sos/alerts/${alertId}`);
+    };
+
+    $("getAlertTimeline").onclick = async () => {
+        const alertId = $("sosAlertId").value.trim();
+        if (!alertId) return log("Alert ID required.");
+        await api(`/api/v1/sos/alerts/${alertId}/timeline`);
+    };
+
+    $("listContacts").onclick = async () => {
+        const {payload} = await api("/api/v1/sos/contacts");
+        if (Array.isArray(payload) && payload.length) {
+            const primary = payload.find((c) => c.primary) ?? payload[0];
+            $("contactId").value = primary.contactId;
+            $("contactName").value = primary.name;
+            $("contactPhone").value = primary.phone;
+            $("contactRelationship").value = primary.relationship ?? "";
+            $("contactPrimary").checked = Boolean(primary.primary);
+        }
+    };
+
+    $("createContact").onclick = async () => {
+        const body = {
+            name: trimOrNull($("contactName").value),
+            phone: trimOrNull($("contactPhone").value),
+            relationship: trimOrNull($("contactRelationship").value),
+            primary: $("contactPrimary").checked,
+        };
+        const {payload} = await api("/api/v1/sos/contacts", "POST", body);
+        if (payload?.contactId) {
+            $("contactId").value = payload.contactId;
+            log("Contact created: " + payload.contactId);
+        }
+    };
+
+    $("updateContact").onclick = async () => {
+        const contactId = $("contactId").value.trim();
+        if (!contactId) return log("Contact ID required.");
+        const body = {
+            name: trimOrNull($("contactName").value),
+            phone: trimOrNull($("contactPhone").value),
+            relationship: trimOrNull($("contactRelationship").value),
+            primary: $("contactPrimary").checked,
+        };
+        await api(`/api/v1/sos/contacts/${contactId}`, "PUT", body);
+    };
+
+    $("setPrimaryContact").onclick = async () => {
+        const contactId = $("contactId").value.trim();
+        if (!contactId) return log("Contact ID required.");
+        await api(`/api/v1/sos/contacts/${contactId}/primary`, "POST");
+        $("contactPrimary").checked = true;
+    };
+
+    $("deleteContact").onclick = async () => {
+        const contactId = $("contactId").value.trim();
+        if (!contactId) return log("Contact ID required.");
+        await api(`/api/v1/sos/contacts/${contactId}`, "DELETE");
+    };
+</script>
 </body>

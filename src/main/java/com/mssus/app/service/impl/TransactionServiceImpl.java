@@ -218,20 +218,24 @@ public class TransactionServiceImpl implements TransactionService {
         BigDecimal afterPending = request.afterPending();
 
         validateCreateTransactionRequest(request);
-
-        User actorUser = userRepository.findById(actorUserId)
-            .orElseThrow(() -> new NotFoundException("Actor user not found: " + actorUserId));
-
+        User actorUser = null;
         User riderUser = (riderUserId != null) ? userRepository.findById(riderUserId)
             .orElseThrow(() -> new NotFoundException("Rider user not found: " + riderUserId)) : null;
         User driverUser = (driverUserId != null) ? userRepository.findById(driverUserId)
             .orElseThrow(() -> new NotFoundException("Driver user not found: " + driverUserId)) : null;
 
         if (actorKind == ActorKind.USER) {
+            actorUser = userRepository.findById(actorUserId)
+                .orElseThrow(() -> new NotFoundException("Actor user not found: " + actorUserId));
             if (request.beforeAvail() == null || request.afterAvail() == null ||
                 request.beforePending() == null || request.afterPending() == null) {
                 throw new ValidationException("Balance snapshots (before/after) are required for USER transactions.");
             }
+        } else {
+            beforeAvail = null;
+            afterAvail = null;
+            beforePending = null;
+            afterPending = null;
         }
 
         Transaction transaction = Transaction.builder()

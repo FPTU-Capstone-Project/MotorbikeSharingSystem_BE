@@ -106,7 +106,7 @@ class OtpServiceImplTest {
                 .totalSpent(BigDecimal.ZERO)
                 .preferredPaymentMethod(PaymentMethod.WALLET)
                 .createdAt(LocalDateTime.now())
-                .emergencyContact("113")
+//                .emergencyContact("113")
                 .build();
     }
 

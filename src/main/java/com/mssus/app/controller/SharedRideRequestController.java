@@ -315,7 +315,7 @@ public class SharedRideRequestController {
         @Parameter(description = "Request ID") @PathVariable Integer requestId,
         @Valid @RequestBody BroadcastAcceptRequest request,
         Authentication authentication) {
-        log.info("Driver {} accepting broadcast request {} with vehicle {}", authentication.getName(), requestId, request.vehicleId());
+        log.info("Driver {} accepting broadcast request {}", authentication.getName(), requestId);
         SharedRideRequestResponse response = requestService.acceptBroadcast(requestId, request, authentication);
         return ResponseEntity.ok(response);
     }

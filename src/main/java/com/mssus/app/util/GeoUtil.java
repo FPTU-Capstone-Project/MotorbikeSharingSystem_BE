@@ -1,10 +1,8 @@
 package com.mssus.app.util;
 
-import org.springframework.stereotype.Component;
-
 import java.util.*;
 
-public final class PolylineDistance {
+public final class GeoUtil {
     private static final double R_EARTH_M = 6371008.8;
 
     public static double metersFromEncodedPolyline(String encoded, int precision) {
@@ -70,6 +68,48 @@ public final class PolylineDistance {
         double a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R_EARTH_M * c;
+    }
+
+    public static String encodePolyline(List<double[]> latLngs, int precision) {
+        if (latLngs == null || latLngs.isEmpty()) return "";
+
+        int factor = (int) Math.pow(10, precision);
+        StringBuilder encoded = new StringBuilder();
+
+        int prevLat = 0;
+        int prevLng = 0;
+        for (double[] coord : latLngs) {
+            int lat = (int) Math.round(coord[0] * factor);
+            int lng = (int) Math.round(coord[1] * factor);
+
+            int dlat = lat - prevLat;
+            int dlng = lng - prevLng;
+
+            encoded.append(encodeValue(dlat));
+            encoded.append(encodeValue(dlng));
+
+            prevLat = lat;
+            prevLng = lng;
+        }
+
+        return encoded.toString();
+    }
+
+    private static String encodeValue(int value) {
+        value = (value << 1) ^ (value < 0 ? -1 : 0);
+        if (value < 0) {
+            value = ~value;
+        }
+
+        StringBuilder result = new StringBuilder();
+        while (value >= 0x20) {
+            int chunk = (value & 0x1F) | 0x20;
+            result.append((char) (chunk + 63));
+            value >>= 5;
+        }
+        result.append((char) (value + 63));
+
+        return result.toString();
     }
 
 }

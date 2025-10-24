@@ -1,0 +1,17 @@
+package com.mssus.app.common.enums;
+
+public enum SosAlertEventType {
+    CREATED,
+    DISPATCH_REQUESTED,
+    ORIGINATOR_NOTIFIED,
+    CONTACT_NOTIFIED,
+    ADMIN_NOTIFIED,
+    AUTO_CALL_TRIGGERED,
+    FALLBACK_CONTACT_USED,
+    ACKNOWLEDGED,
+    ESCALATED,
+    CAMPUS_SECURITY_NOTIFIED,
+    RESOLVED,
+    CLOSED,
+    NOTE_ADDED
+}

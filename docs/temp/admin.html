@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>SOS Admin Console</title>
+<body>
+  <h2>Admin Console</h2>
+
+  <section>
+    <h3>Authentication</h3>
+    <label>Email <input id="loginEmail" value="admin@mssus.com" size="25" /></label>
+    <label>Password <input id="loginPassword" value="Password1!" type="password" size="15" /></label>
+<!--    <label>Profile-->
+<!--      <select id="loginProfile">-->
+<!--        <option value="rider" selected>Rider</option>-->
+<!--        <option value="driver">Driver</option>-->
+<!--      </select>-->
+<!--    </label>-->
+    <button id="login">Login</button>
+  </section>
+
+  <section>
+    <label>Base URL <input id="base" value="http://localhost:8080" size="30" /></label>
+    <label>JWT <input id="jwt" value="PUT_ADMIN_TOKEN_HERE" size="60" /></label>
+    <button id="connect">Connect WS</button>
+  </section>
+
+  <section>
+    <h3>Alert Lookup</h3>
+    <label>Alert ID <input id="alertId" size="10" /></label>
+    <label>Status Filter <input id="statusFilter" placeholder="ACTIVE,ESCALATED" size="25" /></label>
+    <button id="listAlerts">List Alerts</button>
+    <button id="getAlert">Get Alert Detail</button>
+    <button id="getTimeline">Get Alert Timeline</button>
+  </section>
+
+  <section>
+    <h3>Acknowledge & Resolve</h3>
+    <label>Acknowledgement Note <input id="ackNote" size="50" /></label>
+    <button id="ackAlert">Acknowledge Alert</button>
+    <br />
+    <label>Resolution Notes <input id="resolutionNotes" size="60" /></label>
+    <label><input type="checkbox" id="falseAlarm" /> Mark as false alarm</label>
+    <button id="resolveAlert">Resolve Alert</button>
+  </section>
+
+  <section>
+    <h3>Utilities</h3>
+    <button id="refreshNotifications">Fetch Notifications</button>
+  </section>
+
+  <pre id="log"></pre>
+
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const log = (msg) => {
+      $("log").textContent += `[${new Date().toISOString()}] ${msg}\n`;
+    };
+
+    const state = {
+      stomp: null,
+    };
+
+    const trimOrNull = (value) => {
+      if (value === undefined || value === null) return null;
+      const trimmed = String(value).trim();
+      return trimmed.length ? trimmed : null;
+    };
+
+    async function api(path, method = "GET", body) {
+      const base = $("base").value.trim();
+      const jwt = $("jwt").value.trim();
+      const headers = {
+        Authorization: "Bearer " + jwt,
+      };
+      if (body !== undefined) {
+        headers["Content-Type"] = "application/json";
+      }
+      const res = await fetch(base + path, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      const text = await res.text();
+      let payload = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch {
+        payload = text;
+      }
+      log(`${method} ${path} -> ${res.status} ${text}`);
+      return { res, payload };
+    }
+
+    $("login").onclick = async () => {
+      const body = {
+        email: $("loginEmail").value,
+        password: $("loginPassword").value,
+        // activeProfile: $("loginProfile").value,
+      };
+      const { res, payload } = await api("/api/v1/auth/login", "POST", body);
+      if (res.ok && payload?.access_token) {
+        $("jwt").value = payload.access_token;
+        log("Login successful. Token populated.");
+      } else {
+        log("Login failed.");
+      }
+    };
+
+
+    $("connect").onclick = () => {
+      const base = $("base").value.trim();
+      const jwt = $("jwt").value.trim();
+      const sock = new SockJS(base + "/ws?token=" + encodeURIComponent(jwt));
+      state.stomp = Stomp.over(sock);
+      state.stomp.connect(
+        { Authorization: "Bearer " + jwt },
+        () => {
+          log("WebSocket connected");
+          state.stomp.subscribe("/user/queue/sos", (msg) => log("SOS: " + msg.body));
+          state.stomp.subscribe("/user/queue/notifications", (msg) => log("Notification: " + msg.body));
+        },
+        (err) => log("WS error: " + err)
+      );
+    };
+
+    $("listAlerts").onclick = async () => {
+      const status = trimOrNull($("statusFilter").value);
+      const query = status ? `?status=${encodeURIComponent(status)}` : "";
+      await api(`/api/v1/sos/alerts${query}`);
+    };
+
+    $("getAlert").onclick = async () => {
+      const alertId = $("alertId").value.trim();
+      if (!alertId) return log("Alert ID required.");
+      await api(`/api/v1/sos/alerts/${alertId}`);
+    };
+
+    $("getTimeline").onclick = async () => {
+      const alertId = $("alertId").value.trim();
+      if (!alertId) return log("Alert ID required.");
+      await api(`/api/v1/sos/alerts/${alertId}/timeline`);
+    };
+
+    $("ackAlert").onclick = async () => {
+      const alertId = $("alertId").value.trim();
+      if (!alertId) return log("Alert ID required.");
+      const note = trimOrNull($("ackNote").value);
+      const body = note ? { note } : {};
+      await api(`/api/v1/sos/alerts/${alertId}/acknowledge`, "POST", body);
+    };
+
+    $("resolveAlert").onclick = async () => {
+      const alertId = $("alertId").value.trim();
+      if (!alertId) return log("Alert ID required.");
+      const body = {
+        resolutionNotes: trimOrNull($("resolutionNotes").value),
+        falseAlarm: $("falseAlarm").checked,
+      };
+      await api(`/api/v1/sos/alerts/${alertId}/resolve`, "POST", body);
+    };
+
+    $("refreshNotifications").onclick = async () => {
+      await api("/api/v1/notifications?page=0&pageSize=10");
+    };
+  </script>
+</body>

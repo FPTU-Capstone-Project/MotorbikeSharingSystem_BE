@@ -87,7 +87,7 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
 
     @Query("SELECT r FROM SharedRide r " +
         "WHERE r.driver.driverId = :driverId " +
-        "ORDER BY r.scheduledTime DESC")
+        "ORDER BY r.scheduledTime DESC LIMIT 1")
     Optional<SharedRide> findLatestScheduledRideByDriverId(@Param("driverId") Integer driverId);
 
 

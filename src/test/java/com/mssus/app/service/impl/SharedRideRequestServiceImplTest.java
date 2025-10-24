@@ -239,7 +239,7 @@ class SharedRideRequestServiceImplTest {
             "Join ride notes"
         );
 
-        broadcastAcceptRequest = new BroadcastAcceptRequest(1);
+        broadcastAcceptRequest = new BroadcastAcceptRequest(1, new LatLng(null, null));
 
         acceptRequestDto = new AcceptRequestDto(1);
 
