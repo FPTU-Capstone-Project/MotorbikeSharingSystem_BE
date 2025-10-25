@@ -2,10 +2,7 @@ package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mssus.app.common.enums.DeliveryMethod;
-import com.mssus.app.common.enums.NotificationType;
-import com.mssus.app.common.enums.Priority;
-import com.mssus.app.common.enums.SosAlertEventType;
+import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.config.properties.SosConfigurationProperties;
 import com.mssus.app.entity.EmergencyContact;
@@ -13,6 +10,7 @@ import com.mssus.app.entity.SosAlert;
 import com.mssus.app.entity.User;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.NotificationService;
+import com.mssus.app.service.SmsService;
 import com.mssus.app.service.SosAlertEventService;
 import com.mssus.app.service.event.SosAlertEscalatedEvent;
 import com.mssus.app.service.event.SosAlertResolvedEvent;
@@ -22,9 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -35,6 +32,7 @@ public class SosAlertNotificationListener {
 
     private final NotificationService notificationService;
     private final SosAlertEventService sosAlertEventService;
+    private final SmsService smsService;
     private final UserRepository userRepository;
     private final SosConfigurationProperties sosConfig;
     private final ObjectMapper objectMapper;
@@ -73,7 +71,7 @@ public class SosAlertNotificationListener {
                 "An admin has resolved your SOS alert.",
                 payload,
                 Priority.MEDIUM,
-                DeliveryMethod.PUSH,
+                DeliveryMethod.IN_APP,
                 SOS_QUEUE
             );
         }
@@ -94,7 +92,7 @@ public class SosAlertNotificationListener {
             "We're contacting your emergency network now.",
             payload,
             Priority.URGENT,
-            DeliveryMethod.PUSH,
+            DeliveryMethod.IN_APP,
             SOS_QUEUE
         );
         sosAlertEventService.record(alert, SosAlertEventType.ORIGINATOR_NOTIFIED,
@@ -103,42 +101,95 @@ public class SosAlertNotificationListener {
 
     private void notifyAdministrators(SosAlert alert, String message, NotificationType type) {
         List<Integer> adminIds = sosConfig.getAdminUserIds();
-        if (adminIds == null || adminIds.isEmpty()) {
+
+        List<Integer> dbAdminIds = userRepository.findByUserType(UserType.ADMIN)
+            .stream()
+            .map(User::getUserId)
+            .toList();
+
+        Set<Integer> allAdminIds = new HashSet<>();
+        if (adminIds != null) {
+            allAdminIds.addAll(adminIds);
+        }
+        allAdminIds.addAll(dbAdminIds);
+
+        if (allAdminIds.isEmpty()) {
             return;
         }
 
         String payload = buildPayload(alert);
 
-        adminIds.stream()
-            .map(userRepository::findById)
-            .flatMap(Optional::stream)
-            .forEach(admin -> {
-                notificationService.sendNotification(
-                    admin,
-                    type,
-                    "SOS alert requires attention",
-                    message,
-                    payload,
-                    Priority.URGENT,
-                    DeliveryMethod.PUSH,
-                    SOS_QUEUE
-                );
-                sosAlertEventService.record(alert, SosAlertEventType.ADMIN_NOTIFIED,
-                    "Administrator notified: " + admin.getFullName(),
-                    admin.getUserId().toString());
-            });
+        List<User> admins = userRepository.findAllById(allAdminIds);
+
+        admins.forEach(admin -> {
+            notificationService.sendNotification(
+                admin,
+                type,
+                "SOS alert requires attention",
+                message,
+                payload,
+                Priority.URGENT,
+                DeliveryMethod.IN_APP,
+                SOS_QUEUE
+            );
+            sosAlertEventService.record(alert, SosAlertEventType.ADMIN_NOTIFIED,
+                "Administrator notified: " + admin.getFullName(),
+                admin.getUserId().toString());
+        });
     }
 
+
     private void notifyEmergencyContacts(SosAlert alert, List<EmergencyContact> contacts) {
-        if (contacts == null || contacts.isEmpty()) {
-            return;
+        List<EmergencyContact> safeContacts = contacts != null ? contacts : List.of();
+
+        String contactsSummary = safeContacts.stream()
+            .map(contact -> contact.getName() + " (" + contact.getPhone() + ")")
+            .collect(Collectors.joining(", "));
+
+        String locationMessage;
+        if (alert.getCurrentLat() != null && alert.getCurrentLng() != null) {
+            locationMessage = String.format("Lat: %s, Lng: %s%nMap: https://maps.google.com/?q=%s,%s",
+                alert.getCurrentLat(),
+                alert.getCurrentLng(),
+                alert.getCurrentLat(),
+                alert.getCurrentLng());
+        } else {
+            locationMessage = "Location coordinates not captured.";
         }
 
-        for (EmergencyContact contact : contacts) {
+        boolean hadContacts = !safeContacts.isEmpty();
+
+        for (EmergencyContact contact : safeContacts) {
             String description = String.format("Emergency contact notified: %s (%s)",
                 contact.getName(), contact.getPhone());
             sosAlertEventService.record(alert, SosAlertEventType.CONTACT_NOTIFIED,
                 description, contact.getPhone());
+        }
+
+        String smsBody = String.format(
+            "[MSSUS SOS]%nAlert #%d triggered by %s%nContacts: %s%n%s",
+            alert.getSosId(),
+            alert.getTriggeredBy() != null ? alert.getTriggeredBy().getFullName() : "Unknown user",
+            contactsSummary.isBlank() ? "None configured" : contactsSummary,
+            locationMessage
+        );
+
+        try {
+            smsService.sendSms("+84 386 258 379", smsBody);
+            log.info("SOS alert {} SMS dispatched to on-call number.", alert.getSosId());
+        } catch (Exception ex) {
+            log.error("Failed to send SOS SMS for alert {}: {}", alert.getSosId(), ex.getMessage(), ex);
+        }
+
+        if (!hadContacts) {
+            notifyAdministrators(
+                alert,
+                String.format("Fallback hotline invoked for user %s.",
+                    alert.getTriggeredBy() != null ? alert.getTriggeredBy().getFullName() : "unknown"),
+                NotificationType.SOS_ALERT
+            );
+            sosAlertEventService.record(alert, SosAlertEventType.ADMIN_NOTIFIED,
+                "Fallback hotline invoked", "fallback");
         }
     }
 
@@ -168,4 +219,6 @@ public class SosAlertNotificationListener {
             throw BaseDomainException.of("sos.alert.notification-payload-error");
         }
     }
+
+
 }

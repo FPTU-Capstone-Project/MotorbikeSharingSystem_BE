@@ -52,7 +52,6 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final UserRepository userRepository;
     private final SharedRideMapper rideMapper;
     private final RoutingService routingService;
-    private final RealTimeNotificationService realTimeNotificationService;
     private final PricingConfigRepository pricingConfigRepository;
     private final RideTrackRepository trackRepository;
     private final RideTrackingService rideTrackingService;
