@@ -4,7 +4,7 @@ import com.mssus.app.common.enums.DeliveryMethod;
 import com.mssus.app.common.enums.NotificationType;
 import com.mssus.app.common.enums.Priority;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.dto.notification.WebSocketNotificationDto;
+import com.mssus.app.dto.domain.notification.WebSocketNotificationDto;
 import com.mssus.app.dto.response.notification.NotificationResponse;
 import com.mssus.app.dto.response.notification.NotificationSummaryResponse;
 import com.mssus.app.entity.Notification;

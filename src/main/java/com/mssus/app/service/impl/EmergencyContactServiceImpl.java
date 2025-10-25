@@ -1,8 +1,8 @@
 package com.mssus.app.service.impl;
 
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.dto.sos.EmergencyContactRequest;
-import com.mssus.app.dto.sos.EmergencyContactResponse;
+import com.mssus.app.dto.domain.sos.EmergencyContactRequest;
+import com.mssus.app.dto.domain.sos.EmergencyContactResponse;
 import com.mssus.app.entity.EmergencyContact;
 import com.mssus.app.entity.User;
 import com.mssus.app.repository.EmergencyContactRepository;

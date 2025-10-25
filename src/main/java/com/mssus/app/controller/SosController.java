@@ -2,12 +2,12 @@ package com.mssus.app.controller;
 
 import com.mssus.app.common.enums.SosAlertStatus;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.dto.sos.AcknowledgeSosRequest;
-import com.mssus.app.dto.sos.EmergencyContactRequest;
-import com.mssus.app.dto.sos.EmergencyContactResponse;
-import com.mssus.app.dto.sos.ResolveSosRequest;
-import com.mssus.app.dto.sos.SosAlertResponse;
-import com.mssus.app.dto.sos.TriggerSosRequest;
+import com.mssus.app.dto.domain.sos.AcknowledgeSosRequest;
+import com.mssus.app.dto.domain.sos.EmergencyContactRequest;
+import com.mssus.app.dto.domain.sos.EmergencyContactResponse;
+import com.mssus.app.dto.domain.sos.ResolveSosRequest;
+import com.mssus.app.dto.domain.sos.SosAlertResponse;
+import com.mssus.app.dto.domain.sos.TriggerSosRequest;
 import com.mssus.app.entity.User;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.EmergencyContactService;

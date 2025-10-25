@@ -1,6 +1,5 @@
 package com.mssus.app.dto.request.ride;
 
-import com.mssus.app.dto.ride.LatLng;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

@@ -7,14 +7,14 @@ import com.mssus.app.dto.response.*;
 import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.entity.*;
 import com.mssus.app.repository.*;
-import com.mssus.app.security.JwtService;
+import com.mssus.app.infrastructure.security.JwtService;
 import com.mssus.app.service.AuthService;
 import com.mssus.app.service.EmailService;
 import com.mssus.app.service.RefreshTokenService;
 
-import com.mssus.app.util.Constants;
-import com.mssus.app.util.OtpUtil;
-import com.mssus.app.util.ValidationUtil;
+import com.mssus.app.common.util.Constants;
+import com.mssus.app.common.util.OtpUtil;
+import com.mssus.app.common.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;

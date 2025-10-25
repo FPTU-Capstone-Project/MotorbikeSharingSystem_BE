@@ -2,11 +2,11 @@ package com.mssus.app.worker;
 
 import com.mssus.app.common.enums.SosAlertEventType;
 import com.mssus.app.common.enums.SosAlertStatus;
-import com.mssus.app.config.properties.SosConfigurationProperties;
+import com.mssus.app.infrastructure.config.properties.SosConfigurationProperties;
 import com.mssus.app.entity.SosAlert;
 import com.mssus.app.repository.SosAlertRepository;
 import com.mssus.app.service.SosAlertEventService;
-import com.mssus.app.service.event.SosAlertEscalatedEvent;
+import com.mssus.app.service.domain.event.SosAlertEscalatedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -2,7 +2,7 @@ package com.mssus.app.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.mssus.app.dto.sos.EmergencyContactResponse;
+import com.mssus.app.dto.domain.sos.EmergencyContactResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

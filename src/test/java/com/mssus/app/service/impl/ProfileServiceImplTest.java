@@ -9,7 +9,7 @@ import com.mssus.app.entity.*;
 import com.mssus.app.mapper.UserMapper;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.*;
-import com.mssus.app.security.JwtService;
+import com.mssus.app.infrastructure.security.JwtService;
 import com.mssus.app.service.AuthService;
 import com.mssus.app.service.FileUploadService;
 import com.mssus.app.service.FPTAIService;
@@ -34,7 +34,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

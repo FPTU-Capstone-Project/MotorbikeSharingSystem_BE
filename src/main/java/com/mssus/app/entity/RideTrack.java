@@ -1,7 +1,7 @@
 package com.mssus.app.entity;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.mssus.app.dto.ride.LocationPoint;
+import com.mssus.app.dto.domain.ride.LocationPoint;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;

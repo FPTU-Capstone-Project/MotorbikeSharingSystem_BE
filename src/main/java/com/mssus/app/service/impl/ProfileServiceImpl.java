@@ -6,18 +6,17 @@ import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
 import com.mssus.app.dto.response.*;
-import com.mssus.app.dto.sos.EmergencyContactResponse;
+import com.mssus.app.dto.domain.sos.EmergencyContactResponse;
 import com.mssus.app.service.AuthService;
 import com.mssus.app.service.EmergencyContactService;
 import com.mssus.app.service.FPTAIService;
-import org.json.JSONArray;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import com.mssus.app.entity.*;
 import com.mssus.app.mapper.UserMapper;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.*;
-import com.mssus.app.security.JwtService;
+import com.mssus.app.infrastructure.security.JwtService;
 import com.mssus.app.service.FileUploadService;
 import com.mssus.app.service.ProfileService;
 import lombok.RequiredArgsConstructor;
@@ -29,17 +28,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.json.JSONObject;
 
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service

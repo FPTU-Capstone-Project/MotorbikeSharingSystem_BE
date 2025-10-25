@@ -3,7 +3,7 @@ package com.mssus.app.controller;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.QuoteRequest;
 import com.mssus.app.dto.response.ErrorResponse;
-import com.mssus.app.service.pricing.model.Quote;
+import com.mssus.app.service.domain.pricing.model.Quote;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.QuoteService;
 import io.swagger.v3.oas.annotations.Operation;

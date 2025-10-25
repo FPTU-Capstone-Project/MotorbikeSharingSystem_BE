@@ -14,7 +14,7 @@ import com.mssus.app.entity.User;
 import com.mssus.app.repository.RiderProfileRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.EmailService;
-import com.mssus.app.util.OtpUtil;
+import com.mssus.app.common.util.OtpUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

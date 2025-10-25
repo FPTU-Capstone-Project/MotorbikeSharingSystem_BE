@@ -1,6 +1,5 @@
 package com.mssus.app.dto.response.ride;
 
-import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.entity.Location;
 
 import java.math.BigDecimal;

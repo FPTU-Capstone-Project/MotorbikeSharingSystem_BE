@@ -1,8 +1,7 @@
 package com.mssus.app.mapper;
 
 import com.mssus.app.entity.PricingConfig;
-import com.mssus.app.service.pricing.config.PricingConfigDomain;
-import com.mssus.app.service.pricing.model.MoneyVnd;
+import com.mssus.app.service.domain.pricing.config.PricingConfigDomain;
 import org.mapstruct.InheritInverseConfiguration;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

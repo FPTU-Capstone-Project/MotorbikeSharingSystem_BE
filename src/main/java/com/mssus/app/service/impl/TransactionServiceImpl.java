@@ -18,7 +18,6 @@ import org.springframework.security.core.Authentication;
 import com.mssus.app.common.enums.TransactionType;
 import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
-import com.mssus.app.service.pricing.model.SettlementResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

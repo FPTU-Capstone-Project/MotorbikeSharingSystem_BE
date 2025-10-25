@@ -1,7 +1,7 @@
 package com.mssus.app.service;
 
-import com.mssus.app.dto.sos.EmergencyContactRequest;
-import com.mssus.app.dto.sos.EmergencyContactResponse;
+import com.mssus.app.dto.domain.sos.EmergencyContactRequest;
+import com.mssus.app.dto.domain.sos.EmergencyContactResponse;
 import com.mssus.app.entity.User;
 
 import java.util.List;

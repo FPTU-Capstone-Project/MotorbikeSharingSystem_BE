@@ -1,10 +1,10 @@
 package com.mssus.app.service;
 
 import com.mssus.app.common.enums.SosAlertStatus;
-import com.mssus.app.dto.sos.AcknowledgeSosRequest;
-import com.mssus.app.dto.sos.ResolveSosRequest;
-import com.mssus.app.dto.sos.SosAlertResponse;
-import com.mssus.app.dto.sos.TriggerSosRequest;
+import com.mssus.app.dto.domain.sos.AcknowledgeSosRequest;
+import com.mssus.app.dto.domain.sos.ResolveSosRequest;
+import com.mssus.app.dto.domain.sos.SosAlertResponse;
+import com.mssus.app.dto.domain.sos.TriggerSosRequest;
 import com.mssus.app.entity.User;
 
 import java.util.List;

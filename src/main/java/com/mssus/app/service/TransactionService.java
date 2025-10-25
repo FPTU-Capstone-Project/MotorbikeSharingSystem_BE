@@ -4,7 +4,6 @@ import com.mssus.app.dto.request.CreateTransactionRequest;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.wallet.TransactionResponse;
 import com.mssus.app.entity.Transaction;
-import com.mssus.app.service.pricing.model.SettlementResult;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 
