@@ -16,12 +16,6 @@ public interface SharedRideRequestMapper {
     @Mapping(source = "status", target = "status")
     @Mapping(source = "pickupLocation", target = "pickupLocation")
     @Mapping(source = "dropoffLocation", target = "dropoffLocation")
-//    @Mapping(target = "pickupLocationName", ignore = true)   // Set manually in service layer
-//    @Mapping(target = "dropoffLocationName", ignore = true)  // Set manually in service layer
-//    @Mapping(target = "pickupLat", ignore = true)          // Set manually in service layer
-//    @Mapping(target = "pickupLng", ignore = true)          // Set manually in service layer
-//    @Mapping(target = "dropoffLat", ignore = true)         // Set manually in service layer
-//    @Mapping(target = "dropoffLng", ignore = true)         //
     SharedRideRequestResponse toResponse(SharedRideRequest request);
 
     @Mapping(source = "requestKind", target = "requestKind")
@@ -30,9 +24,6 @@ public interface SharedRideRequestMapper {
     @Mapping(source = "status", target = "status")
     @Mapping(target = "riderName", ignore = true)            // Set manually in service layer
     @Mapping(target = "riderRating", ignore = true)
-        // Set manually in service layer
-//    @Mapping(target = "pickupLocationName", ignore = true)   // Set manually in service layer
-//    @Mapping(target = "dropoffLocationName", ignore = true)  // Set manually in service layer
     SharedRideRequestResponse toLightweightResponse(SharedRideRequest request);
 }
 

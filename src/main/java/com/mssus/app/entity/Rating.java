@@ -16,7 +16,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class Rating {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "rating_id")
@@ -43,15 +42,6 @@ public class Rating {
 
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
-
-    @Column(name = "safety_score")
-    private Integer safetyScore;
-
-    @Column(name = "punctuality_score")
-    private Integer punctualityScore;
-
-    @Column(name = "communication_score")
-    private Integer communicationScore;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

@@ -361,6 +361,27 @@ errors:
     owner: pricing-team
     remediation: "Contact support to set up pricing configuration"
 
+  - id: pricing.validation.no-tiers-configured
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: false
+    messageTemplate: "Cấu hình giá ID {pricingConfigId} không có bậc giá nào được định nghĩa."
+    domain: pricing
+    category: validation
+    owner: pricing-team
+    remediation: "Ensure that the active pricing configuration has at least one fare tier defined in the database."
+
+  - id: pricing.validation.no-matching-tier
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Không tìm thấy bậc giá phù hợp cho khoảng cách {distanceKm} km. Vui lòng kiểm tra lại cấu hình giá."
+    domain: pricing
+    category: validation
+    owner: pricing-team
+    remediation: "The provided distance does not fall into any defined fare tier range. This may indicate a gap in the pricing configuration (e.g., tier 1 is 0-5km, tier 2 is 6-10km, leaving 5-6km undefined)."
+
+
   # =========================================================================
   # Ride Module Errors (Ride Booking & Sharing)
   # =========================================================================
@@ -599,6 +620,16 @@ errors:
     owner: ride-team
     remediation: "Ensure sufficient balance to cover cancellation fee"
 
+  - id: ride-request.settlement.failed
+    httpStatus: 500
+    severity: WARN
+    isRetryable: true
+    messageTemplate: "Thanh toán yêu cầu chuyến đi chia sẻ thất bại: {reason}"
+    domain: ride
+    category: operation
+    owner: ride-team
+    remediation: "Retry the settlement or contact support"
+
   # Notification Errors
   - id: notification.not-found.by-id
     httpStatus: 404
@@ -609,3 +640,105 @@ errors:
     category: not-found
     owner: notification-team
     remediation: "Verify the notification ID and try again"
+  # SOS & Safety Errors
+  - id: sos.contact.invalid-name
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: 'Emergency contact name is required.'
+    domain: sos
+    category: validation
+    owner: safety-team
+    remediation: 'Provide a non-empty name for the emergency contact.'
+
+  - id: sos.contact.invalid-phone
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: 'Emergency contact phone number is required.'
+    domain: sos
+    category: validation
+    owner: safety-team
+    remediation: 'Provide a valid phone number (E.164 format recommended).'
+
+  - id: sos.contact.not-found
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: 'Emergency contact not found for this user.'
+    domain: sos
+    category: not-found
+    owner: safety-team
+
+  - id: sos.alert.invalid-user
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: 'Authenticated user is required to trigger SOS.'
+    domain: sos
+    category: validation
+    owner: safety-team
+
+  - id: sos.alert.invalid-request
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: 'SOS trigger request is invalid or missing data.'
+    domain: sos
+    category: validation
+    owner: safety-team
+
+  - id: sos.alert.ride-not-found
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: 'Shared ride not found for SOS reference.'
+    domain: sos
+    category: not-found
+    owner: safety-team
+
+  - id: sos.alert.not-found
+    httpStatus: 404
+    severity: INFO
+    isRetryable: false
+    messageTemplate: 'SOS alert not found.'
+    domain: sos
+    category: not-found
+    owner: safety-team
+
+  - id: sos.alert.already-resolved
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: 'SOS alert has already been resolved.'
+    domain: sos
+    category: conflict
+    owner: safety-team
+
+  - id: sos.alert.access-denied
+    httpStatus: 403
+    severity: WARN
+    isRetryable: false
+    messageTemplate: 'You do not have permission to view this SOS alert.'
+    domain: sos
+    category: unauthorized
+    owner: safety-team
+    remediation: 'Only administrators or the alert owner can access this record.'
+
+  - id: sos.alert.contact-serialization-error
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: 'Failed to serialize emergency contact information for SOS dispatch.'
+    domain: sos
+    category: internal
+    owner: safety-team
+
+  - id: sos.alert.notification-payload-error
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: true
+    messageTemplate: 'Failed to build notification payload for SOS alert.'
+    domain: sos
+    category: internal
+    owner: safety-team

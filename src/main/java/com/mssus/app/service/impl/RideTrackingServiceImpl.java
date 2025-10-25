@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.TrackingResponse;
 import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.dto.ride.LocationPoint;
@@ -22,7 +21,7 @@ import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.RealTimeNotificationService;
 import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.RoutingService;
-import com.mssus.app.util.PolylineDistance;
+import com.mssus.app.util.GeoUtil;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +29,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -88,7 +90,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
                 ObjectNode pointNode = objectMapper.createObjectNode();
                 pointNode.put("lat", p.lat());
                 pointNode.put("lng", p.lng());
-                pointNode.put("timestamp", p.timestamp().toString());
+                pointNode.put("timestamp", p.timestamp().format(DateTimeFormatter.ISO_ZONED_DATE_TIME));
                 newArray.add(pointNode);
             }
             // Merge: existing + new (avoid dups via timestamp check if needed)
@@ -107,26 +109,31 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         // Compute partials for response (current dist from all points; ETA via routing)
         double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
 //        int etaMinutes = computeEta(ride, track.getGpsPoints());  // Stub: Routing to end
+        String polyline = generatePolylineFromPoints(rideId);
 
-        return new TrackingResponse(currentDistanceKm, "OK");
+        return new TrackingResponse(currentDistanceKm, polyline, "OK");
     }
 
     private void validatePoints(List<LocationPoint> points) {
         // Example: Check sequential, speed <200 km/h
         for (int i = 1; i < points.size(); i++) {
-            double distKm = PolylineDistance.haversineMeters(
+            double distMeters = GeoUtil.haversineMeters(
                 points.get(i-1).lat(), points.get(i-1).lng(),
                 points.get(i).lat(), points.get(i).lng());
-            long timeDiffMin = java.time.Duration.between(points.get(i-1).timestamp(), points.get(i).timestamp()).toMinutes();
-            if (timeDiffMin > 0 && (distKm / timeDiffMin) > 3.33) {  // >200 km/h
-                throw BaseDomainException.of("tracking.invalid-speed", "Suspicious speed detected");
+            double distKm = distMeters / 1000.0;
+            long timeDiffSeconds = Duration.between(points.get(i-1).timestamp(), points.get(i).timestamp()).getSeconds();
+            if (timeDiffSeconds > 0) {
+                double speedKph = (distKm / timeDiffSeconds) * 3600; // km/h
+                if (speedKph > 200) {
+                    throw BaseDomainException.of("tracking.invalid-speed", "Suspicious speed detected: " + Math.round(speedKph) + " km/h");
+                }
             }
         }
 
         // Ensure timestamps are recent (e.g., last <1min old)
-        if (java.time.Duration.between(points.get(points.size()-1).timestamp(), LocalDateTime.now()).toMinutes() > 1) {
+        if (Duration.between(points.get(points.size() - 1).timestamp(), ZonedDateTime.now()).toMinutes() > 1) {
             log.warn("Potentially stale points: last point {} min old",
-                java.time.Duration.between(points.get(points.size()-1).timestamp(), LocalDateTime.now()).toMinutes());
+                Duration.between(points.get(points.size() - 1).timestamp(), ZonedDateTime.now()).toMinutes());
             // Not throwing error, just warning
         }
     }
@@ -142,9 +149,9 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             double prevLng = points.get(i-1).get("lng").asDouble();
             double currLat = points.get(i).get("lat").asDouble();
             double currLng = points.get(i).get("lng").asDouble();
-            totalDist += PolylineDistance.haversineMeters(prevLat, prevLng, currLat, currLng);
+            totalDist += GeoUtil.haversineMeters(prevLat, prevLng, currLat, currLng);
         }
-        return totalDist;
+        return totalDist / 1000.0;
     }
 
 //    private int computeEta(SharedRide ride, JsonNode pointsNode) {
@@ -175,12 +182,12 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         JsonNode lastPoint = track.getGpsPoints().get(track.getGpsPoints().size() - 1);
         double lat = lastPoint.get("lat").asDouble();
         double lng = lastPoint.get("lng").asDouble();
-        LocalDateTime timestamp = LocalDateTime.parse(lastPoint.get("timestamp").asText());
+        ZonedDateTime timestamp = ZonedDateTime.parse(lastPoint.get("timestamp").asText(), DateTimeFormatter.ISO_ZONED_DATE_TIME);
 
         // Staleness check
-        if (Duration.between(timestamp, LocalDateTime.now()).toMinutes() > maxStaleMinutes) {
-            log.warn("Stale position for ride {}: {} min old", rideId,
-                Duration.between(timestamp, LocalDateTime.now()).toMinutes());
+        if (Duration.between(timestamp, ZonedDateTime.now()).toMinutes() > maxStaleMinutes) {
+            log.warn("Stale position for ride {}: {} min old", rideId, 
+                Duration.between(timestamp, ZonedDateTime.now()).toMinutes());
             return Optional.empty();  // Caller falls back
         }
 
@@ -210,27 +217,50 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     @Override
     public void stopTracking(Integer rideId) {
         if (rideId == null) {
-            throw BaseDomainException.of("ride.tracking.invalid-ride-id");
+            log.warn("stopTracking called with a null rideId.");
+            return;
         }
 
         RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
             .orElse(null);
 
         if (track == null) {
-            log.debug("stopTracking called for ride {} but no tracking record exists", rideId);
+            log.warn("stopTracking called for ride {} but no tracking record exists. Ignoring.", rideId);
             return;
         }
 
-        if (Boolean.TRUE.equals(track.getIsTracking())) {
-            log.debug("stopTracking called for ride {} but tracking already stopped", rideId);
-            return;
-        }
-
-        track.setIsTracking(false);
+        track.setIsTracking(false); 
         track.setStoppedAt(LocalDateTime.now());
         trackRepository.save(track);
 
         log.info("Stopped tracking for ride {}", rideId);
+    }
+
+    private String generatePolylineFromPoints(Integer rideId) {
+        RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+
+        if (track.getGpsPoints() == null || track.getGpsPoints().isEmpty()) {
+            log.debug("No points for polyline on ride {}", rideId);
+            return "";
+        }
+
+        List<double[]> latLngs = new ArrayList<>();
+        for (JsonNode point : track.getGpsPoints()) {
+            double lat = point.get("lat").asDouble();
+            double lng = point.get("lng").asDouble();
+            latLngs.add(new double[]{lat, lng});
+        }
+
+        if (latLngs.size() < 2) {
+            log.debug("Insufficient points for polyline on ride {}: {}", rideId, latLngs.size());
+            return "";
+        }
+
+        String polyline = GeoUtil.encodePolyline(latLngs, 5);
+        log.debug("Generated polyline for ride {}: {} chars, {} points", rideId, polyline.length(), latLngs.size());
+
+        return polyline;
     }
 
 

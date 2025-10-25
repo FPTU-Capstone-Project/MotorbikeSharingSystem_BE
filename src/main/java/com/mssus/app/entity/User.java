@@ -93,6 +93,7 @@ public class User {
 
     @OneToOne(mappedBy = "user")
     private Wallet wallet;
+    
 
     // Helper method to check if user has a specific role
     public boolean hasProfile(String profile) {

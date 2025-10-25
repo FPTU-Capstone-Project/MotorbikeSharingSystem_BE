@@ -30,11 +30,11 @@ public class SharedRideRequestResponse {
     private Integer sharedRideRequestId;
 
     @JsonProperty("request_kind")
-    @Schema(description = "Request type (AI_BOOKING or JOIN_RIDE)", example = "AI_BOOKING")
+    @Schema(description = "Request type (BOOKING or JOIN_RIDE)", example = "BOOKING")
     private String requestKind;
 
     @JsonProperty("shared_ride_id")
-    @Schema(description = "Associated ride ID (null for pending AI_BOOKING)", example = "300")
+    @Schema(description = "Associated ride ID (null for pending BOOKING)", example = "300")
     private Integer sharedRideId;
 
     @JsonProperty("rider_id")
@@ -57,38 +57,6 @@ public class SharedRideRequestResponse {
     @Schema(description = "Dropoff location details in JSON format")
     private LocationResponse dropoffLocation;
 
-//    @JsonProperty("pickup_location_id")
-//    @Schema(description = "Pickup location ID", example = "5")
-//    private Integer pickupLocationId;
-//
-//    @JsonProperty("pickup_location_name")
-//    @Schema(description = "Pickup location name", example = "Landmark 81")
-//    private String pickupLocationName;
-//
-//    @JsonProperty("dropoff_location_id")
-//    @Schema(description = "Dropoff location ID", example = "6")
-//    private Integer dropoffLocationId;
-//
-//    @JsonProperty("dropoff_location_name")
-//    @Schema(description = "Dropoff location name", example = "Bitexco Tower")
-//    private String dropoffLocationName;
-//
-//    @JsonProperty("pickup_lat")
-//    @Schema(description = "Pickup latitude", example = "10.7769")
-//    private Double pickupLat;
-//
-//    @JsonProperty("pickup_lng")
-//    @Schema(description = "Pickup longitude", example = "106.7009")
-//    private Double pickupLng;
-//
-//    @JsonProperty("dropoff_lat")
-//    @Schema(description = "Dropoff latitude", example = "10.7722")
-//    private Double dropoffLat;
-//
-//    @JsonProperty("dropoff_lng")
-//    @Schema(description = "Dropoff longitude", example = "106.7040")
-//    private Double dropoffLng;
-
     @Schema(description = "Request status (PENDING, CONFIRMED, ONGOING, COMPLETED, CANCELLED, EXPIRED)", example = "PENDING")
     private String status;
 
@@ -107,14 +75,6 @@ public class SharedRideRequestResponse {
     @JsonProperty("pickup_time")
     @Schema(description = "Requested pickup time", example = "2025-10-05T08:30:00")
     private LocalDateTime pickupTime;
-
-    @JsonProperty("max_wait_time")
-    @Schema(description = "Maximum wait time in minutes", example = "10")
-    private Integer maxWaitTime;
-
-    @JsonProperty("coverage_time_step")
-    @Schema(description = "Coverage time step in minutes", example = "5")
-    private Integer coverageTimeStep;
 
     @JsonProperty("special_requests")
     @Schema(description = "Special requests or notes", example = "Need helmet")

@@ -114,7 +114,7 @@ class ProfileServiceImplTest {
                 .totalSpent(BigDecimal.valueOf(100000))
                 .preferredPaymentMethod(PaymentMethod.WALLET)
                 .createdAt(LocalDateTime.now())
-                .emergencyContact("113")
+//                .emergencyContact("113")
                 .build();
         user.setRiderProfile(riderProfile);
 

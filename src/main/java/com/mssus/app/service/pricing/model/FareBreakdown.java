@@ -6,8 +6,6 @@ import java.time.Instant;
 public record FareBreakdown(
     Instant pricingVersion,
     long distanceMeters,
-    MoneyVnd base2KmVnd,
-    MoneyVnd after2KmPerKmVnd,
     MoneyVnd discount,
     MoneyVnd subtotal,
     MoneyVnd total,

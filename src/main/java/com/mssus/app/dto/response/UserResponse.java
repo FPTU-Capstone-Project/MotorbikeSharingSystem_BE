@@ -2,6 +2,7 @@ package com.mssus.app.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.mssus.app.dto.sos.EmergencyContactResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -82,9 +84,9 @@ public class UserResponse {
         @Schema(description = "Rider ID", example = "1")
         private Integer riderId;
 
-        @JsonProperty("emergency_contact")
-        @Schema(description = "Emergency contact", example = "+84987654321")
-        private String emergencyContact;
+        @JsonProperty("emergency_contacts")
+        @Schema(description = "Emergency contacts configured by the rider")
+        private List<EmergencyContactResponse> emergencyContacts;
 
         @JsonProperty("total_rides")
         @Schema(description = "Total completed rides", example = "25")

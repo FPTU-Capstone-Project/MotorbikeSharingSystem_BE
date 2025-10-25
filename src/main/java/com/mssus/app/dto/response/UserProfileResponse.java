@@ -2,6 +2,7 @@ package com.mssus.app.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.mssus.app.dto.sos.EmergencyContactResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,6 +42,10 @@ public class UserProfileResponse {
 
     @Schema(description = "Wallet information")
     private WalletInfo wallet;
+
+    @JsonProperty("emergency_contacts")
+    @Schema(description = "Configured emergency contacts for the user")
+    private List<EmergencyContactResponse> emergencyContacts;
 
     @Data
     @Builder
@@ -82,9 +87,6 @@ public class UserProfileResponse {
     @AllArgsConstructor
     @Schema(description = "Rider profile information")
     public static class RiderProfile {
-        @JsonProperty("emergency_contact")
-        private String emergencyContact;
-
         @JsonProperty("total_rides")
         private Integer totalRides;
 

@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Entity
 @Data
@@ -22,11 +23,14 @@ public class PricingConfig {
     @Column(name = "version", nullable = false)
     private Instant version;
 
-    @Column(name = "base_2km_vnd", nullable = false, precision = 18, scale = 2)
-    private BigDecimal base2KmVnd;
+    @OneToMany(mappedBy = "pricingConfig", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<FareTier> fareTiers;
 
-    @Column(name = "after_2Km_per_km_vnd", nullable = false, precision = 18, scale = 2)
-    private BigDecimal after2KmPerKmVnd;
+//    @Column(name = "base_2km_vnd", nullable = false, precision = 18, scale = 2)
+//    private BigDecimal base2KmVnd;
+//
+//    @Column(name = "after_2Km_per_km_vnd", nullable = false, precision = 18, scale = 2)
+//    private BigDecimal after2KmPerKmVnd;
 
     @Column(name = "system_commission_rate", nullable = false, precision = 5, scale = 4)
     private BigDecimal systemCommissionRate;

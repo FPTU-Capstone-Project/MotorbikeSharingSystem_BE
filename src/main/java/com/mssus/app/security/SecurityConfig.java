@@ -71,7 +71,8 @@ public class SecurityConfig {
 
         // Endpoints requiring any authentication (general authenticated users)
         public static final String[] PRIVATE_PATHS = {
-                "/api/v1/auth/logout"
+                "/api/v1/auth/logout",
+                "/api/v1/sos/**"
         };
 
         // Endpoints requiring ADMIN role

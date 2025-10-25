@@ -2,16 +2,16 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.QuoteRequest;
+import com.mssus.app.dto.ride.LatLng;
 import com.mssus.app.entity.Location;
 import com.mssus.app.service.pricing.PricingService;
 import com.mssus.app.service.pricing.QuoteCache;
 import com.mssus.app.service.pricing.model.PriceInput;
 import com.mssus.app.service.pricing.model.Quote;
 import com.mssus.app.repository.LocationRepository;
-import com.mssus.app.repository.PricingConfigRepository;
 import com.mssus.app.service.QuoteService;
 import com.mssus.app.service.RoutingService;
-import com.mssus.app.util.PolylineDistance;
+import com.mssus.app.util.GeoUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,8 +61,8 @@ public class QuoteServiceImpl implements QuoteService {
         double centerLng = fptuLoc.getLng();
         double maxRadiusKm = 25.0; //TODO: Configurable via rideConfig.getServiceArea().getRadiusKm()
 
-        double pickupDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng()) / 1000.0;
-        double dropoffDistKm = PolylineDistance.haversineMeters(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng()) / 1000.0;
+        double pickupDistKm = GeoUtil.haversineMeters(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng()) / 1000.0;
+        double dropoffDistKm = GeoUtil.haversineMeters(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng()) / 1000.0;
 
         if (pickupDistKm > maxRadiusKm || dropoffDistKm > maxRadiusKm) {
             throw BaseDomainException.of("ride.validation.service-area-violation",
@@ -93,30 +93,34 @@ public class QuoteServiceImpl implements QuoteService {
         return quote;
     }
 
-    private Location findOrCreateLocation(Integer locationId, com.mssus.app.dto.ride.LatLng latLng) {
-        if (locationId != null && latLng == null) {
+    private Location findOrCreateLocation(Integer locationId, LatLng latLng) {
+        boolean hasId = locationId != null;
+        boolean hasCoords = latLng != null && latLng.latitude() != null && latLng.longitude() != null;
+
+        if (hasId && !hasCoords) {
             return locationRepository.findById(locationId)
                 .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
                     "Location not found with ID: " + locationId));
         }
 
-        if (locationId == null && latLng != null) {
+        if (!hasId && hasCoords) {
             return locationRepository.findByLatAndLng(latLng.latitude(), latLng.longitude())
                 .orElseGet(() -> {
                     Location newLocation = new Location();
                     newLocation.setName(null);
                     newLocation.setLat(latLng.latitude());
                     newLocation.setLng(latLng.longitude());
-                    newLocation.setAddress(routingService.getAddressFromCoordinates(
-                        latLng.latitude(), latLng.longitude()));
+                    newLocation.setAddress(
+                        routingService.getAddressFromCoordinates(latLng.latitude(), latLng.longitude()));
                     newLocation.setCreatedAt(LocalDateTime.now());
                     newLocation.setIsPoi(false);
                     return locationRepository.save(newLocation);
                 });
         }
 
-        if (locationId != null) {
-            throw BaseDomainException.of("ride.validation.invalid-location", "Provide either locationId or coordinates, not both");
+        if (hasId) { // If we reach here, hasCoords must be true, so we only need to check hasId
+            throw BaseDomainException.of("ride.validation.invalid-location",
+                "Provide either locationId or coordinates, not both");
         }
 
         throw BaseDomainException.of("ride.validation.invalid-location", "Either locationId or coordinates must be provided");

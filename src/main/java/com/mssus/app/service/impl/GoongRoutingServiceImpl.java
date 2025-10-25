@@ -106,6 +106,31 @@ public class GoongRoutingServiceImpl implements RoutingService {
         }
     }
 
+    @Override
+    public int getEstimatedTravelTimeMinutes(double fromLat, double fromLon, double toLat, double toLon) {
+        String url = String.format(Locale.US, "%s?origin=%f,%f&destination=%f,%f&vehicle=bike&api_key=%s",
+            GOONG_URL, fromLat, fromLon, toLat, toLon, API_KEY);
+
+        ResponseEntity<GoongResponse> resp = restTemplate.getForEntity(url, GoongResponse.class);
+
+        if (resp.getBody() == null || resp.getBody().routes == null || resp.getBody().routes.isEmpty()) {
+            throw new RuntimeException("No route found from Goong");
+        }
+
+        GoongResponse.Route route = resp.getBody().routes.get(0);
+
+        long totalDistance = route.legs.stream().mapToLong(leg -> leg.distance.value).sum();
+        long totalDuration = route.legs.stream().mapToLong(leg -> leg.duration.value).sum();
+
+        RouteResponse response = new RouteResponse(
+            totalDistance,                    // meters
+            totalDuration,                    // seconds
+            route.overview_polyline.points    // encoded polyline
+        );
+
+        return (int) response.time() / 60; // return minutes
+    }
+
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     static class GoongResponse {

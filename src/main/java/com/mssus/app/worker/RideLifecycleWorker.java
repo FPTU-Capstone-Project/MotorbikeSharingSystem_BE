@@ -168,7 +168,7 @@ public class RideLifecycleWorker {
 
             try {
                 Authentication automationAuth = buildDriverAuthentication(ride.getDriver().getUser());
-                sharedRideService.completeRideRequestOfRide(
+                sharedRideService.forceCompleteRideRequestOfRide(
                     new CompleteRideReqRequest(ride.getSharedRideId(), request.getSharedRideRequestId()),
                     automationAuth);
                 notifyRideRequestTransition(request, "REQUEST_AUTO_COMPLETED",
@@ -265,7 +265,7 @@ public class RideLifecycleWorker {
                         .riderId(request.getRider().getRiderId())
                         .riderName(request.getRider().getUser().getFullName())
                         .pickupLocationName(pickup.getName())
-                        .dropoffLocationName(pickup.getName())
+                                                .dropoffLocationName(dropoff.getName())
                         .pickupAddress(pickup.getAddress())
                         .dropoffAddress(dropoff.getAddress())
                         .pickupLat(pickup.getLat())

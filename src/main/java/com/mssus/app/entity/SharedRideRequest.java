@@ -40,6 +40,9 @@ public class SharedRideRequest {
     @Column(name = "distance_meters", nullable = false)
     private Integer distanceMeters;
 
+    @Column(name = "duration_seconds", nullable = false)
+    private Long durationSeconds;
+
     @ManyToOne
     @JoinColumn(name = "pickup_location_id", nullable = false)
     private Location pickupLocation;
@@ -47,24 +50,6 @@ public class SharedRideRequest {
     @ManyToOne
     @JoinColumn(name = "dropoff_location_id", nullable = false)
     private Location dropoffLocation;
-
-//    @Column(name = "pickup_location_id")
-//    private Integer pickupLocationId;
-//
-//    @Column(name = "dropoff_location_id")
-//    private Integer dropoffLocationId;
-
-//    @Column(name = "pickup_lat", nullable = false)
-//    private Double pickupLat;
-//
-//    @Column(name = "pickup_lng", nullable = false)
-//    private Double pickupLng;
-//
-//    @Column(name = "dropoff_lat", nullable = false)
-//    private Double dropoffLat;
-//
-//    @Column(name = "dropoff_lng", nullable = false)
-//    private Double dropoffLng;
 
     @Column(name = "status")
     @Enumerated(EnumType.STRING)

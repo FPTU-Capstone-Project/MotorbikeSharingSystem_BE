@@ -17,18 +17,16 @@ public interface PricingConfigMapper {
 
     @Mapping(target = "pricingConfigId", source = "pricingConfigId")
     @Mapping(target = "version", source = "version")
-    @Mapping(target = "base2KmVnd", expression = "java(MoneyVnd.VND(entity.getBase2KmVnd()))")
-    @Mapping(target = "after2KmPerKmVnd", expression = "java(MoneyVnd.VND(entity.getAfter2KmPerKmVnd()))")
     @Mapping(target = "systemCommissionRate", source = "systemCommissionRate")
     @Mapping(target = "validFrom", source = "validFrom")
     @Mapping(target = "validUntil", source = "validUntil")
+    @Mapping(target = "fareTiers", ignore = true)          // handled separately
     PricingConfigDomain toDomain(PricingConfig entity);
 
     @InheritInverseConfiguration
     @Mapping(target = "pricingConfigId", ignore = true)
-    @Mapping(target = "base2KmVnd", source = "base2KmVnd.amount")
-    @Mapping(target = "after2KmPerKmVnd", source = "after2KmPerKmVnd.amount")
     @Mapping(target = "systemCommissionRate", source = "systemCommissionRate")
+    @Mapping(target = "fareTiers", ignore = true)          // handled separately
     @Mapping(target = "validFrom", ignore = true)   // handled by service
     @Mapping(target = "validUntil", ignore = true)  // handled by service
     PricingConfig toEntity(PricingConfigDomain domain);
