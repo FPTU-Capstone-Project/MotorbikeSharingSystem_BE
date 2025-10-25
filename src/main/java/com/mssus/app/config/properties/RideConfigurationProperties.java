@@ -207,7 +207,7 @@ public class RideConfigurationProperties {
          * Maximum time an ongoing request can remain active before auto-completion (minutes).
          * Default: 15 minutes.
          */
-        private Duration requestDropoffTimeout = Duration.ofMinutes(15);
+        private Duration requestDropoffTimeout = Duration.ofMinutes(60);
     }
 
     @Data

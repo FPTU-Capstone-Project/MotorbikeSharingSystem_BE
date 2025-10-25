@@ -815,6 +815,103 @@ public class SharedRideServiceImpl implements SharedRideService {
         return buildRideResponse(ride);
     }
 
+    @Override
+    @Transactional
+    public RideRequestCompletionResponse forceCompleteRideRequestOfRide(CompleteRideReqRequest request, Authentication authentication) {
+        Integer rideId = request.rideId();
+        String username = authentication.getName();
+        log.info("System auto-completing ride request {} for ride {}", request.rideRequestId(), rideId);
+
+        SharedRide ride = rideRepository.findByIdForUpdate(rideId)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+        SharedRideRequest rideRequest = requestRepository.findById(request.rideRequestId())
+            .orElseThrow(() -> BaseDomainException.formatted("ride-request.not-found.resource", request.rideRequestId()));
+
+        User user = userRepository.findByEmail(username)
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+        DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+
+        if (!ride.getDriver().getDriverId().equals(driver.getDriverId())) {
+            throw BaseDomainException.of("ride.unauthorized.not-owner", "Automation task running for wrong driver.");
+        }
+
+        if (ride.getStatus() != SharedRideStatus.ONGOING) {
+            log.warn("Force-complete skipped for request {}: ride {} is not ONGOING (status: {})",
+                rideRequest.getSharedRideRequestId(), ride.getSharedRideId(), ride.getStatus());
+            return null;
+        }
+
+        if (rideRequest.getStatus() != SharedRideRequestStatus.ONGOING) {
+            log.warn("Force-complete skipped for request {}: request is not ONGOING (status: {})",
+                rideRequest.getSharedRideRequestId(), rideRequest.getStatus());
+            return null;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        Integer actualDuration = (int) java.time.Duration.between(ride.getStartedAt(), now).toMinutes();
+
+        Float actualDistance;
+        try {
+            RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId).orElse(null);
+            if (track != null && track.getGpsPoints() != null && track.getGpsPoints().size() > 1) {
+                actualDistance = (float) rideTrackingService.computeDistanceFromPoints(track.getGpsPoints());
+            } else {
+                actualDistance = ride.getEstimatedDistance();
+            }
+        } catch (Exception e) {
+            log.warn("Distance computation failed for ride {}: {}. Falling back to estimated.", rideId, e.getMessage());
+            actualDistance = ride.getEstimatedDistance();
+        }
+
+        PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
+            .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+
+        FareBreakdown fareBreakdown = new FareBreakdown(
+            activePricingConfig.getVersion(),
+            rideRequest.getDistanceMeters(),
+            MoneyVnd.VND(rideRequest.getDiscountAmount()),
+            MoneyVnd.VND(rideRequest.getSubtotalFare()),
+            MoneyVnd.VND(rideRequest.getTotalFare()),
+            activePricingConfig.getSystemCommissionRate()
+        );
+
+        RideRequestSettledResponse requestSettledResponse;
+        try {
+            RideCompleteSettlementRequest captureRequest = new RideCompleteSettlementRequest();
+            captureRequest.setRiderId(rideRequest.getRider().getRiderId());
+            captureRequest.setRideRequestId(rideRequest.getSharedRideRequestId());
+            captureRequest.setDriverId(driver.getDriverId());
+            captureRequest.setNote("Ride auto-completion - Request #" + rideRequest.getSharedRideRequestId());
+
+            requestSettledResponse = rideFundCoordinatingService.settleRideFunds(captureRequest, fareBreakdown);
+
+            rideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
+            rideRequest.setActualDropoffTime(LocalDateTime.now());
+            requestRepository.save(rideRequest);
+
+            log.info("Auto-captured fare for request {} - amount: {}",
+                rideRequest.getSharedRideRequestId(), rideRequest.getTotalFare());
+
+        } catch (Exception e) {
+            log.error("Failed to auto-capture fare for request {}: {}",
+                rideRequest.getSharedRideRequestId(), e.getMessage(), e);
+            throw BaseDomainException.of("ride-request.settlement.failed");
+        }
+
+        BigDecimal driverEarnings = requestSettledResponse.driverEarnings() == null
+            ? BigDecimal.ZERO : requestSettledResponse.driverEarnings();
+
+        return RideRequestCompletionResponse.builder()
+            .sharedRideRequestId(rideRequest.getSharedRideRequestId())
+            .sharedRideId(rideId)
+            .driverEarningsOfRequest(driverEarnings)
+            .platformCommission(requestSettledResponse.systemCommission())
+            .requestActualDistance(actualDistance)
+            .requestActualDuration(actualDuration)
+            .build();
+    }
+
     private SharedRideResponse buildRideResponse(SharedRide ride/*, Location startLoc, Location endLoc*/) {
 
 //        if (startLoc != null) {
