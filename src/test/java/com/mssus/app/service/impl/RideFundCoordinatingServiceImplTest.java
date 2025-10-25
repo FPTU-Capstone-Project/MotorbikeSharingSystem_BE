@@ -430,8 +430,6 @@ class RideFundCoordinatingServiceImplTest {
         return new FareBreakdown(
             Instant.now(),
             5_000,
-            MoneyVnd.VND(10_000),
-            MoneyVnd.VND(5_000),
             MoneyVnd.VND(0),
             MoneyVnd.VND(total),
             MoneyVnd.VND(total),

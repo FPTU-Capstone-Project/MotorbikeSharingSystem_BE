@@ -522,14 +522,12 @@ public class SharedRideServiceImpl implements SharedRideService {
         FareBreakdown fareBreakdown = new FareBreakdown(
             activePricingConfig.getVersion(),
             rideRequest.getDistanceMeters(),
-            MoneyVnd.VND(activePricingConfig.getBase2KmVnd()),
-            MoneyVnd.VND(activePricingConfig.getAfter2KmPerKmVnd()),
             MoneyVnd.VND(rideRequest.getDiscountAmount()),
             MoneyVnd.VND(rideRequest.getSubtotalFare()),
             MoneyVnd.VND(rideRequest.getTotalFare()),
             activePricingConfig.getSystemCommissionRate()
         );
-        RideRequestSettledResponse requestSettledResponse = null;
+        RideRequestSettledResponse requestSettledResponse;
 
         try {
             RideCompleteSettlementRequest captureRequest = new RideCompleteSettlementRequest();

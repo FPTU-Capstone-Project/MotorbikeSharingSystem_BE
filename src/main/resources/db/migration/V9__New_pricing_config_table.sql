@@ -55,8 +55,8 @@ ALTER TABLE pricing_configs
 ALTER TABLE pricing_configs
     ADD CONSTRAINT chk_commission_range CHECK (system_commission_rate >= 0 AND system_commission_rate <= 1);
 
-INSERT INTO pricing_configs (version, base_2km_vnd, after_2Km_per_km_vnd, system_commission_rate, valid_from, valid_until)
-VALUES ('2025-01-15 00:00:00', 10000.00, 2500.00, 0.1000, '2025-01-15 00:00:00'::timestamp, NULL);
+-- INSERT INTO pricing_configs (version, base_2km_vnd, after_2Km_per_km_vnd, system_commission_rate, valid_from, valid_until)
+-- VALUES ('2025-01-15 00:00:00', 10000.00, 2500.00, 0.1000, '2025-01-15 00:00:00'::timestamp, NULL);
 
 
 ALTER TABLE shared_ride_requests

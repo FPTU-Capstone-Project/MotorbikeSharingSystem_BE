@@ -148,8 +148,6 @@ class SharedRideServiceImplTest {
         pricingConfig = new PricingConfig();
         pricingConfig.setPricingConfigId(1);
         pricingConfig.setVersion(Instant.now());
-        pricingConfig.setBase2KmVnd(BigDecimal.valueOf(15000));
-        pricingConfig.setAfter2KmPerKmVnd(BigDecimal.valueOf(5000));
         pricingConfig.setSystemCommissionRate(BigDecimal.valueOf(0.20));
         pricingConfig.setValidFrom(Instant.now().minusSeconds(3600));
 

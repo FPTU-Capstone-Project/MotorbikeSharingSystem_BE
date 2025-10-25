@@ -834,6 +834,34 @@ FROM system_txn g;
 INSERT INTO locations (name, lat, lng, address)
 VALUES ('Nhà Văn Hóa Sinh Viên', 10.8753395, 106.8000331, 'N/A');
 
+INSERT INTO pricing_configs (version, system_commission_rate, valid_from, valid_until)
+VALUES ('2025-01-15 00:00:00', 0.1000, '2025-01-15 00:00:00'::timestamp, NULL);
+
+DO
+$$
+    DECLARE
+        v_pricing_config_id INTEGER;
+    BEGIN
+        -- Find the pricing_config_id for the version we want to populate.
+        SELECT pricing_config_id
+        INTO v_pricing_config_id
+        FROM pricing_configs
+        WHERE version = '2025-01-15 00:00:00'::timestamp
+        LIMIT 1;
+
+        -- Only insert if the pricing config exists.
+        IF v_pricing_config_id IS NOT NULL THEN
+            -- Tier 1: Base fare for the first 2km.
+            INSERT INTO fare_tiers (pricing_config_id, tier_level, description, amount, min_km, max_km)
+            VALUES (v_pricing_config_id, 1, 'Base fare for first 5km', 10000.00, 0, 5);
+
+            -- Tier 2: Price per km for distances beyond 2km.
+            INSERT INTO fare_tiers (pricing_config_id, tier_level, description, amount, min_km, max_km)
+            VALUES (v_pricing_config_id, 2, 'Fixed fare for above 5km', 15000.00, 5, 999);
+        END IF;
+    END;
+$$;
+
 
 -- ============================================================================
 -- Mock Transaction Data for Testing and Development

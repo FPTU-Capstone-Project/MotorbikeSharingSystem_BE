@@ -1,5 +1,7 @@
 package com.mssus.app.service.pricing.policy.impl;
 
+import com.mssus.app.common.exception.BaseDomainException;
+import com.mssus.app.service.pricing.config.FareTierDomain;
 import com.mssus.app.service.pricing.config.PricingConfigDomain;
 import com.mssus.app.service.pricing.model.FareBreakdown;
 import com.mssus.app.service.pricing.model.MoneyVnd;
@@ -10,6 +12,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class StandardFarePolicy implements FarePolicy {
@@ -17,12 +22,29 @@ public class StandardFarePolicy implements FarePolicy {
 
     @Override
     public MoneyVnd computeSubtotal(PriceInput in, PricingConfigDomain cfg) {
-        var km = BigDecimal.valueOf(in.distanceMeters()).divide(BigDecimal.valueOf(1000), 3, R);
+        if (cfg.getFareTiers() == null || cfg.getFareTiers().isEmpty()) {
+            throw BaseDomainException.of("pricing.validation.no-tiers-configured",
+                Map.of("pricingConfigId", cfg.getPricingConfigId()));
+        }
 
-        var distance = cfg.after2KmPerKmVnd().mulBig(km.subtract(BigDecimal.valueOf(2)).max(BigDecimal.ZERO), R);
-        var base = cfg.base2KmVnd();
+        var distanceKm = BigDecimal.valueOf(in.distanceMeters()).divide(BigDecimal.valueOf(1000), 3, R);
 
-        return base.add(distance);
+        List<FareTierDomain> sortedTiers = cfg.getFareTiers().stream()
+            .sorted(Comparator.comparingInt(FareTierDomain::tierLevel))
+            .toList();
+
+        for (FareTierDomain tier : sortedTiers) {
+            var tierMinKm = BigDecimal.valueOf(tier.minKm());
+            var tierMaxKm = BigDecimal.valueOf(tier.maxKm());
+            if (distanceKm.compareTo(tierMinKm) > 0  && distanceKm.compareTo(tierMaxKm) <= 0) {
+                return tier.amount();
+            }
+        }
+
+        throw BaseDomainException.of("pricing.validation.no-matching-tier", Map.of(
+            "distanceKm", distanceKm,
+            "pricingConfigId", cfg.getPricingConfigId()
+        ));
     }
 
     @Override
@@ -30,18 +52,17 @@ public class StandardFarePolicy implements FarePolicy {
 //        var discount = promo.applied() ? promo.discount() : MoneyVnd.VND(0);
         var discount = MoneyVnd.VND(0); //TODO: promotion not implemented yet
         var unclamped = pre.sub(discount);
-        var total = MoneyVnd.VND(unclamped.amount().max(cfg.base2KmVnd().amount()));
+        var minFare = cfg.getFareTiers().stream().min(Comparator.comparingInt(FareTierDomain::tierLevel))
+            .map(FareTierDomain::amount).orElse(MoneyVnd.VND(0));
+        var total = MoneyVnd.VND(unclamped.amount().max(minFare.amount()));
 
         return new FareBreakdown(
-            cfg.version(),
+            cfg.getVersion(),
             in.distanceMeters(),
-            cfg.base2KmVnd(),
-            cfg.after2KmPerKmVnd(),
             discount,
             pre,
             total,
-            cfg.systemCommissionRate()
+            cfg.getSystemCommissionRate()
         );
     }
 }
-

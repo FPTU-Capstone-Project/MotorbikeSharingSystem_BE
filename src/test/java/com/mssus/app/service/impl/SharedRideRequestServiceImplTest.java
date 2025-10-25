@@ -164,8 +164,6 @@ class SharedRideRequestServiceImplTest {
         pricingConfig = new PricingConfig();
         pricingConfig.setPricingConfigId(1);
         pricingConfig.setVersion(Instant.now());
-        pricingConfig.setBase2KmVnd(BigDecimal.valueOf(15000));
-        pricingConfig.setAfter2KmPerKmVnd(BigDecimal.valueOf(5000));
         pricingConfig.setSystemCommissionRate(BigDecimal.valueOf(0.20));
 
         ride = new SharedRide();
@@ -200,8 +198,6 @@ class SharedRideRequestServiceImplTest {
         fareBreakdown = new FareBreakdown(
             Instant.now(),
             10500L,
-            MoneyVnd.VND(BigDecimal.valueOf(15000)),
-            MoneyVnd.VND(BigDecimal.valueOf(5000)),
             MoneyVnd.VND(BigDecimal.ZERO),
             MoneyVnd.VND(BigDecimal.valueOf(50000)),
             MoneyVnd.VND(BigDecimal.valueOf(50000)),
@@ -1348,8 +1344,6 @@ class SharedRideRequestServiceImplTest {
             new FareBreakdown(
                 Instant.now(),
                 0L,
-                MoneyVnd.VND(BigDecimal.ZERO),
-                MoneyVnd.VND(BigDecimal.ZERO),
                 MoneyVnd.VND(BigDecimal.ZERO),
                 MoneyVnd.VND(BigDecimal.ZERO),
                 MoneyVnd.VND(BigDecimal.ZERO),

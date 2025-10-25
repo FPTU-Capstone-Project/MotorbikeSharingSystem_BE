@@ -361,6 +361,27 @@ errors:
     owner: pricing-team
     remediation: "Contact support to set up pricing configuration"
 
+  - id: pricing.validation.no-tiers-configured
+    httpStatus: 500
+    severity: ERROR
+    isRetryable: false
+    messageTemplate: "Cấu hình giá ID {pricingConfigId} không có bậc giá nào được định nghĩa."
+    domain: pricing
+    category: validation
+    owner: pricing-team
+    remediation: "Ensure that the active pricing configuration has at least one fare tier defined in the database."
+
+  - id: pricing.validation.no-matching-tier
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Không tìm thấy bậc giá phù hợp cho khoảng cách {distanceKm} km. Vui lòng kiểm tra lại cấu hình giá."
+    domain: pricing
+    category: validation
+    owner: pricing-team
+    remediation: "The provided distance does not fall into any defined fare tier range. This may indicate a gap in the pricing configuration (e.g., tier 1 is 0-5km, tier 2 is 6-10km, leaving 5-6km undefined)."
+
+
   # =========================================================================
   # Ride Module Errors (Ride Booking & Sharing)
   # =========================================================================
@@ -721,4 +742,3 @@ errors:
     domain: sos
     category: internal
     owner: safety-team
-

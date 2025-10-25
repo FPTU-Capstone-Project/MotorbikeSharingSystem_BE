@@ -234,16 +234,12 @@ class QuoteServiceImplTest {
     }
 
     private static FareBreakdown createFareBreakdown(long distanceMeters) {
-        MoneyVnd base = MoneyVnd.VND(10_000);
-        MoneyVnd after = MoneyVnd.VND(5_000);
         MoneyVnd discount = MoneyVnd.VND(0);
         MoneyVnd subtotal = MoneyVnd.VND(15_000);
         MoneyVnd total = MoneyVnd.VND(15_000);
         return new FareBreakdown(
             Instant.now(),
             distanceMeters,
-            base,
-            after,
             discount,
             subtotal,
             total,
