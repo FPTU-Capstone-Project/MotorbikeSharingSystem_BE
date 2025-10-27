@@ -16,6 +16,8 @@ public interface SharedRideRequestMapper {
     @Mapping(source = "status", target = "status")
     @Mapping(source = "pickupLocation", target = "pickupLocation")
     @Mapping(source = "dropoffLocation", target = "dropoffLocation")
+    @Mapping(source = "polyline", target = "polyline")
+    @Mapping(target = "polylineFromDriverToPickup", ignore = true)
     SharedRideRequestResponse toResponse(SharedRideRequest request);
 
     @Mapping(source = "requestKind", target = "requestKind")
@@ -24,6 +26,7 @@ public interface SharedRideRequestMapper {
     @Mapping(source = "status", target = "status")
     @Mapping(target = "riderName", ignore = true)            // Set manually in service layer
     @Mapping(target = "riderRating", ignore = true)
+    @Mapping(target = "polylineFromDriverToPickup", ignore = true)
     SharedRideRequestResponse toLightweightResponse(SharedRideRequest request);
 }
 

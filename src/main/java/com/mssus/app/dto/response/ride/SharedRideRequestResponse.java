@@ -100,6 +100,14 @@ public class SharedRideRequestResponse {
     @Schema(description = "Who initiated (rider or driver)", example = "rider")
     private String initiatedBy;
 
+    @JsonProperty("polyline")
+    @Schema(description = "Route polyline for the ride request from pickup to dropoff", example = "abcdEfghIjklMnopQrstuVwxyz")
+    private String polyline;
+
+    @JsonProperty("polyline_from_driver_to_pickup")
+    @Schema(description = "Polyline from driver's current location to pickup point", example = "abcdEfghIjklMnopQrstuVwxyz")
+    private String polylineFromDriverToPickup;
+
     @JsonProperty("created_at")
     @Schema(description = "Creation timestamp", example = "2025-10-04T16:00:00")
     private LocalDateTime createdAt;

@@ -1,5 +1,6 @@
 package com.mssus.app.service;
 
+import com.mssus.app.dto.domain.ride.LatLng;
 import com.mssus.app.dto.response.ride.BroadcastingRideRequestResponse;
 import com.mssus.app.dto.domain.ride.AcceptRequestDto;
 import com.mssus.app.dto.domain.ride.BroadcastAcceptRequest;

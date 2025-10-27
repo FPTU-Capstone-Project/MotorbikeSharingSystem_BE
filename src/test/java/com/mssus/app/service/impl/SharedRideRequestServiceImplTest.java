@@ -122,6 +122,7 @@ class SharedRideRequestServiceImplTest {
     private JoinRideRequest joinRideRequest;
     private BroadcastAcceptRequest broadcastAcceptRequest;
     private AcceptRequestDto acceptRequestDto;
+    private LatLng currentDriverLocation;
 
     @BeforeEach
     void setUp() {
@@ -233,8 +234,11 @@ class SharedRideRequestServiceImplTest {
         );
 
         broadcastAcceptRequest = new BroadcastAcceptRequest(1, new LatLng(null, null));
+        currentDriverLocation = new LatLng(10.763622, 106.661172);
 
-        acceptRequestDto = new AcceptRequestDto(1);
+        acceptRequestDto = new AcceptRequestDto(1, currentDriverLocation);
+
+
 
 
         // Setup timezone for testing (use reflection to set private field)
@@ -974,7 +978,7 @@ class SharedRideRequestServiceImplTest {
         when(rideRepository.findByIdForUpdate(999)).thenReturn(Optional.empty());
 
         // Act & Assert
-        AcceptRequestDto dtoWithDifferentRideId = new AcceptRequestDto(999);
+        AcceptRequestDto dtoWithDifferentRideId = new AcceptRequestDto(999, currentDriverLocation);
         assertThrows(BaseDomainException.class,
             () -> sharedRideRequestService.acceptRequest(1, dtoWithDifferentRideId, authentication));
     }

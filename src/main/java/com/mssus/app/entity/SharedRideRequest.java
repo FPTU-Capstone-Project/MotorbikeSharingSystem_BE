@@ -93,6 +93,9 @@ public class SharedRideRequest {
     @Column(name = "initiated_by")
     private String initiatedBy;
 
+    @Column(name = "polyline", columnDefinition = "TEXT")
+    private String polyline;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

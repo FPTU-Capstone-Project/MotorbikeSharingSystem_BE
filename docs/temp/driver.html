@@ -191,6 +191,16 @@
                 state.stomp.subscribe("/user/queue/notifications", (msg) =>
                     log("Notification: " + msg.body)
                 );
+
+                const activeRideId = $("rideId").value;
+                if (activeRideId) {
+                    state.stomp.subscribe("/topic/ride.tracking." + activeRideId, (msg) => {
+                        log("Ride Tracking Update: " + msg.body);
+                    });
+                    log("Subscribed to ride tracking for ride ID: " + activeRideId);
+                } else {
+                    log("No active ride ID to subscribe for tracking.");
+                }
             },
             (err) => log("WS error: " + err)
         );
@@ -238,8 +248,18 @@
         if (!state.lastOffer) return log("No offer captured yet.");
         const reqId = $("requestId").value || state.lastOffer.requestId;
         const rideId = parseInt($("rideId").value || state.lastOffer.rideId, 10);
-        await api(`/api/v1/ride-requests/${reqId}/accept`, "POST", {rideId});
+
+        const body = {
+            rideId: rideId,
+            currentDriverLocation: {
+                latitude: 10.8386317,
+                longitude: 106.8318038
+            }
+        };
+
+        await api(`/api/v1/ride-requests/${reqId}/accept`, "POST", body);
     };
+
 
     $("acceptBroadcast").onclick = async () => {
         // if (!state.lastOffer || !state.lastOffer.broadcast) {
@@ -284,6 +304,7 @@
     $("sendTrack").onclick = async () => {
         const rideId = $("rideId").value;
         if (!rideId) return log("Ride ID required.");
+        if (!state.stomp || !state.stomp.connected) return log("WebSocket not connected.");
         const routeCoords = [
             [10.83876, 106.83176], [10.83860, 106.83131], [10.83951, 106.83099],
             [10.83906, 106.82977], [10.83922, 106.82971], [10.83938, 106.82968],
@@ -315,12 +336,13 @@
         });
         log("Sending " + payload.length + " tracking points...");
 
-        await api(`/api/v1/rides/${rideId}/track`, "POST", payload);
+        state.stomp.send("/app/ride.track." + rideId, {}, JSON.stringify(payload));
     };
 
     $("sendTrackDropoff").onclick = async () => {
         const rideId = $("rideId").value;
         if (!rideId) return log("Ride ID required.");
+        if (!state.stomp || !state.stomp.connected) return log("WebSocket not connected.");
         const routeCoords = [
             [10.84314, 106.81920],
             [10.84326, 106.81903],
@@ -374,7 +396,7 @@
         });
         log("Sending " + payload.length + " tracking points...");
 
-        await api(`/api/v1/rides/${rideId}/track`, "POST", payload);
+        state.stomp.send("/app/ride.track." + rideId, {}, JSON.stringify(payload));
     };
 
     $("startRequest").onclick = async () => {

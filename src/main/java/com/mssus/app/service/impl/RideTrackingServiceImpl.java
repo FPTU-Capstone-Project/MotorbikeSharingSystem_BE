@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
@@ -22,12 +23,15 @@ import com.mssus.app.service.RealTimeNotificationService;
 import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.RoutingService;
 import com.mssus.app.common.util.GeoUtil;
+import com.mssus.app.dto.domain.ride.RealTimeTrackingUpdateDto;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -42,20 +46,19 @@ public class RideTrackingServiceImpl implements RideTrackingService {
 
     private final RideTrackRepository trackRepository;
     private final SharedRideRepository rideRepository;
-    private final RoutingService routingService;
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
     private final DriverProfileRepository driverRepository;
     private final RealTimeNotificationService notificationService;
 
+    private final SimpMessagingTemplate messagingTemplate;
     @Override
     @Transactional
     public TrackingResponse appendGpsPoints(Integer rideId, List<LocationPoint> points, String username) {
         // Fetch and validate ride
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
-
-        User user = userRepository.findByEmail(username)
+        User user = userRepository.findById(Integer.parseInt(username))
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
@@ -79,24 +82,26 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             .orElseGet(() -> {
                 RideTrack newTrack = new RideTrack();
                 newTrack.setSharedRide(ride);
+                newTrack.setIsTracking(true);
                 return newTrack;
             });
 
-        // Append points to JSON (merge arrays)
         try {
-            JsonNode existingPoints = track.getGpsPoints() != null ? track.getGpsPoints() : objectMapper.createArrayNode();
+            ArrayNode existingPoints = track.getGpsPoints() != null && track.getGpsPoints().isArray()
+                                       ? (ArrayNode) track.getGpsPoints()
+                                       : JsonNodeFactory.instance.arrayNode();
+
             ArrayNode newArray = objectMapper.createArrayNode();
             for (LocationPoint p : points) {
                 ObjectNode pointNode = objectMapper.createObjectNode();
                 pointNode.put("lat", p.lat());
                 pointNode.put("lng", p.lng());
-                pointNode.put("timestamp", p.timestamp().format(DateTimeFormatter.ISO_ZONED_DATE_TIME));
+                pointNode.put("timestamp", p.timestamp().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)); // Use ISO_OFFSET_DATE_TIME for ZonedDateTime
                 newArray.add(pointNode);
             }
-            // Merge: existing + new (avoid dups via timestamp check if needed)
-            ((ArrayNode) existingPoints).addAll(newArray);
+            existingPoints.addAll(newArray);
             track.setGpsPoints(existingPoints);
-            track.setCreatedAt(LocalDateTime.now());  // Or lastUpdated
+            track.setCreatedAt(LocalDateTime.now());
             trackRepository.save(track);
 
             log.debug("Appended {} points to track for ride {}", points.size(), rideId);
@@ -106,9 +111,9 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             throw BaseDomainException.of("tracking.append-failed", "Could not save GPS points");
         }
 
-        // Compute partials for response (current dist from all points; ETA via routing)
+        publishRealTimeTrackingUpdate(rideId);
+
         double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
-//        int etaMinutes = computeEta(ride, track.getGpsPoints());  // Stub: Routing to end
         String polyline = generatePolylineFromPoints(rideId);
 
         return new TrackingResponse(currentDistanceKm, polyline, "OK");
@@ -133,8 +138,8 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         // Ensure timestamps are recent (e.g., last <1min old)
         if (Duration.between(points.get(points.size() - 1).timestamp(), ZonedDateTime.now()).toMinutes() > 1) {
             log.warn("Potentially stale points: last point {} min old",
-                Duration.between(points.get(points.size() - 1).timestamp(), ZonedDateTime.now()).toMinutes());
-            // Not throwing error, just warning
+                Duration.between(points.get(points.size() - 1).timestamp().toInstant(), Instant.now()).toMinutes());
+            // Not throwing error, just warning. Convert ZonedDateTime to Instant for Duration.between
         }
     }
 
@@ -188,7 +193,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         if (Duration.between(timestamp, ZonedDateTime.now()).toMinutes() > maxStaleMinutes) {
             log.warn("Stale position for ride {}: {} min old", rideId, 
                 Duration.between(timestamp, ZonedDateTime.now()).toMinutes());
-            return Optional.empty();  // Caller falls back
+            return Optional.empty();
         }
 
         log.debug("Latest pos for ride {}: ({}, {}) at {}", rideId, lat, lng, timestamp);
@@ -206,6 +211,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
                 newTrack.setSharedRide(ride);
                 newTrack.setGpsPoints(objectMapper.createArrayNode());
                 newTrack.setCreatedAt(LocalDateTime.now());
+                newTrack.setIsTracking(true);
                 return trackRepository.save(newTrack);
             });
 
@@ -263,5 +269,28 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         return polyline;
     }
 
+    private void publishRealTimeTrackingUpdate(Integer rideId) {
+        try {
+            RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
+                .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+
+            String polyline = generatePolylineFromPoints(rideId);
+            Optional<LatLng> latestPos = getLatestPosition(rideId, 3); // Get latest position, max 1 min stale
+            double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
+
+            RealTimeTrackingUpdateDto updateDto = RealTimeTrackingUpdateDto.builder()
+                .rideId(rideId)
+                .polyline(polyline)
+                .currentLat(latestPos.map(LatLng::latitude).orElse(null))
+                .currentLng(latestPos.map(LatLng::longitude).orElse(null))
+                .currentDistanceKm(currentDistanceKm)
+                .build();
+
+            messagingTemplate.convertAndSend("/topic/ride.tracking." + rideId, updateDto);
+            log.debug("Published real-time tracking update for ride {}", rideId);
+        } catch (Exception e) {
+            log.error("Failed to publish real-time tracking update for ride {}: {}", rideId, e.getMessage(), e);
+        }
+    }
 
 }

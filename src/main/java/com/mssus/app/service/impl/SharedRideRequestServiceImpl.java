@@ -70,6 +70,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final NotificationService notificationService;
     private final RideFundCoordinatingService rideFundCoordinatingService;
     private final RoutingService routingService;
+    private final RideTrackingService rideTrackingService;
 
     @Override
     @Transactional
@@ -106,8 +107,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         BigDecimal subtotalFare = quote.fare().subtotal().amount();
         PricingConfig pricingConfig = pricingConfigRepository.findByVersion(quote.fare().pricingVersion())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
-
-        //TODO: Refactor to use fare rules from pricing service
+        String polyline = quote.polyline();
 
         log.info("Creating AI booking - fare from quote: {} VND", fareAmount);
 
@@ -121,12 +121,6 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .rider(rider)
             .pickupLocation(quote.pickupLocation())
             .dropoffLocation(quote.dropoffLocation())
-//            .pickupLocationId(quote.pickupLocationId())
-//            .dropoffLocationId(quote.dropoffLocationId())
-//            .pickupLat(quote.pickupLat())
-//            .pickupLng(quote.pickupLng())
-//            .dropoffLat(quote.dropoffLat())
-//            .dropoffLng(quote.dropoffLng())
             .status(SharedRideRequestStatus.PENDING)
             .totalFare(fareAmount)
             .pricingConfig(pricingConfig)
@@ -138,6 +132,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .pickupTime(desiredPickupTime)
             .specialRequests(request.notes() == null ? "N/A" : request.notes())
             .initiatedBy("rider")
+            .polyline(polyline)
             .createdAt(LocalDateTime.now())
             .build();
 
@@ -237,6 +232,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         BigDecimal subtotalFare = quote.fare().subtotal().amount();
         PricingConfig pricingConfig = pricingConfigRepository.findByVersion(quote.fare().pricingVersion())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+        String polyline = quote.polyline();
 
         LocalDateTime desiredPickupTime = request.desiredPickupTime() == null ?
             LocalDateTime.now(ZoneId.of(appTimezone)) :
@@ -260,6 +256,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             .pickupTime(desiredPickupTime)
             .specialRequests(request.notes() == null ? "N/A" : request.notes())
             .initiatedBy("rider")
+            .polyline(polyline)
             .createdAt(LocalDateTime.now())
             .build();
 
@@ -311,127 +308,11 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         return buildRequestResponse(request);
     }
 
-//    @Override
-//    @Transactional
-//    public SharedRideRequestResponse acceptBroadcast(Integer requestId,
-//                                                     BroadcastAcceptRequest request,
-//                                                     Authentication authentication) {
-//        String username = authentication.getName();
-//        log.info("Driver {} accepting broadcast request {} with vehicle {}", username, requestId, request.vehicleId());
-//
-//        User user = userRepository.findByEmail(username)
-//            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
-//        DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
-//            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
-//
-//        if (driver.getStatus() != DriverProfileStatus.ACTIVE) {
-//            throw BaseDomainException.of("ride.validation.invalid-state",
-//                "Driver profile is not active");
-//        }
-//
-//        SharedRideRequest rideRequest = requestRepository.findById(requestId)
-//            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.request", requestId));
-//
-//        if (rideRequest.getRequestKind() != RequestKind.BOOKING) {
-//            throw BaseDomainException.of("ride.validation.request-invalid-state",
-//                "Broadcast acceptance is only available for booking requests");
-//        }
-//
-//        if (rideRequest.getStatus() != SharedRideRequestStatus.BROADCASTING) {
-//            throw BaseDomainException.of("ride.validation.request-invalid-state",
-//                Map.of("currentState", rideRequest.getStatus()));
-//        }
-//
-//        boolean locked = matchingCoordinator.beginBroadcastAcceptance(requestId, driver.getDriverId());
-//        if (!locked) {
-//            throw BaseDomainException.of("ride.validation.request-invalid-state",
-//                "Broadcast offer is no longer available or already processed");
-//        }
-//
-//        try {
-//            Vehicle vehicle = vehicleRepository.findById(request.vehicleId())
-//                .orElseThrow(() -> BaseDomainException.formatted("ride.validation.vehicle-not-found",
-//                    "Vehicle not found with ID: " + request.vehicleId()));
-//
-//            if (!vehicle.getDriver().getDriverId().equals(driver.getDriverId())) {
-//                throw BaseDomainException.of("ride.unauthorized.not-owner",
-//                    "You don't own this vehicle");
-//            }
-//
-//            if (rideRepository.existsByDriverDriverIdAndStatus(driver.getDriverId(), SharedRideStatus.ONGOING)) {
-//                throw BaseDomainException.of("ride.validation.invalid-state",
-//                    "Driver currently has an ongoing ride");
-//            }
-//
-//            LocalDateTime now = LocalDateTime.now(ZoneId.of(appTimezone));
-//            LocalDateTime pickupTime = rideRequest.getPickupTime() == null ? now : rideRequest.getPickupTime();
-//            LocalDateTime scheduledTime = pickupTime.isAfter(now) ? pickupTime : now;
-//            Location startLocation = rideRequest.getPickupLocation();
-//            Location endLocation = rideRequest.getDropoffLocation();
-//
-//            SharedRide newRide = new SharedRide();
-//            newRide.setDriver(driver);
-//            newRide.setVehicle(vehicle);
-//            newRide.setStatus(SharedRideStatus.ONGOING);
-//            int capacity = vehicle.getCapacity() != null
-//                ? vehicle.getCapacity()
-//                : Optional.ofNullable(driver.getMaxPassengers()).orElse(1);
-//            if (capacity <= 0) {
-//                capacity = 1;
-//            }
-//            newRide.setMaxPassengers(capacity);
-//            newRide.setCurrentPassengers(1);
-//            newRide.setPricingConfig(rideRequest.getPricingConfig());
-//            newRide.setScheduledTime(scheduledTime);
-//            newRide.setStartLocation(startLocation);
-//            newRide.setEndLocation(endLocation);
-//            newRide.setCreatedAt(LocalDateTime.now());
-//
-//            SharedRide savedRide = rideRepository.save(newRide);
-//
-//            int estimatedTravelTimeFromCurrentDriverPosToPickup = routingService.getEstimatedTravelTimeMinutes(
-//                startLocation.getLat(),
-//                startLocation.getLng(),
-//                endLocation.getLat(),
-//                endLocation.getLng()
-//            );
-//
-//            rideRequest.setSharedRide(savedRide);
-//            rideRequest.setStatus(SharedRideRequestStatus.CONFIRMED);
-//            rideRequest.setEstimatedPickupTime(scheduledTime);
-//            requestRepository.save(rideRequest);
-//
-//            RideMatchProposalResponse proposal = RideMatchProposalResponse.builder()
-//                .sharedRideId(savedRide.getSharedRideId())
-//                .driverId(driver.getDriverId())
-//                .driverName(driver.getUser().getFullName())
-//                .driverRating(driver.getRatingAvg())
-//                .vehicleModel(vehicle.getModel())
-//                .vehiclePlate(vehicle.getPlateNumber())
-//                .scheduledTime(savedRide.getScheduledTime())
-//                .availableSeats(Math.max(0,
-//                    (savedRide.getMaxPassengers() == null ? 0 : savedRide.getMaxPassengers())
-//                        - savedRide.getCurrentPassengers()))
-//                .totalFare(rideRequest.getTotalFare())
-//                .estimatedPickupTime(LocalDateTime.now().plusMinutes(estimatedTravelTimeFromCurrentDriverPosToPickup))
-//                .estimatedDropoffTime()
-//                .build();
-//
-//            matchingCoordinator.completeBroadcastAcceptance(requestId, proposal);
-//
-//            log.info("Broadcast request {} accepted by driver {} - new ride {}",
-//                requestId, driver.getDriverId(), savedRide.getSharedRideId());
-//
-//            return buildRequestResponse(rideRequest);
-//        } catch (RuntimeException ex) {
-//            matchingCoordinator.failBroadcastAcceptance(requestId, ex.getMessage());
-//            throw ex;
-//        }
-//    }
-
     @Override
     @Transactional
-    public SharedRideRequestResponse acceptBroadcast(Integer requestId, BroadcastAcceptRequest request, Authentication authentication) {
+    public SharedRideRequestResponse acceptBroadcast(Integer requestId,
+                                                     BroadcastAcceptRequest request,
+                                                     Authentication authentication) {
         String username = authentication.getName();
         log.info("Driver {} accepting broadcast request {}", username, requestId);
 
@@ -451,6 +332,14 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         if (driver.getStatus() != DriverProfileStatus.ACTIVE) {
             throw BaseDomainException.of("ride.validation.invalid-state",
                 "Driver profile is not active");
+        }
+
+        boolean hasCoords = request.startLatLng() != null &&
+                            request.startLatLng().latitude() != null &&
+                            request.startLatLng().longitude() != null;
+
+        if (!hasCoords && request.startLocationId() == null) {
+            throw BaseDomainException.of("ride.validation.missing-current-location");
         }
 
         SharedRideRequest rideRequest = requestRepository.findById(requestId)
@@ -543,7 +432,16 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             log.info("Broadcast request {} accepted by driver {} - new ride {}",
                 requestId, driver.getDriverId(), savedRide.getSharedRideId());
 
-            return buildRequestResponse(rideRequest);
+            rideTrackingService.startTracking(savedRide.getSharedRideId());
+
+            String polylineFromDriverToPickup = routingService.getRoute(
+                startLocation.getLat(),
+                startLocation.getLng(),
+                rideRequest.getPickupLocation().getLat(),
+                rideRequest.getPickupLocation().getLng()
+            ).polyline();
+
+            return buildRequestResponse(rideRequest, polylineFromDriverToPickup);
         } catch (RuntimeException ex) {
             matchingCoordinator.failBroadcastAcceptance(requestId, ex.getMessage());
             throw ex;
@@ -739,7 +637,14 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             throw e;
         }
 
-        return buildRequestResponse(request);
+        String polylineFromDriverToPickup = routingService.getRoute(
+            acceptDto.currentDriverLocation().latitude(),
+            acceptDto.currentDriverLocation().longitude(),
+            request.getPickupLocation().getLat(),
+            request.getPickupLocation().getLng()
+        ).polyline();
+
+        return buildRequestResponse(request, polylineFromDriverToPickup);
     }
 
     @Override
@@ -891,95 +796,22 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         return buildRequestResponse(request);
     }
 
-    private Integer ensureLocationExists(Integer locationId, Double lat, Double lng, String label) {
-        if (locationId != null) {
-            return locationId;
-        }
-        if (lat == null || lng == null) {
-            throw BaseDomainException.of("ride.validation.invalid-location",
-                label + " coordinates are missing");
-        }
-
-        return locationRepository.findByLatAndLng(lat, lng)
-            .map(Location::getLocationId)
-            .orElseGet(() -> {
-                Location newLocation = new Location();
-                newLocation.setName(label);
-                newLocation.setLat(lat);
-                newLocation.setLng(lng);
-                return locationRepository.save(newLocation).getLocationId();
-            });
-    }
-
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request) {
-
-//        if (request.getPickupLocationId() != null) {
-//            Location pickupLoc = locationRepository.findById(request.getPickupLocationId()).orElse(null);
-//            if (pickupLoc != null) {
-//                response.setPickupLocationName(pickupLoc.getName());
-//                response.setPickupLat(pickupLoc.getLat());
-//                response.setPickupLng(pickupLoc.getLng());
-//            } else {
-//                response.setPickupLocationName("Unknown Location");
-//                response.setPickupLat(request.getPickupLat());
-//                response.setPickupLng(request.getPickupLng());
-//            }
-//        } else {
-//            response.setPickupLocationName("Custom Pickup Location");
-//            response.setPickupLat(request.getPickupLat());
-//            response.setPickupLng(request.getPickupLng());
-//        }
-//
-//        if (request.getDropoffLocationId() != null) {
-//            Location dropoffLoc = locationRepository.findById(request.getDropoffLocationId()).orElse(null);
-//            if (dropoffLoc != null) {
-//                response.setDropoffLocationName(dropoffLoc.getName());
-//                response.setDropoffLat(dropoffLoc.getLat());
-//                response.setDropoffLng(dropoffLoc.getLng());
-//            } else {
-//                response.setDropoffLocationName("Unknown Location");
-//                response.setDropoffLat(request.getDropoffLat());
-//                response.setDropoffLng(request.getDropoffLng());
-//            }
-//        } else {
-//            response.setDropoffLocationName("Custom Dropoff Location");
-//            response.setDropoffLat(request.getDropoffLat());
-//            response.setDropoffLng(request.getDropoffLng());
-//        }
-
         return requestMapper.toResponse(request);
     }
 
-    private BroadcastingRideRequestResponse toBroadcastingResponse(SharedRideRequest request) {
-//        String pickupName = resolveLocationName(
-//            request.getPickupLocationId(),
-//            request.getPickupLat(),
-//            request.getPickupLng(),
-//            "Custom Pickup Location");
-//
-//        String dropoffName = resolveLocationName(
-//            request.getDropoffLocationId(),
-//            request.getDropoffLat(),
-//            request.getDropoffLng(),
-//            "Custom Dropoff Location");
-//
-//        LatLng pickupCoordinates = (request.getPickupLat() != null && request.getPickupLng() != null)
-//            ? new LatLng(request.getPickupLat(), request.getPickupLng())
-//            : null;
-//
-//        LatLng dropoffCoordinates = (request.getDropoffLat() != null && request.getDropoffLng() != null)
-//            ? new LatLng(request.getDropoffLat(), request.getDropoffLng())
-//            : null;
+    private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request, String polylineFromDriverToPickup) {
+        var response = requestMapper.toResponse(request);
+        response.setPolylineFromDriverToPickup(polylineFromDriverToPickup);
+        return response;
+    }
 
+    private BroadcastingRideRequestResponse toBroadcastingResponse(SharedRideRequest request) {
         return new BroadcastingRideRequestResponse(
             request.getSharedRideRequestId(),
             request.getTotalFare(),
             request.getPickupLocation(),
             request.getDropoffLocation(),
-//            pickupName,
-//            dropoffName,
-//            pickupCoordinates,
-//            dropoffCoordinates,
             request.getPickupTime() != null ? request.getPickupTime().format(ISO_DATE_TIME) : null
         );
     }

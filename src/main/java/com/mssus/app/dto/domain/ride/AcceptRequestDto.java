@@ -9,11 +9,11 @@ public record AcceptRequestDto(
         @NotNull(message = "Ride ID is required")
         @Positive(message = "Ride ID must be positive")
         @Schema(description = "The ride ID accepting this request", example = "300", required = true)
-        Integer rideId
-//
-//        @Future(message = "Estimated pickup time must be in the future")
-//        @Schema(description = "Estimated pickup time (ISO 8601)", example = "2025-10-05T08:15:00")
-//        LocalDateTime estimatedPickupTime
+        Integer rideId,
+
+        @NotNull(message = "Current driver location is required")
+        @Schema(description = "The current location of the driver", required = true)
+        LatLng currentDriverLocation
 ) {
 }
 

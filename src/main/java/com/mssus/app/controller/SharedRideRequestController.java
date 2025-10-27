@@ -3,6 +3,7 @@ package com.mssus.app.controller;
 import com.mssus.app.dto.domain.ride.AcceptRequestDto;
 import com.mssus.app.dto.domain.ride.BroadcastAcceptRequest;
 import com.mssus.app.dto.domain.ride.CreateRideRequestDto;
+import com.mssus.app.dto.domain.ride.LatLng;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;

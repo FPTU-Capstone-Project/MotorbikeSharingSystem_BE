@@ -325,17 +325,4 @@ public class SharedRideController {
         SharedRideResponse response = sharedRideService.getRideById(rideId);
         return ResponseEntity.ok(response);
     }
-
-    @PostMapping("/{rideId}/track")
-    public ResponseEntity<TrackingResponse> trackRide(
-        @PathVariable Integer rideId,
-        @RequestBody List<LocationPoint> points,
-        Authentication authentication) {
-
-        String username = authentication.getName();
-
-        TrackingResponse response = rideTrackingService.appendGpsPoints(rideId, points, username);
-        return ResponseEntity.ok(response);
-    }
 }
-
