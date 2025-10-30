@@ -1,11 +1,9 @@
 package com.mssus.app.service.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mssus.app.common.enums.DriverProfileStatus;
 import com.mssus.app.common.enums.RiderProfileStatus;
 import com.mssus.app.common.enums.VerificationStatus;
 import com.mssus.app.common.enums.VerificationType;
-import com.mssus.app.common.enums.FuelType;
 import com.mssus.app.dto.request.BackgroundCheckRequest;
 import com.mssus.app.dto.request.BulkApprovalRequest;
 import com.mssus.app.dto.request.VerificationDecisionRequest;
@@ -14,26 +12,23 @@ import com.mssus.app.dto.response.DriverStatsResponse;
 import com.mssus.app.dto.response.MessageResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.StudentVerificationResponse;
-import com.mssus.app.dto.response.VehicleInfo;
 import com.mssus.app.dto.response.VerificationResponse;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.RiderProfile;
 import com.mssus.app.entity.User;
-import com.mssus.app.entity.Vehicle;
 import com.mssus.app.entity.Verification;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.UserRepository;
-import com.mssus.app.repository.VehicleRepository;
 import com.mssus.app.repository.VerificationRepository;
 import com.mssus.app.repository.RiderProfileRepository;
 import com.mssus.app.service.EmailService;
+import com.mssus.app.service.domain.verification.VerificationOutcomeHandler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
@@ -77,9 +72,7 @@ class VerificationServiceImplTest {
     @Mock
     private EmailService emailService;
     @Mock
-    private VehicleRepository vehicleRepository;
-    @Mock
-    private ObjectMapper objectMapper;
+    private VerificationOutcomeHandler verificationOutcomeHandler;
 
     @InjectMocks
     private VerificationServiceImpl verificationService;
@@ -184,15 +177,13 @@ class VerificationServiceImplTest {
             assertThat(updatedVerification.getVerifiedAt()).isEqualTo(now);
             assertThat(updatedVerification.getMetadata()).isEqualTo(request.getNotes());
 
-            assertThat(riderProfile.getStatus()).isEqualTo(RiderProfileStatus.ACTIVE);
-            assertThat(riderProfile.getActivatedAt()).isEqualTo(now);
-
             verify(userRepository).findByEmail(ADMIN_EMAIL);
             verify(verificationRepository).findById(100);
             verify(verificationRepository).findById(200);
-            verify(riderProfileRepository).save(riderProfile);
-            verify(emailService, times(2)).notifyUserActivated(riderUser);
-            verifyNoMoreInteractions(verificationRepository, userRepository, riderProfileRepository, emailService);
+            verify(verificationOutcomeHandler).handleApproval(pendingVerification);
+            verify(emailService).notifyUserActivated(riderUser);
+            verifyNoInteractions(riderProfileRepository);
+            verifyNoMoreInteractions(verificationRepository, userRepository, verificationOutcomeHandler, emailService);
         }
     }
 
@@ -213,14 +204,13 @@ class VerificationServiceImplTest {
 
     @ParameterizedTest
     @MethodSource("driverVerificationTypes")
-    void should_activateDriver_when_driverVerificationApproved(VerificationType type, boolean expectVehicleCreation) throws Exception {
+    void should_delegateOutcomeHandler_when_driverVerificationApproved(VerificationType type) throws Exception {
         // Arrange
         Integer userId = 55;
         User user = createUser(userId);
         DriverProfile driverProfile = createDriverProfile(user, DriverProfileStatus.PENDING);
         user.setDriverProfile(driverProfile);
         Verification verification = buildVerification(301, user, type, VerificationStatus.PENDING, FIXED_NOW.minusDays(1));
-        verification.setMetadata(expectVehicleCreation ? "{\"plateNumber\":\"59A1-12345\"}" : null);
 
         User admin = createUser(999);
         VerificationDecisionRequest request = VerificationDecisionRequest.builder()
@@ -233,21 +223,6 @@ class VerificationServiceImplTest {
         when(verificationRepository.findByUserIdAndTypeAndStatus(userId, type, VerificationStatus.PENDING))
                 .thenReturn(Optional.of(verification));
         when(userRepository.findByEmail(ADMIN_EMAIL)).thenReturn(Optional.of(admin));
-        when(verificationRepository.findByListUserId(userId)).thenReturn(buildApprovedVerifications(user));
-
-        if (expectVehicleCreation) {
-            VehicleInfo vehicleInfo = VehicleInfo.builder()
-                    .plateNumber("59A1-12345")
-                    .model("Yamaha")
-                    .color("Red")
-                    .capacity(2)
-                    .year(2023)
-                    .fuelType(FuelType.GASOLINE)
-                    .insuranceExpiry(FIXED_NOW.plusYears(1))
-                    .build();
-            when(vehicleRepository.findByDriver_DriverId(driverProfile.getDriverId())).thenReturn(Optional.empty());
-            when(objectMapper.readValue(anyString(), eq(VehicleInfo.class))).thenReturn(vehicleInfo);
-        }
 
         LocalDateTime now = FIXED_NOW.plusMinutes(5);
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class, CALLS_REAL_METHODS)) {
@@ -263,33 +238,19 @@ class VerificationServiceImplTest {
             assertThat(verification.getVerifiedAt()).isEqualTo(now);
             assertThat(verification.getMetadata()).isEqualTo(request.getNotes());
 
-            assertThat(driverProfile.getStatus()).isEqualTo(DriverProfileStatus.ACTIVE);
-            assertThat(driverProfile.getActivatedAt()).isEqualTo(now);
-
             verify(userRepository).findById(userId);
             verify(userRepository).findByEmail(ADMIN_EMAIL);
             verify(verificationRepository).findByUserIdAndTypeAndStatus(userId, type, VerificationStatus.PENDING);
-            verify(verificationRepository).findByListUserId(userId);
             verify(verificationRepository).save(verification);
-            verify(driverProfileRepository).save(driverProfile);
-            verify(emailService).notifyUserActivated(user);
-
-            if (expectVehicleCreation) {
-                verify(vehicleRepository).findByDriver_DriverId(driverProfile.getDriverId());
-                ArgumentCaptor<Vehicle> vehicleCaptor = ArgumentCaptor.forClass(Vehicle.class);
-                verify(vehicleRepository).save(vehicleCaptor.capture());
-                assertThat(vehicleCaptor.getValue().getPlateNumber()).isEqualTo("59A1-12345");
-            } else {
-                verifyNoInteractions(vehicleRepository);
-            }
+            verify(verificationOutcomeHandler).handleApproval(verification);
         }
     }
 
-    private static Stream<Arguments> driverVerificationTypes() {
+    private static Stream<VerificationType> driverVerificationTypes() {
         return Stream.of(
-                Arguments.of(VerificationType.DRIVER_LICENSE, false),
-                Arguments.of(VerificationType.DRIVER_DOCUMENTS, false),
-                Arguments.of(VerificationType.VEHICLE_REGISTRATION, true)
+                VerificationType.DRIVER_LICENSE,
+                VerificationType.DRIVER_DOCUMENTS,
+                VerificationType.VEHICLE_REGISTRATION
         );
     }
 
@@ -553,4 +514,3 @@ class VerificationServiceImplTest {
         );
     }
 }
-
