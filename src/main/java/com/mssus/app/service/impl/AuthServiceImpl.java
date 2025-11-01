@@ -11,7 +11,6 @@ import com.mssus.app.infrastructure.security.JwtService;
 import com.mssus.app.service.AuthService;
 import com.mssus.app.service.EmailService;
 import com.mssus.app.service.RefreshTokenService;
-
 import com.mssus.app.common.util.Constants;
 import com.mssus.app.common.util.OtpUtil;
 import com.mssus.app.common.util.ValidationUtil;
@@ -30,7 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
-
     private final UserRepository userRepository;
     private final RiderProfileRepository riderProfileRepository;
     private final DriverProfileRepository driverProfileRepository;
@@ -40,8 +38,6 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenService refreshTokenService;
     private final EmailService emailService;
-
-
     public static Map<String, Object> userContext = new ConcurrentHashMap<>();
 
     @Override
@@ -50,48 +46,24 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByEmailAndStatusNot(request.getEmail(), UserStatus.EMAIL_VERIFYING)) {
             throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s already registered", request.getEmail());
         }
-
         if (userRepository.existsByEmailAndStatus(request.getEmail(), UserStatus.EMAIL_VERIFYING)) {
             throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s is pending verification", request.getEmail());
         }
-
         String normalizedPhone = ValidationUtil.normalizePhone(request.getPhone());
         if (userRepository.existsByPhone(normalizedPhone)) {
             throw BaseDomainException.formatted("user.conflict.phone-exists", "Phone %s already registered", normalizedPhone);
         }
-
-
-        User user = User.builder()
-                .email(request.getEmail())
-                .phone(normalizedPhone)
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(request.getFullName())
-                .userType(UserType.USER)
-                .status(UserStatus.EMAIL_VERIFYING)
-                .emailVerified(false)
-                .phoneVerified(false)
-                .build();
-
+        User user = User.builder().email(request.getEmail()).phone(normalizedPhone).passwordHash(passwordEncoder.encode(request.getPassword())).fullName(request.getFullName()).userType(UserType.USER).status(UserStatus.EMAIL_VERIFYING).emailVerified(false).phoneVerified(false).build();
         user = userRepository.save(user);
-
         Map<String, Object> claims = buildTokenClaims(user, null);
         String token = jwtService.generateToken(user.getEmail(), claims);
-
-        return RegisterResponse.builder()
-                .userId(user.getUserId())
-                .userType("rider")
-                .email(user.getEmail())
-                .phone(user.getPhone())
-                .fullName(user.getFullName())
-                .token(token)
-                .createdAt(user.getCreatedAt())
-                .build();
+        return RegisterResponse.builder().userId(user.getUserId()).userType("rider").email(user.getEmail()).phone(user.getPhone()).fullName(user.getFullName()).token(token).createdAt(user.getCreatedAt()).build();
     }
 
     @Override
     public LoginResponse login(LoginRequest request) {
         log.info("Login attempt for: {}", request.getEmail());
-
+        
         String identifier = request.getEmail();
         User user = userRepository.findByEmail(identifier)
                 .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email"));
@@ -100,37 +72,53 @@ public class AuthServiceImpl implements AuthService {
             throw BaseDomainException.of("user.validation.invalid-email");
         }
 
-        if (!user.hasProfile(request.getTargetProfile().toUpperCase()) && !UserType.ADMIN.equals(user.getUserType())) {
-            throw BaseDomainException.formatted("user.validation.profile-not-exists", "User does not have profile: %s", request.getTargetProfile());
+        // Allow login if email is verified (status = PENDING)
+        // Rider profile is created separately through verification request, not required for login
+        boolean isAdmin = UserType.ADMIN.equals(user.getUserType());
+        boolean isEmailVerified = Boolean.TRUE.equals(user.getEmailVerified());
+
+        if (!isAdmin) {
+            // Check if email is verified - if not, require email verification
+            if (!isEmailVerified) {
+                // Email not verified - require email verification before login
+                throw BaseDomainException.of("auth.unauthorized.email-verification-pending");
+            }
+            // Email is verified - allow login even if profile doesn't exist yet
+            // Profile will be created separately through verification request to admin
+            log.info("User {} attempting login with email verified. Profile may or may not exist.", user.getEmail());
         }
 
         validateUserBeforeGrantingToken(user);
-
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(user.getEmail(), request.getPassword())
         );
 
         // Generate tokens
-        Map<String, Object> claims = buildTokenClaims(user, UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile());
-
+        Map<String, Object> claims = buildTokenClaims(user, 
+                UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile());
+        
         var currentProfile = request.getTargetProfile();
 
         if (!UserType.ADMIN.equals(user.getUserType())) {
             if ("rider".equalsIgnoreCase(currentProfile)) {
+                // Only update status if profile exists
                 if (user.getRiderProfile() != null) {
                     user.getRiderProfile().setStatus(RiderProfileStatus.ACTIVE);
                     riderProfileRepository.save(user.getRiderProfile());
                 }
+                // Profile might not exist yet - that's OK, user can still login
                 if (user.getDriverProfile() != null) {
                     user.getDriverProfile().setStatus(DriverProfileStatus.INACTIVE);
                     driverProfileRepository.save(user.getDriverProfile());
                 }
             } else if ("driver".equalsIgnoreCase(currentProfile)) {
+                // Only update status if profile exists
                 if (user.getDriverProfile() != null) {
                     user.getDriverProfile().setStatus(DriverProfileStatus.ACTIVE);
                     driverProfileRepository.save(user.getDriverProfile());
                 }
+                // Profile might not exist yet - that's OK, user can still login
                 if (user.getRiderProfile() != null) {
                     user.getRiderProfile().setStatus(RiderProfileStatus.INACTIVE);
                     riderProfileRepository.save(user.getRiderProfile());
@@ -139,60 +127,61 @@ public class AuthServiceImpl implements AuthService {
         }
 
         userContext.put(user.getUserId().toString(), claims);
-
         String accessToken = jwtService.generateToken(user.getEmail(), claims);
         String refreshToken = refreshTokenService.generateRefreshToken(user);
+
+        // Set activeProfile based on whether profile exists
+        String activeProfile = null;
+        if (!UserType.ADMIN.equals(user.getUserType())) {
+            if ("rider".equalsIgnoreCase(currentProfile) && user.getRiderProfile() != null) {
+                activeProfile = "rider";
+            } else if ("driver".equalsIgnoreCase(currentProfile) && user.getDriverProfile() != null) {
+                activeProfile = "driver";
+            }
+            // If profile doesn't exist yet, activeProfile remains null
+        }
 
         return LoginResponse.builder()
                 .userId(user.getUserId())
                 .userType(user.getUserType().name())
-                .activeProfile(UserType.ADMIN.equals(user.getUserType()) ? null : request.getTargetProfile())
+                .activeProfile(activeProfile)
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .expiresIn(jwtService.getExpirationTime() / 1000) // Convert to seconds
                 .build();
     }
-
     @Override
     public MessageResponse logout(String refreshToken) {
         log.info("User logged out");
         refreshTokenService.invalidateRefreshToken(refreshToken);
         return MessageResponse.of("Logged out successfully");
     }
-
     @Override
     public TokenRefreshResponse refreshToken(TokenRefreshRequest request) {
         log.info("Refreshing access token");
-
         String requestRefreshToken = request.refreshToken();
         if (!refreshTokenService.validateRefreshToken(requestRefreshToken)) {
             throw BaseDomainException.of("auth.unauthorized.invalid-refresh-token");
         }
-
         String userId = refreshTokenService.getUserIdFromRefreshToken(requestRefreshToken);
         if (userId == null) {
             throw BaseDomainException.of("auth.unauthorized.invalid-refresh-token");
         }
-
         User user = userRepository.findById(Integer.valueOf(userId))
                 .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-id", "User with ID %s not found", userId));
-
         validateUserBeforeGrantingToken(user);
-
-        //TODO: implement context persistence for refresh token
+        
+        // TODO: implement context persistence for refresh token
         @SuppressWarnings("unchecked")
         Map<String, Object> claims = Optional.ofNullable(userContext.get(userId))
                 .filter(Map.class::isInstance)
                 .map(obj -> (Map<String, Object>) obj)
                 .orElseGet(() -> buildTokenClaims(user, null));
-
         String newAccessToken = jwtService.generateToken(user.getEmail(), claims);
-
         return TokenRefreshResponse.builder()
                 .accessToken(newAccessToken)
                 .build();
     }
-
     @Override
     public void validateUserBeforeGrantingToken(User user) {
         if (UserStatus.SUSPENDED.equals(user.getStatus())) {
@@ -203,41 +192,50 @@ public class AuthServiceImpl implements AuthService {
             throw BaseDomainException.of("auth.unauthorized.account-deleted");
         }
 
+        // Allow login if email is verified (status = PENDING or EMAIL_VERIFYING with email verified)
+        // Flow: EMAIL_VERIFYING -> verify email -> PENDING (can login)
         if (UserStatus.EMAIL_VERIFYING.equals(user.getStatus())) {
-            throw BaseDomainException.of("auth.unauthorized.email-verification-pending");
+            // Only block if email is NOT verified
+            if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+                throw BaseDomainException.of("auth.unauthorized.email-verification-pending");
+            }
+            // If email is verified, allow login (should be PENDING after verification, but allow just in case)
+            log.info("User {} has EMAIL_VERIFYING status but email is verified. Allowing login.", user.getEmail());
+        }
+
+        // PENDING status is allowed - user has verified email and can login
+        if (UserStatus.PENDING.equals(user.getStatus())) {
+            log.debug("User {} with PENDING status attempting login - allowed (email verified).", user.getEmail());
         }
     }
-
-
     @Override
     public MessageResponse forgotPassword(ForgotPasswordRequest request) {
         String identifier = request.getEmailOrPhone();
         User user = ValidationUtil.isValidEmail(identifier)
                 ? userRepository.findByEmail(identifier).orElse(null)
                 : userRepository.findByPhone(ValidationUtil.normalizePhone(identifier)).orElse(null);
-
+        
         if (user == null) {
             return MessageResponse.of("OTP sent to your registered contact");
         }
-
+        
         String otp = OtpUtil.generateOtp();
         String otpKey = user.getEmail() + ":" + Constants.OTP_FORGOT_PASSWORD;
         OtpUtil.storeOtp(otpKey, otp, OtpFor.FORGOT_PASSWORD);
-
-        Map<String, Object> templateData = Map.of(
-                "fullName", user.getFullName(),
-                "otp", otp
-        );
+        
+        Map<String, Object> templateData = Map.of("fullName", user.getFullName(), "otp", otp);
         String templateName = "emails/otp-password-reset";
         String email = user.getEmail();
         String subject = "Password Reset OTP";
-        emailService.sendEmail(email, subject, templateName, templateData, EmailPriority.HIGH, Long.valueOf(user.getUserId()), "")
+        
+        emailService.sendEmail(email, subject, templateName, templateData, EmailPriority.HIGH, 
+                Long.valueOf(user.getUserId()), "")
                 .thenAccept(result -> log.info("Password reset OTP email sent to: {}", email))
                 .exceptionally(ex -> {
                     log.error("Failed to send password reset OTP email to {}: {}", email, ex.getMessage());
                     return null;
                 });
-
+        
         return MessageResponse.of("OTP sent to your registered contact");
     }
     @Override
@@ -261,45 +259,34 @@ public class AuthServiceImpl implements AuthService {
         claims.put("sub", "user-" + user.getUserId());
         claims.put("email", user.getEmail());
         claims.put("userId", user.getUserId());
-
         List<String> profiles = getUserProfiles(user);
         claims.put("profiles", profiles);
         claims.put("active_profile", activeProfile == null ? null : activeProfile.toUpperCase());
-
         Map<String, String> profileStatus = buildProfileStatus(user);
         claims.put("profile_status", profileStatus);
-
         claims.put("token_version", user.getTokenVersion());
-
         return claims;
     }
 
     public List<String> getUserProfiles(User user) {
         List<String> profiles = new ArrayList<>();
-
         if (user.hasProfile("RIDER")) {
             profiles.add("RIDER");
         }
-
         if (user.hasProfile("DRIVER")) {
             profiles.add("DRIVER");
         }
-
         return profiles;
     }
 
     public Map<String, String> buildProfileStatus(User user) {
         Map<String, String> roleStatus = new HashMap<>();
-
         Optional.ofNullable(user.getRiderProfile())
-            .map(RiderProfile::getStatus)
-            .ifPresent(status -> roleStatus.put("RIDER", status.name()));
-
+                .map(RiderProfile::getStatus)
+                .ifPresent(status -> roleStatus.put("RIDER", status.name()));
         Optional.ofNullable(user.getDriverProfile())
-            .map(DriverProfile::getStatus)
-            .ifPresent(status -> roleStatus.put("DRIVER", status.name()));
-
+                .map(DriverProfile::getStatus)
+                .ifPresent(status -> roleStatus.put("DRIVER", status.name()));
         return roleStatus;
     }
-
-}
+    }
