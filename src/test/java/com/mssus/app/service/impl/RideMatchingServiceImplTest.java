@@ -184,7 +184,6 @@ class RideMatchingServiceImplTest {
     @DisplayName("Should handle ride with zero available seats")
     void should_handleZeroAvailableSeats_when_findingMatches() {
         // Arrange
-        testRide.setCurrentPassengers(testRide.getMaxPassengers());
         when(rideRepository.findCandidateRidesForMatching(any(LocalDateTime.class), any(LocalDateTime.class)))
             .thenReturn(List.of(testRide));
         when(locationRepository.findById(testRequest.getPickupLocation().getLocationId()))
@@ -380,8 +379,6 @@ class RideMatchingServiceImplTest {
         testRide.setVehicle(testVehicle);
         testRide.setPricingConfig(testPricingConfig);
         testRide.setStatus(SharedRideStatus.SCHEDULED);
-        testRide.setMaxPassengers(2);
-        testRide.setCurrentPassengers(0);
         testRide.setScheduledTime(LocalDateTime.now().plusHours(1));
         testRide.setStartLocation(testPickupLocation);
         testRide.setEndLocation(testDropoffLocation);
@@ -469,8 +466,6 @@ class RideMatchingServiceImplTest {
         ride.setVehicle(testVehicle);
         ride.setPricingConfig(testPricingConfig);
         ride.setStatus(SharedRideStatus.SCHEDULED);
-        ride.setMaxPassengers(2);
-        ride.setCurrentPassengers(0);
         ride.setScheduledTime(LocalDateTime.now().plusHours(1));
         ride.setStartLocation(startLocation);
         ride.setEndLocation(endLocation);

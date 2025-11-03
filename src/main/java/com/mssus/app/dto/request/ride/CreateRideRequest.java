@@ -20,6 +20,9 @@ public record CreateRideRequest(
 
         LatLng endLatLng,
 
+        @Schema(description = "Template route ID to reuse (optional)", example = "12")
+        Integer routeId,
+
         @Future(message = "Scheduled time must be in the future")
         @Schema(description = "Scheduled departure time (ISO 8601)", example = "2025-10-05T08:00:00", required = true)
         LocalDateTime scheduledDepartureTime

@@ -25,8 +25,8 @@ public class SharedRideRequest {
     @Column(name = "shared_ride_request_id")
     private Integer sharedRideRequestId;
 
-    @ManyToOne
-    @JoinColumn(name = "shared_ride_id", nullable = true)
+    @OneToOne
+    @JoinColumn(name = "shared_ride_id", referencedColumnName = "shared_ride_id", nullable = true)
     private SharedRide sharedRide;
 
     @Column(name = "request_kind", length = 20, nullable = false)

@@ -54,16 +54,13 @@ public class Transaction {
     @Column(name = "currency", length = 3)
     private String currency = "VND";
 
-    @Column(name = "booking_id")
-    private Integer bookingId;
+    @ManyToOne
+    @JoinColumn(name = "shared_ride_id")
+    private SharedRide sharedRide;
 
     @ManyToOne
-    @JoinColumn(name = "rider_user_id")
-    private User riderUser;
-
-    @ManyToOne
-    @JoinColumn(name = "driver_user_id")
-    private User driverUser;
+    @JoinColumn(name = "shared_ride_request_id")
+    private SharedRideRequest sharedRideRequest;
 
     @Column(name = "psp_ref")
     private String pspRef;

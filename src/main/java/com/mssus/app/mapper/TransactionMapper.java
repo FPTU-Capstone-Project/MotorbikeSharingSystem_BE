@@ -17,10 +17,8 @@ public interface TransactionMapper {
     @Mapping(target = "actorUserId", source = "actorUser.userId")
     @Mapping(target = "actorUsername", source = "actorUser.fullName")
     @Mapping(target = "systemWallet", expression = "java(transaction.getSystemWallet() != null ? transaction.getSystemWallet().name() : null)")
-    @Mapping(target = "riderUserId", source = "riderUser.userId")
-    @Mapping(target = "riderUsername", source = "riderUser.fullName")
-    @Mapping(target = "driverUserId", source = "driverUser.userId")
-    @Mapping(target = "driverUsername", source = "driverUser.fullName")
     @Mapping(target = "status", expression = "java(transaction.getStatus() != null ? transaction.getStatus().name() : null)")
+    @Mapping(target = "sharedRideId", source = "sharedRide.sharedRideId")
+    @Mapping(target = "sharedRideRequestId", source = "sharedRideRequest.sharedRideRequestId")
     TransactionResponse mapToTransactionResponse(Transaction transaction);
 }

@@ -99,6 +99,7 @@ class SharedRideServiceImplTest {
     private SharedRideRequest rideRequest;
     private RiderProfile rider;
     private CreateRideRequest createRideRequest;
+    private Route route;
 
     @BeforeEach
     void setUp() {
@@ -163,8 +164,6 @@ class SharedRideServiceImplTest {
 //        ride.setStartLocationId(1);
 //        ride.setEndLocationId(2);
         ride.setStatus(SharedRideStatus.SCHEDULED);
-        ride.setMaxPassengers(1);
-        ride.setCurrentPassengers(0);
         ride.setScheduledTime(LocalDateTime.now().plusHours(1));
         ride.setEstimatedDuration(30);
         ride.setEstimatedDistance(10.5f);
@@ -203,6 +202,7 @@ class SharedRideServiceImplTest {
             2,
             null,
             null,
+            null,
             LocalDateTime.now().plusHours(2)
         );
     }
@@ -235,6 +235,7 @@ class SharedRideServiceImplTest {
             null,
             new LatLng(10.762622, 106.660172),
             new LatLng(10.772622, 106.670172),
+            null,
             LocalDateTime.now().plusHours(2)
         );
 

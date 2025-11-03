@@ -270,7 +270,7 @@ public class WalletServiceImpl implements WalletService {
 
         // Count total trips
         int totalTrips = (int) earningsTransactions.stream()
-                .map(Transaction::getBookingId)
+                .map(Transaction::getSharedRide)
                 .distinct()
                 .count();
 

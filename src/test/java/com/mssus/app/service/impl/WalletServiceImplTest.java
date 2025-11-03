@@ -945,7 +945,7 @@ class WalletServiceImplTest {
             .actorUser(testUser)
             .amount(new BigDecimal("50000"))
             .currency("VND")
-            .bookingId(1)
+//            .bookingId(1)
             .status(TransactionStatus.SUCCESS)
             .createdAt(LocalDateTime.now())
             .build();

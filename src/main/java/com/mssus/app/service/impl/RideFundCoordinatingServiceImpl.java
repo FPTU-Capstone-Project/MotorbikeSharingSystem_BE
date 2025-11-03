@@ -68,7 +68,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         CreateTransactionRequest txnRequest = new CreateTransactionRequest(
             UUID.randomUUID(), TransactionType.HOLD_CREATE, TransactionDirection.INTERNAL,
             ActorKind.USER, userId, null, amount, CURRENCY,
-            request.getRideRequestId(), userId, null, null, TransactionStatus.SUCCESS,
+            null, request.getRideRequestId(), null, TransactionStatus.SUCCESS,
             request.getNote(), walletBefore.getShadowBalance(), afterAvail,
             walletBefore.getPendingBalance(), afterPending
         );
@@ -112,17 +112,16 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             request.getDriverId(), settlementResult.riderPay().amount());
 
         // Manually calculate post-transaction balances for accurate logging
-        BigDecimal riderAfterAvail = riderWalletBefore.getShadowBalance(); // No change
+        BigDecimal riderAfterAvail = riderWalletBefore.getShadowBalance();
         BigDecimal riderAfterPending = riderWalletBefore.getPendingBalance().subtract(settlementResult.riderPay().amount());
         BigDecimal driverAfterAvail = driverWalletBefore.getShadowBalance().add(settlementResult.driverPayout().amount());
-        BigDecimal driverAfterPending = driverWalletBefore.getPendingBalance(); // No change
+        BigDecimal driverAfterPending = driverWalletBefore.getPendingBalance();
 
         CreateTransactionRequest riderPayTxnRequest = new CreateTransactionRequest(
             groupId, TransactionType.CAPTURE_FARE, TransactionDirection.OUT,
             ActorKind.USER, request.getRiderId(), null,
             settlementResult.riderPay().amount(), CURRENCY,
-            request.getRideRequestId(), request.getRiderId(), request.getDriverId(),
-            null, TransactionStatus.SUCCESS,
+            request.getRideId(), request.getRideRequestId(), null, TransactionStatus.SUCCESS,
             "Rider payment for ride " + request.getRideRequestId(),
             riderWalletBefore.getShadowBalance(), riderAfterAvail,
             riderWalletBefore.getPendingBalance(), riderAfterPending
@@ -132,8 +131,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             groupId, TransactionType.CAPTURE_FARE, TransactionDirection.IN,
             ActorKind.USER, request.getDriverId(), null,
             settlementResult.driverPayout().amount(), CURRENCY,
-            request.getRideRequestId(), request.getRiderId(), request.getDriverId(),
-            null, TransactionStatus.SUCCESS,
+            request.getRideId(), request.getRideRequestId(), null, TransactionStatus.SUCCESS,
             "Driver payout for ride " + request.getRideRequestId(),
             driverWalletBefore.getShadowBalance(), driverAfterAvail,
             driverWalletBefore.getPendingBalance(), driverAfterPending
@@ -143,14 +141,12 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             groupId, TransactionType.CAPTURE_FARE, TransactionDirection.IN,
             ActorKind.SYSTEM, null, SystemWallet.COMMISSION,
             settlementResult.commission().amount(), CURRENCY,
-            request.getRideRequestId(), request.getRiderId(), request.getDriverId(),
-            null, TransactionStatus.SUCCESS,
+            request.getRideId(), request.getRideRequestId(), null, TransactionStatus.SUCCESS,
             "Platform commission for ride " + request.getRideRequestId(),
             BigDecimal.ZERO, BigDecimal.ZERO,
             BigDecimal.ZERO, BigDecimal.ZERO
         );
 
-        // Persist balance changes
         walletService.decreasePendingBalance(request.getRiderId(), settlementResult.riderPay().amount());
         walletService.increaseShadowBalance(request.getDriverId(), settlementResult.driverPayout().amount());
 
@@ -204,10 +200,10 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
     @Transactional
     public void releaseRideFunds(RideHoldReleaseRequest request) {
         Transaction transaction = transactionRepository.findAll().stream()
-            .filter(t -> t.getBookingId() != null && t.getBookingId().equals(request.getRideRequestId()))
-            .filter(t -> t.getRiderUser() != null && t.getRiderUser().getUserId().equals(request.getRiderId()))
+            .filter(t -> t.getSharedRideRequest() != null && t.getSharedRideRequest().getSharedRideRequestId().equals(request.getRideRequestId()))
+            .filter(t -> t.getActorUser() != null && t.getActorUser().getUserId().equals(request.getRiderId()))
             .findFirst()
-            .orElseThrow(() -> new NotFoundException("Transaction not found for bookingId: " + request.getRiderId()));
+            .orElseThrow(() -> new NotFoundException("Transaction not found for request: " + request.getRiderId()));
 
         if (transaction.getGroupId() == null) {
             throw new NotFoundException("Group ID not found for bookingId: " + request.getRiderId());
@@ -227,7 +223,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         }
 
         BigDecimal heldAmount = holdTransaction.getAmount();
-        Integer riderId = holdTransaction.getRiderUser().getUserId();
+        Integer riderId = request.getRiderId();
 
         Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
             .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
@@ -239,8 +235,8 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
 
         CreateTransactionRequest releaseTxnRequest = new CreateTransactionRequest(
             newGroupId, TransactionType.HOLD_RELEASE, TransactionDirection.INTERNAL,
-            ActorKind.USER, riderId, null, heldAmount, CURRENCY,
-            request.getRideRequestId(), riderId, null, null, TransactionStatus.SUCCESS,
+            ActorKind.USER, request.getRiderId(), null, heldAmount, CURRENCY,
+            null, request.getRideRequestId(), null, TransactionStatus.SUCCESS,
             request.getNote(), riderWallet.getShadowBalance(), afterAvail,
             riderWallet.getPendingBalance(), afterPending
         );

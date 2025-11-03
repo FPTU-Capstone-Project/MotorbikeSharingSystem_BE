@@ -15,8 +15,10 @@ import com.mssus.app.dto.domain.ride.BroadcastAcceptRequest;
 import com.mssus.app.dto.domain.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.request.wallet.RideConfirmHoldRequest;
+import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.BroadcastingRideRequestResponse;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
+import com.mssus.app.dto.response.ride.RouteSummaryResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.dto.domain.ride.LatLng;
 import com.mssus.app.entity.*;
@@ -71,6 +73,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final RideFundCoordinatingService rideFundCoordinatingService;
     private final RoutingService routingService;
     private final RideTrackingService rideTrackingService;
+    private final RouteAssignmentService routeAssignmentService;
 
     @Override
     @Transactional
@@ -224,10 +227,6 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 Map.of("currentState", ride.getStatus()));
         }
 
-        if (ride.getCurrentPassengers() >= ride.getMaxPassengers()) {
-            throw BaseDomainException.of("ride.validation.no-seats-available");
-        }
-
         BigDecimal fareAmount = quote.fare().total().amount();
         BigDecimal subtotalFare = quote.fare().subtotal().amount();
         PricingConfig pricingConfig = pricingConfigRepository.findByVersion(quote.fare().pricingVersion())
@@ -375,6 +374,18 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             Location startLocation = findOrCreateLocation(request.startLocationId(), request.startLatLng(), "Start");
             Location endLocation = rideRequest.getDropoffLocation();
 
+            RouteResponse rideRoute = null;
+            try {
+                rideRoute = routingService.getRoute(
+                    startLocation.getLat(),
+                    startLocation.getLng(),
+                    endLocation.getLat(),
+                    endLocation.getLng()
+                );
+            } catch (Exception routeEx) {
+                log.warn("Failed to fetch start->end route for request {}: {}", requestId, routeEx.getMessage());
+            }
+
             SharedRide newRide = new SharedRide();
             newRide.setDriver(driver);
             newRide.setVehicle(vehicle);
@@ -385,12 +396,20 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             if (capacity <= 0) {
                 capacity = 1;
             }
-            newRide.setMaxPassengers(capacity);
-            newRide.setCurrentPassengers(1);
             newRide.setPricingConfig(rideRequest.getPricingConfig());
             newRide.setScheduledTime(scheduledTime);
             newRide.setStartLocation(startLocation);
             newRide.setEndLocation(endLocation);
+            newRide.setRoute(routeAssignmentService.resolveRoute(
+                null,
+                startLocation,
+                endLocation,
+                rideRoute != null ? rideRoute.polyline() : null
+            ));
+            if (rideRoute != null) {
+                newRide.setEstimatedDuration((int) Math.ceil(rideRoute.time() / 60.0));
+                newRide.setEstimatedDistance((float) rideRoute.distance() / 1000);
+            }
             newRide.setCreatedAt(LocalDateTime.now());
             newRide.setStartedAt(LocalDateTime.now());
 
@@ -411,6 +430,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             rideRequest.setEstimatedDropoffTime(estimatedDropoffTime);
             requestRepository.save(rideRequest);
 
+            newRide.setSharedRideRequest(rideRequest);
+            rideRepository.save(newRide);
+
             RideMatchProposalResponse proposal = RideMatchProposalResponse.builder()
                 .sharedRideId(savedRide.getSharedRideId())
                 .driverId(driver.getDriverId())
@@ -419,9 +441,6 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 .vehicleModel(vehicle.getModel())
                 .vehiclePlate(vehicle.getPlateNumber())
                 .scheduledTime(savedRide.getScheduledTime())
-                .availableSeats(Math.max(0,
-                    (savedRide.getMaxPassengers() == null ? 0 : savedRide.getMaxPassengers())
-                        - savedRide.getCurrentPassengers()))
                 .totalFare(rideRequest.getTotalFare())
                 .estimatedPickupTime(estimatedPickupTime)
                 .estimatedDropoffTime(estimatedDropoffTime)
@@ -567,9 +586,6 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 Map.of("currentState", request.getStatus()));
         }
 
-        if (ride.getCurrentPassengers() >= ride.getMaxPassengers()) {
-            throw BaseDomainException.of("ride.validation.no-seats-available");
-        }
 
         boolean trackingAcceptance = false;
         if (request.getRequestKind() == RequestKind.BOOKING) {
@@ -622,13 +638,15 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             request.setEstimatedDropoffTime(estimatedDropoffTime);
             requestRepository.save(request);
 
-            rideRepository.incrementPassengerCount(ride.getSharedRideId());
 
             log.info("Request {} accepted successfully for ride {}", requestId, acceptDto.rideId());
 
             if (trackingAcceptance) {
                 matchingCoordinator.completeDriverAcceptance(requestId);
             }
+
+            ride.setSharedRideRequest(request);
+            rideRepository.save(ride);
 
         } catch (RuntimeException e) {
             if (trackingAcceptance) {
@@ -778,9 +796,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             // Continue with cancellation even if release fails
         }
 
-        if (request.getStatus() == SharedRideRequestStatus.CONFIRMED && request.getSharedRide() != null) {
-            rideRepository.decrementPassengerCount(request.getSharedRide().getSharedRideId());
-        }
+//        if (request.getStatus() == SharedRideRequestStatus.CONFIRMED && request.getSharedRide() != null) {
+//            rideRepository.decrementPassengerCount(request.getSharedRide().getSharedRideId());
+//        }
 
         // Update request status
         request.setStatus(SharedRideRequestStatus.CANCELLED);
@@ -797,12 +815,15 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     }
 
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request) {
-        return requestMapper.toResponse(request);
+        SharedRideRequestResponse response = requestMapper.toResponse(request);
+        applyRouteSummary(request, response);
+        return response;
     }
 
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request, String polylineFromDriverToPickup) {
         var response = requestMapper.toResponse(request);
         response.setPolylineFromDriverToPickup(polylineFromDriverToPickup);
+        applyRouteSummary(request, response);
         return response;
     }
 
@@ -814,6 +835,31 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             request.getDropoffLocation(),
             request.getPickupTime() != null ? request.getPickupTime().format(ISO_DATE_TIME) : null
         );
+    }
+
+    private void applyRouteSummary(SharedRideRequest request, SharedRideRequestResponse response) {
+        if (response == null || request == null) {
+            return;
+        }
+        SharedRide ride = request.getSharedRide();
+        if (ride != null) {
+            response.setRoute(toRouteSummary(ride.getRoute()));
+        }
+    }
+
+    private RouteSummaryResponse toRouteSummary(Route route) {
+        if (route == null) {
+            return null;
+        }
+        return RouteSummaryResponse.builder()
+            .routeId(route.getRouteId())
+            .name(route.getName())
+            .routeType(route.getRouteType() != null ? route.getRouteType().name() : null)
+            .defaultPrice(route.getDefaultPrice())
+            .polyline(route.getPolyline())
+            .validFrom(route.getValidFrom())
+            .validUntil(route.getValidUntil())
+            .build();
     }
 
     private Location findOrCreateLocation(Integer locationId, LatLng latLng, String pointType) {

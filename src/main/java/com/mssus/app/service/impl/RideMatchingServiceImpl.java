@@ -447,7 +447,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         double detourKm,
         int detourMinutes,
         long timeGapMinutes,
-        boolean hasAvailableSeats,
         boolean withinDetourLimit,
         float finalScore
     ) {
@@ -552,7 +551,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                 .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
                 .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
                 .scheduledTime(ride.getScheduledTime())
-                .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
                 .totalFare(totalFare)
                 .earnedAmount(earnedAmount)
                 .estimatedDuration(estimatedTripMinutes)
@@ -587,7 +585,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
                 .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
                 .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
                 .scheduledTime(ride.getScheduledTime())
-                .availableSeats(ride.getMaxPassengers() - ride.getCurrentPassengers())
                 .totalFare(totalFare)
                 .earnedAmount(earnedAmount)
                 .estimatedDuration(estimatedTripMinutes)
@@ -621,7 +618,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         double maxDetourKm = rideConfig.getMatching().getMaxDetourKm();
         double detourScore = Math.max(0, 1.0 - (detour.distanceKm() / maxDetourKm));
 
-        boolean hasSeats = (ride.getMaxPassengers() - ride.getCurrentPassengers()) > 0;
         boolean withinDetourLimit = isDetourAcceptable(ride, detour.durationMinutes());
 
         MatchFeatures features = new MatchFeatures(
@@ -634,7 +630,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             detour.distanceKm(),
             detour.durationMinutes(),
             timeDiffMinutes,
-            hasSeats,
             withinDetourLimit,
             matchScore
         );
@@ -685,10 +680,6 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             positives.add("good driver rating");
         } else if (features.driverRatingScore() < 0.6) { // Below 3.0 stars
             concerns.add("low driver rating");
-        }
-
-        if (!features.hasAvailableSeats()) {
-            concerns.add("no available seats");
         }
 
         if (!features.withinDetourLimit()) {

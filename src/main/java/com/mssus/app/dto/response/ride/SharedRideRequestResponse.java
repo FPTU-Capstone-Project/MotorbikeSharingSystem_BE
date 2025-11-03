@@ -108,6 +108,10 @@ public class SharedRideRequestResponse {
     @Schema(description = "Polyline from driver's current location to pickup point", example = "abcdEfghIjklMnopQrstuVwxyz")
     private String polylineFromDriverToPickup;
 
+    @JsonProperty("route")
+    @Schema(description = "Associated route summary when a ride has been confirmed")
+    private RouteSummaryResponse route;
+
     @JsonProperty("created_at")
     @Schema(description = "Creation timestamp", example = "2025-10-04T16:00:00")
     private LocalDateTime createdAt;

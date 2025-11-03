@@ -47,20 +47,10 @@ public class TransactionResponse {
     @Schema(description = "Currency code", example = "VND")
     private String currency;
 
-    @Schema(description = "Booking ID (if applicable)", example = "456")
-    private Long bookingId;
+    @Schema(description = "Shared ride ID", example = "456")
+    private Long sharedRideId;
 
-    @Schema(description = "Rider user ID (if applicable)", example = "2")
-    private Integer riderUserId;
-
-    @Schema(description = "Rider username (if applicable)", example = "rider_user")
-    private String riderUsername;
-
-    @Schema(description = "Driver user ID (if applicable)", example = "3")
-    private Integer driverUserId;
-
-    @Schema(description = "Driver username (if applicable)", example = "driver_user")
-    private String driverUsername;
+    private Long sharedRideRequestId;
 
     @Schema(description = "Payment service provider reference", example = "MOMO123456")
     private String pspRef;

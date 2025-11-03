@@ -39,6 +39,7 @@
     <label>Pickup Location ID <input id="pickupLocationId" size="4"/></label>
     <label>Drop Location ID <input id="dropLocationId" value="12" size="4"/></label>
     <label>Desired Pickup (ISO) <input id="desiredPickup" size="20"/></label>
+    <label>Route ID <input id="routeId" value="2" size="4"/></label>
     <button id="generateQuote">Generate Quote</button>
     <button id="createAiBooking">Create AI Booking</button>
 </section>
@@ -224,6 +225,7 @@
             dropoff: {latitude: parseFloat($("dropLat").value), longitude: parseFloat($("dropLng").value)},
             pickupLocationId: parseInt($("pickupLocationId").value, 10),
             dropoffLocationId: parseInt($("dropLocationId").value, 10),
+            routeId: parseInt($("routeId").value, 10),
         };
         const {payload} = await api("/api/v1/quotes", "POST", body);
         if (payload?.id || payload?.quoteId) {
