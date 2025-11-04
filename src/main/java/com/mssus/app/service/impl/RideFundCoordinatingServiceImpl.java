@@ -121,7 +121,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             groupId, TransactionType.CAPTURE_FARE, TransactionDirection.OUT,
             ActorKind.USER, request.getRiderId(), null,
             settlementResult.riderPay().amount(), CURRENCY,
-            request.getRideId(), request.getRideRequestId(), null, TransactionStatus.SUCCESS,
+            request.getRideId(), null, null, TransactionStatus.SUCCESS,
             "Rider payment for ride " + request.getRideRequestId(),
             riderWalletBefore.getShadowBalance(), riderAfterAvail,
             riderWalletBefore.getPendingBalance(), riderAfterPending
@@ -131,7 +131,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             groupId, TransactionType.CAPTURE_FARE, TransactionDirection.IN,
             ActorKind.USER, request.getDriverId(), null,
             settlementResult.driverPayout().amount(), CURRENCY,
-            request.getRideId(), request.getRideRequestId(), null, TransactionStatus.SUCCESS,
+            request.getRideId(), null, null, TransactionStatus.SUCCESS,
             "Driver payout for ride " + request.getRideRequestId(),
             driverWalletBefore.getShadowBalance(), driverAfterAvail,
             driverWalletBefore.getPendingBalance(), driverAfterPending
@@ -141,7 +141,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             groupId, TransactionType.CAPTURE_FARE, TransactionDirection.IN,
             ActorKind.SYSTEM, null, SystemWallet.COMMISSION,
             settlementResult.commission().amount(), CURRENCY,
-            request.getRideId(), request.getRideRequestId(), null, TransactionStatus.SUCCESS,
+            request.getRideId(), null, null, TransactionStatus.SUCCESS,
             "Platform commission for ride " + request.getRideRequestId(),
             BigDecimal.ZERO, BigDecimal.ZERO,
             BigDecimal.ZERO, BigDecimal.ZERO

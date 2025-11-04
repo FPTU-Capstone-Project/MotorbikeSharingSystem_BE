@@ -1,8 +1,8 @@
 package com.mssus.app.service;
 
+import com.mssus.app.messaging.RideEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -10,11 +10,10 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class ApplicationEventPublisherService {
 
-    private final ApplicationEventPublisher eventPublisher;
+    private final RideEventPublisher rideEventPublisher;
 
     public void publishRideRequestCreatedEvent(Integer requestId) {
-        log.info("Publishing RideRequestCreatedEvent for request ID: {}", requestId);
-        RideRequestCreatedEvent event = new RideRequestCreatedEvent(this, requestId);
-        eventPublisher.publishEvent(event);
+        log.info("Dispatching ride.request.created for request ID: {}", requestId);
+        rideEventPublisher.publishRideRequestCreated(requestId);
     }
 }

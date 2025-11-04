@@ -540,6 +540,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             captureRequest.setRiderId(rideRequest.getRider().getRiderId());
             captureRequest.setRideRequestId(rideRequest.getSharedRideRequestId());
             captureRequest.setDriverId(driver.getDriverId());
+            captureRequest.setRideId(ride.getSharedRideId());
             captureRequest.setNote("Ride completion - Request #" + rideRequest.getSharedRideRequestId());
 
             requestSettledResponse = rideFundCoordinatingService.settleRideFunds(captureRequest, fareBreakdown);
@@ -889,7 +890,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             captureRequest.setRideRequestId(rideRequest.getSharedRideRequestId());
             captureRequest.setDriverId(driver.getDriverId());
             captureRequest.setNote("Ride auto-completion - Request #" + rideRequest.getSharedRideRequestId());
-
+            captureRequest.setRideId(ride.getSharedRideId());
             requestSettledResponse = rideFundCoordinatingService.settleRideFunds(captureRequest, fareBreakdown);
 
             rideRequest.setStatus(SharedRideRequestStatus.COMPLETED);

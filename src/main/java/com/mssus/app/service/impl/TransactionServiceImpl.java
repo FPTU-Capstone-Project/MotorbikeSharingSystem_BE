@@ -887,7 +887,7 @@ public class TransactionServiceImpl implements TransactionService {
         if (actorKind != ActorKind.SYSTEM && systemWallet != null) {
             throw new ValidationException("System wallet must be null for non-SYSTEM transactions");
         }
-        if (sharedRideId != null && TransactionType.CAPTURE_FARE == type) {
+        if (sharedRideId != null && TransactionType.CAPTURE_FARE != type) {
             throw new ValidationException("Shared ride ID can only be set for CAPTURE_FARE transactions");
         }
         if (sharedRideRequestId != null && !(TransactionType.HOLD_CREATE == type || TransactionType.HOLD_RELEASE == type) ) {

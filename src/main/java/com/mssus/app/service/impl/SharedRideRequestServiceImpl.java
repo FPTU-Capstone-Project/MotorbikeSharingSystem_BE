@@ -9,6 +9,7 @@ import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
+import com.mssus.app.infrastructure.config.properties.RideMessagingProperties;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
 import com.mssus.app.dto.domain.ride.AcceptRequestDto;
 import com.mssus.app.dto.domain.ride.BroadcastAcceptRequest;
@@ -26,9 +27,11 @@ import com.mssus.app.mapper.SharedRideRequestMapper;
 import com.mssus.app.service.domain.pricing.model.Quote;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
+import com.mssus.app.service.domain.matching.QueueRideMatchingOrchestrator;
 import com.mssus.app.service.domain.matching.RideMatchingCoordinator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -66,7 +69,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final QuoteService quoteService;
     private final RideMatchingService matchingService;
     private final RideConfigurationProperties rideConfig;
+    private final RideMessagingProperties rideMessagingProperties;
     private final RideMatchingCoordinator matchingCoordinator;
+    private final ObjectProvider<QueueRideMatchingOrchestrator> queueOrchestratorProvider;
     private final ApplicationEventPublisherService eventPublisherService;
     private final PricingConfigRepository pricingConfigRepository;
     private final NotificationService notificationService;
@@ -285,7 +290,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         log.info("Join ride request created - ID: {}, rider: {}, ride: {}, fare: {}, status: {}",
             savedRequest.getSharedRideRequestId(), rider.getRiderId(), rideId, fareAmount, savedRequest.getStatus());
 
-        matchingCoordinator.initiateRideJoining(savedRequest.getSharedRideRequestId());
+        // Publish event to MQ (if enabled) or use legacy coordinator
+        eventPublisherService.publishRideRequestCreatedEvent(savedRequest.getSharedRideRequestId());
+        
         notificationService.sendNotification(user,
             NotificationType.JOIN_RIDE_REQUEST_CREATED,
             "Join Ride Request Created",
@@ -354,11 +361,19 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 Map.of("currentState", rideRequest.getStatus()));
         }
 
-        boolean locked = matchingCoordinator.beginBroadcastAcceptance(requestId, driver.getDriverId());
-        if (!locked) {
-            throw BaseDomainException.of("ride.validation.request-invalid-state",
-                "Broadcast offer is no longer available or already processed");
+        boolean usingMqMode = rideMessagingProperties != null && 
+            rideMessagingProperties.isEnabled() && 
+            rideMessagingProperties.isMatchingEnabled();
+        
+        if (!usingMqMode) {
+            // Legacy mode: validate via in-memory coordinator
+            boolean locked = matchingCoordinator.beginBroadcastAcceptance(requestId, driver.getDriverId());
+            if (!locked) {
+                throw BaseDomainException.of("ride.validation.request-invalid-state",
+                    "Broadcast offer is no longer available or already processed");
+            }
         }
+        // MQ mode: validation happens in queue orchestrator
 
         try {
 
@@ -446,7 +461,18 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 .estimatedDropoffTime(estimatedDropoffTime)
                 .build();
 
-            matchingCoordinator.completeBroadcastAcceptance(requestId, proposal);
+            if (usingMqMode) {
+                // MQ mode: only publish to queue orchestrator
+                queueOrchestratorProvider.ifAvailable(orchestrator ->
+                    orchestrator.publishDriverResponse(
+                        requestId,
+                        driver.getDriverId(),
+                        savedRide.getSharedRideId(),
+                        true));
+            } else {
+                // Legacy mode: use in-memory coordinator
+                matchingCoordinator.completeBroadcastAcceptance(requestId, proposal);
+            }
 
             log.info("Broadcast request {} accepted by driver {} - new ride {}",
                 requestId, driver.getDriverId(), savedRide.getSharedRideId());
@@ -462,7 +488,11 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
             return buildRequestResponse(rideRequest, polylineFromDriverToPickup);
         } catch (RuntimeException ex) {
-            matchingCoordinator.failBroadcastAcceptance(requestId, ex.getMessage());
+            if (!usingMqMode) {
+                // Legacy mode: notify coordinator of failure
+                matchingCoordinator.failBroadcastAcceptance(requestId, ex.getMessage());
+            }
+            // MQ mode: failure is handled by transaction rollback and timeout
             throw ex;
         }
     }
@@ -588,27 +618,37 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
 
         boolean trackingAcceptance = false;
-        if (request.getRequestKind() == RequestKind.BOOKING) {
-            boolean accepted = matchingCoordinator.beginDriverAcceptance(
-                requestId,
-                acceptDto.rideId(),
-                driver.getDriverId());
+        boolean usingMqMode = rideMessagingProperties != null && 
+            rideMessagingProperties.isEnabled() && 
+            rideMessagingProperties.isMatchingEnabled();
+        
+        if (!usingMqMode) {
+            // Legacy mode: validate via in-memory coordinator
+            if (request.getRequestKind() == RequestKind.BOOKING) {
+                boolean accepted = matchingCoordinator.beginDriverAcceptance(
+                    requestId,
+                    acceptDto.rideId(),
+                    driver.getDriverId());
 
-            if (!accepted) {
-                throw BaseDomainException.of("ride.validation.request-invalid-state",
-                    "Ride offer is no longer available or already processed");
-            }
-            trackingAcceptance = true;
-        } else if (request.getRequestKind() == RequestKind.JOIN_RIDE) {
-            boolean accepted = matchingCoordinator.beginJoinAcceptance(
-                requestId,
-                acceptDto.rideId(),
-                driver.getDriverId());
+                if (!accepted) {
+                    throw BaseDomainException.of("ride.validation.request-invalid-state",
+                        "Ride offer is no longer available or already processed");
+                }
+                trackingAcceptance = true;
+            } else if (request.getRequestKind() == RequestKind.JOIN_RIDE) {
+                boolean accepted = matchingCoordinator.beginJoinAcceptance(
+                    requestId,
+                    acceptDto.rideId(),
+                    driver.getDriverId());
 
-            if (!accepted) {
-                throw BaseDomainException.of("ride.validation.request-invalid-state",
-                    "Ride offer is no longer available or already processed");
+                if (!accepted) {
+                    throw BaseDomainException.of("ride.validation.request-invalid-state",
+                        "Ride offer is no longer available or already processed");
+                }
+                trackingAcceptance = true;
             }
+        } else {
+            // MQ mode: validation happens in queue orchestrator
             trackingAcceptance = true;
         }
 
@@ -642,16 +682,29 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             log.info("Request {} accepted successfully for ride {}", requestId, acceptDto.rideId());
 
             if (trackingAcceptance) {
-                matchingCoordinator.completeDriverAcceptance(requestId);
+                if (usingMqMode) {
+                    // MQ mode: only publish to queue orchestrator
+                    queueOrchestratorProvider.ifAvailable(orchestrator ->
+                        orchestrator.publishDriverResponse(
+                            requestId,
+                            driver.getDriverId(),
+                            acceptDto.rideId(),
+                            false));
+                } else {
+                    // Legacy mode: use in-memory coordinator
+                    matchingCoordinator.completeDriverAcceptance(requestId);
+                }
             }
 
             ride.setSharedRideRequest(request);
             rideRepository.save(ride);
 
         } catch (RuntimeException e) {
-            if (trackingAcceptance) {
+            if (trackingAcceptance && !usingMqMode) {
+                // Legacy mode: notify coordinator of failure
                 matchingCoordinator.failDriverAcceptance(requestId, e.getMessage());
             }
+            // MQ mode: failure is handled by transaction rollback and timeout
             throw e;
         }
 
@@ -739,6 +792,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         if (request.getRequestKind() == RequestKind.BOOKING &&
             request.getStatus() == SharedRideRequestStatus.PENDING) {
             matchingCoordinator.cancelMatching(requestId);
+            queueOrchestratorProvider.ifAvailable(orchestrator -> orchestrator.publishCancellation(requestId));
         }
 
         // Calculate cancellation fee if CONFIRMED

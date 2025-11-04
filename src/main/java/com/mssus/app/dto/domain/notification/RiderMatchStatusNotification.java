@@ -3,6 +3,7 @@ package com.mssus.app.dto.domain.notification;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
  */
 @Value
 @Builder
+@Jacksonized
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RiderMatchStatusNotification {
     Integer requestId;
