@@ -1,19 +1,23 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.MessageType;
 import com.mssus.app.dto.request.chat.SendMessageRequest;
 import com.mssus.app.dto.response.chat.ConversationSummary;
 import com.mssus.app.dto.response.chat.MessageResponse;
 import com.mssus.app.entity.*;
 import com.mssus.app.repository.*;
+import com.mssus.app.service.FileUploadService;
 import com.mssus.app.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +29,7 @@ public class MessageServiceImpl implements MessageService {
     private final UserRepository userRepository;
     private final SharedRideRequestRepository sharedRideRequestRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final FileUploadService fileUploadService;
 
     private static final String CHAT_QUEUE = "/queue/chat";
 
@@ -215,6 +220,34 @@ public class MessageServiceImpl implements MessageService {
         log.debug("Found user ID: {} for email: {}", userId, userEmail);
 
         return messageRepository.countUnreadMessagesByReceiverId(userId);
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse uploadChatImage(String senderEmail, MultipartFile file, Integer receiverId, Integer rideRequestId) {
+        log.info("Uploading chat image from user email: {} to user ID: {}", senderEmail, receiverId);
+
+        try {
+            // Upload file to Cloudinary
+            CompletableFuture<String> uploadFuture = fileUploadService.uploadFile(file);
+            String imageUrl = uploadFuture.get(); // Wait for upload to complete
+            log.info("Image uploaded successfully: {}", imageUrl);
+
+            // Create and send IMAGE type message
+            SendMessageRequest messageRequest = SendMessageRequest.builder()
+                    .receiverId(receiverId)
+                    .rideRequestId(rideRequestId)
+                    .messageType(MessageType.IMAGE)
+                    .content(imageUrl)
+                    .metadata("{\"originalFilename\":\"" + file.getOriginalFilename() + "\"}")
+                    .build();
+
+            return sendMessage(senderEmail, messageRequest);
+            
+        } catch (Exception e) {
+            log.error("Error uploading chat image", e);
+            throw new RuntimeException("Failed to upload chat image", e);
+        }
     }
 
     @Override

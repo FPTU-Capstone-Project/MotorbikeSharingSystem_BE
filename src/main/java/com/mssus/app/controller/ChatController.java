@@ -16,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.util.List;
@@ -103,6 +104,32 @@ public class ChatController {
         String userId = userDetails.getUsername();
         Long count = messageService.getUnreadMessageCount(userId);
         return ResponseEntity.ok(count);
+    }
+
+    /**
+     * REST: Upload image for chat
+     */
+    @PostMapping("/api/v1/chat/upload-image")
+    @ResponseBody
+    public ResponseEntity<MessageResponse> uploadChatImage(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("receiverId") Integer receiverId,
+            @RequestParam("rideRequestId") Integer rideRequestId
+    ) {
+        try {
+            log.info("REST: Uploading chat image from user {}", userDetails.getUsername());
+            MessageResponse response = messageService.uploadChatImage(
+                    userDetails.getUsername(),
+                    file,
+                    receiverId,
+                    rideRequestId
+            );
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("REST: Error uploading chat image", e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     // ========== WebSocket Endpoints ==========

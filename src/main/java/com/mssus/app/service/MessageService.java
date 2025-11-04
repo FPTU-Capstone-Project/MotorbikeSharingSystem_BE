@@ -3,6 +3,7 @@ package com.mssus.app.service;
 import com.mssus.app.dto.request.chat.SendMessageRequest;
 import com.mssus.app.dto.response.chat.ConversationSummary;
 import com.mssus.app.dto.response.chat.MessageResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -44,6 +45,16 @@ public interface MessageService {
      * @return Count of unread messages
      */
     Long getUnreadMessageCount(String userEmail);
+    
+    /**
+     * Upload an image and send it as a chat message
+     * @param senderEmail Email of the sender (from JWT token)
+     * @param file The image file to upload
+     * @param receiverId The receiver's user ID
+     * @param rideRequestId The ride request ID
+     * @return MessageResponse with the image message
+     */
+    MessageResponse uploadChatImage(String senderEmail, MultipartFile file, Integer receiverId, Integer rideRequestId);
     
     /**
      * Generate conversation ID from ride request and participants
