@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -33,12 +34,24 @@ import java.util.List;
 public class ProfileController {
     private final ProfileService profileService;
 
-    @PutMapping
-    public ResponseEntity<UserProfileResponse> updateProfile(
+    @Operation(summary = "Update My Profile", description = "User updates their own profile information",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Profile updated successfully",
+            content = @Content(schema = @Schema(implementation = UserProfileResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid input data",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "409", description = "Phone or Student ID already exists",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PutMapping("/profile")
+    public ResponseEntity<UserProfileResponse> updateMyProfile(
         Authentication authentication,
         @Valid @RequestBody UpdateProfileRequest request) {
         String username = authentication.getName();
-        UserProfileResponse response = profileService.updateProfile(username, request);
+        UserProfileResponse response = profileService.updateMyProfile(username, request);
         return ResponseEntity.ok(response);
     }
 
@@ -105,7 +118,7 @@ public class ProfileController {
         @ApiResponse(responseCode = "401", description = "Unauthorized",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PutMapping(value = "/update-avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequestMapping(value = "/update-avatar", method = {RequestMethod.PUT, RequestMethod.POST}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<MessageResponse> updateAvatar(
         Authentication authentication,
         @Parameter(description = "Avatar image file", required = true)

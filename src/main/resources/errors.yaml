@@ -146,6 +146,16 @@ errors:
     owner: user-team
     remediation: "Choose a different phone"
 
+  - id: user.conflict.student-id-exists
+    httpStatus: 409
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Mã số sinh viên đã tồn tại. Vui lòng sử dụng mã số khác."
+    domain: user
+    category: conflict
+    owner: user-team
+    remediation: "Choose a different student ID"
+
   - id: user.validation.invalid-email
     httpStatus: 400
     severity: WARN

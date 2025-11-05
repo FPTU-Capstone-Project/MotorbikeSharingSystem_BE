@@ -34,4 +34,8 @@ public class UpdateProfileRequest {
 
     @Schema(description = "Emergency contact", example = "+84909999888")
     private String emergencyContact;
+
+    @Size(min = 3, max = 32, message = "Student ID must be between 3 and 32 characters")
+    @Schema(description = "Student ID (MSSV)", example = "SE123456")
+    private String studentId;
 }
