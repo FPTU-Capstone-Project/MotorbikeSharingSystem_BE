@@ -1,5 +1,6 @@
 package com.mssus.app.repository;
 
+import com.mssus.app.common.enums.VehicleStatus;
 import com.mssus.app.entity.Vehicle;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,4 +24,19 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
 
     @Query("SELECT v FROM Vehicle v JOIN FETCH v.driver WHERE v.vehicleId = :vehicleId")
     Optional<Vehicle> findByIdWithDriver(@Param("vehicleId") Integer vehicleId);
+
+    /**
+     * Finds the primary/active vehicle for a driver.
+     * Returns the first ACTIVE vehicle, or if none exists, returns the first vehicle for that driver.
+     * This ensures a unique result even when a driver has multiple vehicles.
+     */
+    @Query("SELECT v FROM Vehicle v JOIN FETCH v.driver d WHERE d.driverId = :driverId " +
+           "ORDER BY CASE WHEN v.status = :activeStatus THEN 0 ELSE 1 END, v.createdAt ASC")
+    List<Vehicle> findVehiclesByDriverIdOrdered(@Param("driverId") Integer driverId, 
+                                                 @Param("activeStatus") VehicleStatus activeStatus);
+
+    default Optional<Vehicle> findPrimaryVehicleByDriverId(Integer driverId) {
+        List<Vehicle> vehicles = findVehiclesByDriverIdOrdered(driverId, VehicleStatus.ACTIVE);
+        return vehicles.isEmpty() ? Optional.empty() : Optional.of(vehicles.get(0));
+    }
 }

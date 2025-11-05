@@ -166,6 +166,16 @@ errors:
     owner: user-team
     remediation: "Password must be at least 8 characters with mixed case, numbers, and symbols"
 
+  - id: user.validation.old-password-incorrect
+    httpStatus: 400
+    severity: WARN
+    isRetryable: false
+    messageTemplate: "Mật khẩu cũ không đúng. Vui lòng kiểm tra và thử lại."
+    domain: user
+    category: validation
+    owner: user-team
+    remediation: "Re-enter your current password correctly"
+
   - id: user.validation.profile-not-exists
     httpStatus: 400
     severity: WARN

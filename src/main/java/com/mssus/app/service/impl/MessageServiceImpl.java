@@ -63,7 +63,7 @@ public class MessageServiceImpl implements MessageService {
                 .receiverId(request.getReceiverId())
                 .sharedRideRequest(rideRequest)
                 .conversationId(conversationId)
-                .messageType(request.getMessageType())
+                .messageType(MessageType.valueOf(request.getMessageType().name()))
                 .content(request.getContent())
                 .metadata(request.getMetadata())
                 .isRead(false)

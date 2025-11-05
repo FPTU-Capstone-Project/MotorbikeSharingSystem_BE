@@ -72,7 +72,7 @@ public class SharedRideServiceImpl implements SharedRideService {
         DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
 
-        Vehicle vehicle = vehicleRepository.findByDriver_DriverId(driver.getDriverId())
+        Vehicle vehicle = vehicleRepository.findPrimaryVehicleByDriverId(driver.getDriverId())
             .orElseThrow(() -> BaseDomainException.formatted("ride.validation.vehicle-not-found"));
 
         if (!vehicle.getDriver().getDriverId().equals(driver.getDriverId())) {
