@@ -20,8 +20,9 @@ public class SharedRide {
     @Column(name = "shared_ride_id")
     private Integer sharedRideId;
 
-    @OneToMany(mappedBy = "sharedRide", fetch = FetchType.LAZY)
-    private List<SharedRideRequest> rideRequests;
+    @OneToOne
+    @JoinColumn(name = "shared_ride_request_id", referencedColumnName = "shared_ride_request_id", nullable = true)
+    private SharedRideRequest sharedRideRequest;
 
     @ManyToOne
     @JoinColumn(name = "driver_id", nullable = false)
@@ -39,33 +40,13 @@ public class SharedRide {
     @JoinColumn(name = "end_location_id", nullable = false)
     private Location endLocation;
 
-//    @Column(name = "start_location_id", nullable = false)
-//    private Integer startLocationId;
-//
-//    @Column(name = "end_location_id", nullable = false)
-//    private Integer endLocationId;
-
-//    @Column(name = "start_lat", nullable = false)
-//    private double startLat;
-//
-//    @Column(name = "start_lng", nullable = false)
-//    private double startLng;
-//
-//    @Column(name = "end_lat", nullable = false)
-//    private double endLat;
-//
-//    @Column(name = "end_lng", nullable = false)
-//    private double endLng;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "route_id")
+    private Route route;
 
     @Column(name = "status", length = 50)
     @Enumerated(EnumType.STRING)
     private SharedRideStatus status;
-
-    @Column(name = "max_passengers")
-    private Integer maxPassengers;
-
-    @Column(name = "current_passengers")
-    private Integer currentPassengers;
 
     @ManyToOne
     @JoinColumn(name = "pricing_config_id", nullable = false)

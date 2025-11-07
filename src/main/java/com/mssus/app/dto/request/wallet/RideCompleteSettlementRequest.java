@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class RideCompleteSettlementRequest {
     private Integer riderId;
     private Integer rideRequestId;
+    private Integer rideId;
     private Integer driverId;
     private String note;
 }

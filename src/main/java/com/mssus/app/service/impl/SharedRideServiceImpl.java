@@ -59,6 +59,7 @@ public class SharedRideServiceImpl implements SharedRideService {
     private final RideFundCoordinatingService rideFundCoordinatingService;
     private final LocationMapper locationMapper;
     private final RideConfigurationProperties rideConfig;
+    private final RouteAssignmentService routeAssignmentService;
 
 
     @Override
@@ -120,23 +121,28 @@ public class SharedRideServiceImpl implements SharedRideService {
             log.info("Route validated - distance: {} m, duration: {} s",
                 routeResponse.distance(), routeResponse.time());
 
+            Route resolvedRoute = routeAssignmentService.resolveRoute(
+                request.routeId(), startLoc, endLoc,
+                routeResponse != null ? routeResponse.polyline() : null);
+
             SharedRide ride = new SharedRide();
             ride.setDriver(driver);
             ride.setVehicle(vehicle);
             ride.setStartLocation(startLoc);
             ride.setEndLocation(endLoc);
+            ride.setRoute(resolvedRoute);
             ride.setPricingConfig(pricingConfig);
             ride.setStatus(request.scheduledDepartureTime() != null
                 ? SharedRideStatus.SCHEDULED
                 : SharedRideStatus.ONGOING
             );
-            ride.setMaxPassengers(1);
-            ride.setCurrentPassengers(0);
             ride.setScheduledTime(request.scheduledDepartureTime() != null
                 ? request.scheduledDepartureTime()
                 : LocalDateTime.now());
-            ride.setEstimatedDuration((int) Math.ceil(routeResponse.time() / 60.0)); // in minutes
-            ride.setEstimatedDistance((float) routeResponse.distance() / 1000); // in km
+            if (routeResponse != null) {
+                ride.setEstimatedDuration((int) Math.ceil(routeResponse.time() / 60.0)); // in minutes
+                ride.setEstimatedDistance((float) routeResponse.distance() / 1000); // in km
+            }
             ride.setCreatedAt(LocalDateTime.now());
             ride.setStartedAt(request.scheduledDepartureTime() == null
                 ? LocalDateTime.now()
@@ -534,6 +540,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             captureRequest.setRiderId(rideRequest.getRider().getRiderId());
             captureRequest.setRideRequestId(rideRequest.getSharedRideRequestId());
             captureRequest.setDriverId(driver.getDriverId());
+            captureRequest.setRideId(ride.getSharedRideId());
             captureRequest.setNote("Ride completion - Request #" + rideRequest.getSharedRideRequestId());
 
             requestSettledResponse = rideFundCoordinatingService.settleRideFunds(captureRequest, fareBreakdown);
@@ -883,7 +890,7 @@ public class SharedRideServiceImpl implements SharedRideService {
             captureRequest.setRideRequestId(rideRequest.getSharedRideRequestId());
             captureRequest.setDriverId(driver.getDriverId());
             captureRequest.setNote("Ride auto-completion - Request #" + rideRequest.getSharedRideRequestId());
-
+            captureRequest.setRideId(ride.getSharedRideId());
             requestSettledResponse = rideFundCoordinatingService.settleRideFunds(captureRequest, fareBreakdown);
 
             rideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
@@ -921,7 +928,17 @@ public class SharedRideServiceImpl implements SharedRideService {
 //            response.setEndLocationName(endLoc.getName());
 //        }
 
-        return rideMapper.toResponse(ride);
+        SharedRideResponse response = rideMapper.toResponse(ride);
+
+        if (ride.getStartLocation() != null) {
+            response.setStartLocation(locationMapper.toResponse(ride.getStartLocation()));
+        }
+        if (ride.getEndLocation() != null) {
+            response.setEndLocation(locationMapper.toResponse(ride.getEndLocation()));
+        }
+        response.setRoute(toRouteSummary(ride.getRoute()));
+
+        return response;
     }
 
     private Location findOrCreateLocation(Integer locationId, LatLng latLng, String pointType) {
@@ -956,5 +973,20 @@ public class SharedRideServiceImpl implements SharedRideService {
         }
 
         throw BaseDomainException.of("ride.validation.invalid-location", "Either " + pointType.toLowerCase() + "LocationId or " + pointType.toLowerCase() + "LatLng must be provided");
+    }
+
+    private RouteSummaryResponse toRouteSummary(Route route) {
+        if (route == null) {
+            return null;
+        }
+        return RouteSummaryResponse.builder()
+            .routeId(route.getRouteId())
+            .name(route.getName())
+            .routeType(route.getRouteType() != null ? route.getRouteType().name() : null)
+            .defaultPrice(route.getDefaultPrice())
+            .polyline(route.getPolyline())
+            .validFrom(route.getValidFrom())
+            .validUntil(route.getValidUntil())
+            .build();
     }
 }

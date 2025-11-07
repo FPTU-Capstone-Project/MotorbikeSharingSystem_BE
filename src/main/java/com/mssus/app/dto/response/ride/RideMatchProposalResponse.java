@@ -53,10 +53,6 @@ public class RideMatchProposalResponse {
     @Schema(description = "Ride scheduled departure time", example = "2025-10-05T08:00:00")
     private LocalDateTime scheduledTime;
 
-    @JsonProperty("available_seats")
-    @Schema(description = "Available seats", example = "1")
-    private Integer availableSeats;
-
     @JsonProperty("estimated_fare")
     @Schema(description = "Total fare for this match", example = "25000.00")
     private BigDecimal totalFare;

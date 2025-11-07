@@ -36,7 +36,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
 
     List<Transaction> findByGroupIdAndStatus(java.util.UUID groupId, TransactionStatus status);
 
-    @Query("SELECT t FROM Transaction t WHERE (t.actorUser.userId = :userId OR t.riderUser.userId = :userId OR t.driverUser.userId = :userId) "
+    @Query("SELECT t FROM Transaction t WHERE (t.actorUser.userId = :userId)"
             + "AND (:type IS NULL OR t.type = :type) "
             + "AND (:status IS NULL OR t.status = :status)")
     Page<Transaction> findUserHistory(@Param("userId") Integer userId,

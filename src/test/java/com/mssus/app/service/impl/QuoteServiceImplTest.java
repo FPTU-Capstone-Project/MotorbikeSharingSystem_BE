@@ -70,7 +70,8 @@ class QuoteServiceImplTest {
             createLatLng(FPTU_LAT, FPTU_LNG),
             createLatLng(SCH_LAT, SCH_LNG),
             1,
-            2
+            2,
+            null
         );
         int userId = 42;
         Location fptLocation = createLocation(1, "FPT University", FPTU_LAT, FPTU_LNG);
@@ -124,6 +125,7 @@ class QuoteServiceImplTest {
             createLatLng(FPTU_LAT, FPTU_LNG),
             createLatLng(SCH_LAT, SCH_LNG),
             null,
+            null,
             null
         );
         doReturn(Optional.empty()).when(locationRepository).findByLatAndLng(FPTU_LAT, FPTU_LNG);
@@ -142,7 +144,7 @@ class QuoteServiceImplTest {
     void should_throwDomainException_when_pickupEqualsDropoff() {
         stubCampusLocations();
         LatLng samePoint = createLatLng(10.85, 106.81);
-        QuoteRequest request = new QuoteRequest(samePoint, samePoint, null, null);
+        QuoteRequest request = new QuoteRequest(samePoint, samePoint, null, null, null);
 
         assertThatThrownBy(() -> quoteService.generateQuote(request, 7))
             .isInstanceOf(BaseDomainException.class)
@@ -158,7 +160,7 @@ class QuoteServiceImplTest {
     @MethodSource("outsideServiceAreaProvider")
     void should_throwDomainException_when_pickupOrDropoffOutsideServiceArea(LatLng pickup, LatLng dropoff, String scenario) {
         stubCampusLocations();
-        QuoteRequest request = new QuoteRequest(pickup, dropoff, null, null);
+        QuoteRequest request = new QuoteRequest(pickup, dropoff, null, null, null);
 
         assertThatThrownBy(() -> quoteService.generateQuote(request, 9))
             .as(scenario)

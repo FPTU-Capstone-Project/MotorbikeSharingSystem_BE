@@ -15,4 +15,7 @@ public record QuoteRequest(
 
     @Positive(message = "Dropoff location ID must be positive")
     @Schema(description = "Dropoff location ID along the route", example = "6")
-    Integer dropoffLocationId) {}
+    Integer dropoffLocationId,
+
+    @Schema(description = "Optional predefined route to use", example = "12")
+    Integer routeId) {}

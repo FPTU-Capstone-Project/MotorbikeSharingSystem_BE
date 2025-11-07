@@ -6,13 +6,9 @@ import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.dto.request.CreateTransactionRequest;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.wallet.TransactionResponse;
-import com.mssus.app.entity.Transaction;
-import com.mssus.app.entity.User;
-import com.mssus.app.entity.Wallet;
+import com.mssus.app.entity.*;
 import com.mssus.app.mapper.TransactionMapper;
-import com.mssus.app.repository.TransactionRepository;
-import com.mssus.app.repository.UserRepository;
-import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.repository.*;
 import com.mssus.app.service.EmailService;
 import org.springframework.security.core.Authentication;
 import com.mssus.app.common.enums.TransactionType;
@@ -43,6 +39,8 @@ public class TransactionServiceImpl implements TransactionService {
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
     private final TransactionMapper transactionMapper;
+    private final SharedRideRepository sharedRideRepository;
+    private final SharedRideRequestRepository sharedRideRequestRepository;
 
     public UUID generateGroupId() {
         return UUID.randomUUID();
@@ -84,7 +82,6 @@ public class TransactionServiceImpl implements TransactionService {
                 .direction(TransactionDirection.IN)
                 .actorKind(ActorKind.USER)
                 .actorUser(user)
-                .riderUser(user)
                 .amount(amount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
@@ -205,10 +202,9 @@ public class TransactionServiceImpl implements TransactionService {
         BigDecimal amount = request.amount();
         String currency = request.currency();
         UUID groupId = request.groupId();
-        Integer bookingId = request.bookingId();
-        Integer riderUserId = request.riderUserId();
-        Integer driverUserId = request.driverUserId();
         String pspRef = request.pspRef();
+        Integer sharedRideId = request.sharedRideId();
+        Integer sharedRideRequestId = request.sharedRideRequestId();
         TransactionStatus status = request.status();
         String note = request.note();
         BigDecimal beforeAvail = request.beforeAvail();
@@ -218,10 +214,6 @@ public class TransactionServiceImpl implements TransactionService {
 
         validateCreateTransactionRequest(request);
         User actorUser = null;
-        User riderUser = (riderUserId != null) ? userRepository.findById(riderUserId)
-            .orElseThrow(() -> new NotFoundException("Rider user not found: " + riderUserId)) : null;
-        User driverUser = (driverUserId != null) ? userRepository.findById(driverUserId)
-            .orElseThrow(() -> new NotFoundException("Driver user not found: " + driverUserId)) : null;
 
         if (actorKind == ActorKind.USER) {
             actorUser = userRepository.findById(actorUserId)
@@ -237,6 +229,19 @@ public class TransactionServiceImpl implements TransactionService {
             afterPending = null;
         }
 
+        SharedRide sharedRide = null;
+        SharedRideRequest sharedRideRequest = null;
+
+        if (sharedRideId != null) {
+            sharedRide = sharedRideRepository.findById(sharedRideId)
+                .orElseThrow(() -> new NotFoundException("Shared ride not found: " + sharedRideId));
+        }
+
+        if (sharedRideRequestId != null) {
+            sharedRideRequest = sharedRideRequestRepository.findById(sharedRideRequestId)
+                .orElseThrow(() -> new NotFoundException("Shared ride request not found: " + sharedRideRequestId));
+        }
+
         Transaction transaction = Transaction.builder()
             .groupId(groupId)
             .type(type)
@@ -246,9 +251,8 @@ public class TransactionServiceImpl implements TransactionService {
             .systemWallet(systemWallet)
             .amount(amount)
             .currency(currency)
-            .bookingId(bookingId)
-            .riderUser(riderUser)
-            .driverUser(driverUser)
+            .sharedRide(sharedRide)
+            .sharedRideRequest(sharedRideRequest)
             .pspRef(pspRef)
             .status(status)
             .beforeAvail(beforeAvail)
@@ -521,7 +525,6 @@ public class TransactionServiceImpl implements TransactionService {
                 .groupId(groupId)
                 .direction(TransactionDirection.OUT)
                 .actorKind(ActorKind.SYSTEM)
-                .driverUser(driver)
                 .amount(amount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
@@ -562,11 +565,6 @@ public class TransactionServiceImpl implements TransactionService {
         for (Transaction txn : transactions) {
             txn.setStatus(TransactionStatus.SUCCESS);
 
-            if (txn.getDriverUser() != null) {
-                driverId = txn.getDriverUser().getUserId();
-                amount = txn.getAmount();
-            }
-
             transactionRepository.save(txn);
         }
 
@@ -599,11 +597,6 @@ public class TransactionServiceImpl implements TransactionService {
         for (Transaction txn : transactions) {
             txn.setStatus(TransactionStatus.FAILED);
             txn.setNote(txn.getNote() + " - Failed: " + reason);
-
-            if (txn.getDriverUser() != null) {
-                driverId = txn.getDriverUser().getUserId();
-                amount = txn.getAmount();
-            }
 
             transactionRepository.save(txn);
         }
@@ -648,7 +641,6 @@ public class TransactionServiceImpl implements TransactionService {
                 .direction(TransactionDirection.IN)
                 .actorKind(ActorKind.USER)
                 .actorUser(rider.getRiderProfile().getUser())
-                .riderUser(rider)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.SUCCESS)
@@ -666,7 +658,6 @@ public class TransactionServiceImpl implements TransactionService {
                 .direction(TransactionDirection.OUT)
                 .actorKind(ActorKind.USER)
                 .actorUser(driver.getDriverProfile().getUser())
-                .driverUser(driver)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.SUCCESS)
@@ -865,11 +856,9 @@ public class TransactionServiceImpl implements TransactionService {
         Integer actorUserId = request.actorUserId();
         SystemWallet systemWallet = request.systemWallet();
         BigDecimal amount = request.amount();
-        String currency = request.currency();
-        Integer bookingId = request.bookingId();
-        Integer riderUserId = request.riderUserId();
-        Integer driverUserId = request.driverUserId();
         TransactionStatus status = request.status();
+        Integer sharedRideId = request.sharedRideId();
+        Integer sharedRideRequestId = request.sharedRideRequestId();
 
         if (type == null) {
             throw new ValidationException("Transaction type is required");
@@ -898,17 +887,18 @@ public class TransactionServiceImpl implements TransactionService {
         if (actorKind != ActorKind.SYSTEM && systemWallet != null) {
             throw new ValidationException("System wallet must be null for non-SYSTEM transactions");
         }
-
-        if ((type == TransactionType.HOLD_CREATE || type == TransactionType.HOLD_RELEASE ||
-            type == TransactionType.CAPTURE_FARE) && bookingId == null) {
-            throw new ValidationException("Booking ID is required for ride-related transactions: " + type);
+        if (sharedRideId != null && TransactionType.CAPTURE_FARE != type) {
+            throw new ValidationException("Shared ride ID can only be set for CAPTURE_FARE transactions");
+        }
+        if (sharedRideRequestId != null && !(TransactionType.HOLD_CREATE == type || TransactionType.HOLD_RELEASE == type) ) {
+            throw new ValidationException("Shared ride request ID can only be set for HOLD_CREATE or HOLD_RELEASE transactions");
         }
 
         validateTypeCombo(type, direction, actorKind, systemWallet);
 
-        if (type == TransactionType.CAPTURE_FARE) {
-            validateCaptureFareAlignment(direction, actorKind, systemWallet, actorUserId, riderUserId, driverUserId);
-        }
+//        if (type == TransactionType.CAPTURE_FARE) {
+//            validateCaptureFareAlignment(direction, actorKind, systemWallet, actorUserId, riderUserId, driverUserId);
+//        }
 
         validateStatusByType(type, status);
     }
@@ -956,23 +946,22 @@ public class TransactionServiceImpl implements TransactionService {
         }
     }
 
-    private void validateCaptureFareAlignment(TransactionDirection direction, ActorKind actorKind,
-                                              SystemWallet systemWallet, Integer actorUserId,
-                                              Integer riderUserId, Integer driverUserId) {
-        if (actorKind == ActorKind.USER && direction == TransactionDirection.OUT) {
-            if (riderUserId == null || !riderUserId.equals(actorUserId)) {
-                throw new ValidationException("For CAPTURE_FARE OUT transactions, actor user must be the rider");
-            }
-        } else if (actorKind == ActorKind.USER && direction == TransactionDirection.IN) {
-            if (driverUserId == null || !driverUserId.equals(actorUserId)) {
-                throw new ValidationException("For CAPTURE_FARE IN transactions, actor user must be the driver");
-            }
-        } else if (actorKind == ActorKind.SYSTEM && direction == TransactionDirection.IN) {
-            if (systemWallet != SystemWallet.COMMISSION) {
-                throw new ValidationException("For CAPTURE_FARE SYSTEM IN transactions, must use COMMISSION wallet");
-            }
-        }
-    }
+//    private void validateCaptureFareAlignment(TransactionDirection direction, ActorKind actorKind,
+//                                              SystemWallet systemWallet, Integer actorUserId) {
+//        if (actorKind == ActorKind.USER && direction == TransactionDirection.OUT) {
+//            if (riderUserId == null || !riderUserId.equals(actorUserId)) {
+//                throw new ValidationException("For CAPTURE_FARE OUT transactions, actor user must be the rider");
+//            }
+//        } else if (actorKind == ActorKind.USER && direction == TransactionDirection.IN) {
+//            if (driverUserId == null || !driverUserId.equals(actorUserId)) {
+//                throw new ValidationException("For CAPTURE_FARE IN transactions, actor user must be the driver");
+//            }
+//        } else if (actorKind == ActorKind.SYSTEM && direction == TransactionDirection.IN) {
+//            if (systemWallet != SystemWallet.COMMISSION) {
+//                throw new ValidationException("For CAPTURE_FARE SYSTEM IN transactions, must use COMMISSION wallet");
+//            }
+//        }
+//    }
 
     private void validateStatusByType(TransactionType type, TransactionStatus status) {
         if (status == null) {

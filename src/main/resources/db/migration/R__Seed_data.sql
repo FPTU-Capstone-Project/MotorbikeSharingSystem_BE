@@ -93,7 +93,7 @@ SELECT user_id, 12, 432000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'tran.thi.b@student.hcmut.edu.vn'
 UNION ALL
-SELECT user_id,  35, 1120000.00, 'ACTIVE', 'WALLET', NOW()
+SELECT user_id, 35, 1120000.00, 'ACTIVE', 'WALLET', NOW()
 FROM users
 WHERE email = 'le.van.c@student.hcmut.edu.vn'
 UNION ALL
@@ -530,7 +530,8 @@ VALUES ('HCMUT2024', 'HCMUT Student Discount', 'Special discount for HCMUT stude
 -- =====================================================
 
 -- Admin user
-INSERT INTO users ( email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified, created_at, updated_at, token_version)
+INSERT INTO users (email, phone, password_hash, full_name, user_type, status, email_verified, phone_verified,
+                   created_at, updated_at, token_version)
 VALUES ('admin@mssus.com',
         '0900000001',
         '$2a$10$BaeiCK1yapOvw.WrcaGb1OqHVOqqSD4TkEAvhHThm.F85BvxYH7ru', -- password: Password1!
@@ -545,7 +546,8 @@ VALUES ('admin@mssus.com',
 ON CONFLICT (email) DO NOTHING;
 
 -- Ordinary user (John Doe)
-INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified, created_at, updated_at,
+INSERT INTO users (email, phone, password_hash, full_name, student_id, user_type, status, email_verified, created_at,
+                   updated_at,
                    phone_verified, token_version)
 VALUES ('john.doe@example.com',
         '0987654321',
@@ -587,8 +589,7 @@ VALUES ('driver1@example.com',
         true,
         NOW(),
         NOW(),
-        1
-       )
+        1)
 ON CONFLICT (email) DO NOTHING;
 
 -- Rider profile for Driver 1
@@ -719,7 +720,6 @@ INTO transactions (type,
                    direction,
                    actor_kind,
                    actor_user_id,
-                   rider_user_id,
                    amount,
                    currency,
                    status,
@@ -734,8 +734,7 @@ SELECT 'TOPUP',
        g.group_id,
        'IN',
        'USER',
-       2, -- actor_user_id
-       1, -- rider_user_id
+       (SELECT user_id FROM users WHERE email = 'john.doe@example.com'), -- actor_user_id
        300000,
        'VND',
        'SUCCESS',
@@ -802,7 +801,6 @@ INTO transactions (type,
                    direction,
                    actor_kind,
                    actor_user_id,
-                   rider_user_id,
                    amount,
                    currency,
                    status,
@@ -817,8 +815,7 @@ SELECT 'TOPUP',
        g.group_id,
        'IN',
        'USER',
-       2, -- actor_user_id
-       1, -- rider_user_id
+       (SELECT user_id FROM users WHERE email = 'driver1@example.com'), -- actor_user_id
        300000,
        'VND',
        'SUCCESS',
@@ -1235,3 +1232,23 @@ $$;
 --        'Refund for cancelled ride - Partial refund',
 --        now()
 -- FROM system_txn g;
+
+-- =====================================================
+-- 12. ROUTES (Template catalogue)
+-- =====================================================
+INSERT INTO routes (name, route_type, from_location_id, to_location_id, default_price, polyline, distance_meters, duration_seconds, metadata,
+                    valid_from, created_at, updated_at)
+SELECT
+       'S2.02 Vinhomes Grand Park to FPT University HCMC',
+       'TEMPLATE',
+       (SELECT location_id FROM locations WHERE name = 'Tòa S2.02 Vinhomes Grand Park' LIMIT 1),
+       (SELECT location_id FROM locations WHERE name = 'FPT University - HCMC Campus' LIMIT 1),
+       10000.00,
+       'g}caAoq`kS^xAuD~@xArF_@J_@DuAX}AXqE|@iHvAtAfBn@x@~@hApB`CHNJRLZHj@BXAf@Gh@Cd@MhBIbBSbEAJCb@GxBAf@ErAAf@GXEXg@|@a@p@KPYd@[h@aA`BkAlBo@bAW`@c@h@UTCBcCdBoBvAj@`Aj@~@j@~@l@~@f@x@LJRVVVgCfEjA~AtCcD|CrCLLj@h@nDbDj@f@xBrBlBfBJPLPPd@FZAH?F?F@D_@p@_@j@wGdH',
+       3598,
+       880,
+       '{"notes":"Core campus corridor"}',
+       NOW(),
+       NOW(),
+       NOW()
+WHERE NOT EXISTS (SELECT 1 FROM routes WHERE name = 'S2.02 Vinhomes Grand Park to FPT University HCMC');

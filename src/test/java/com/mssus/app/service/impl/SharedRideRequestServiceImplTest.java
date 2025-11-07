@@ -169,8 +169,6 @@ class SharedRideRequestServiceImplTest {
         ride.setDriver(driver);
         ride.setVehicle(vehicle);
         ride.setStatus(SharedRideStatus.SCHEDULED);
-        ride.setMaxPassengers(2);
-        ride.setCurrentPassengers(1);
 
         rideRequest = new SharedRideRequest();
         rideRequest.setSharedRideRequestId(1);
@@ -560,8 +558,6 @@ class SharedRideRequestServiceImplTest {
     @Test
     void requestToJoinRide_RideFull_ShouldThrowException() {
         // Arrange
-        ride.setMaxPassengers(1);
-        ride.setCurrentPassengers(1);
         when(riderRepository.findByUserUserId(1)).thenReturn(Optional.of(rider));
         when(quoteService.getQuote(any(UUID.class))).thenReturn(quote);
         when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
@@ -930,7 +926,6 @@ class SharedRideRequestServiceImplTest {
         verify(rideRepository).findByIdForUpdate(1);
         verify(matchingCoordinator).beginDriverAcceptance(1, 1, 1);
         verify(requestRepository).save(any(SharedRideRequest.class));
-        verify(rideRepository).incrementPassengerCount(1);
         verify(matchingCoordinator).completeDriverAcceptance(1);
     }
 
@@ -955,7 +950,6 @@ class SharedRideRequestServiceImplTest {
         verify(rideRepository).findByIdForUpdate(1);
         verify(matchingCoordinator, never()).beginDriverAcceptance(anyInt(), anyInt(), anyInt());
         verify(requestRepository).save(any(SharedRideRequest.class));
-        verify(rideRepository).incrementPassengerCount(1);
     }
 
     @Test
@@ -999,8 +993,6 @@ class SharedRideRequestServiceImplTest {
     @Test
     void acceptRequest_RideFull_ShouldThrowException() {
         // Arrange
-        ride.setMaxPassengers(1);
-        ride.setCurrentPassengers(1);
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(requestRepository.findById(1)).thenReturn(Optional.of(rideRequest));
         when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
@@ -1157,7 +1149,6 @@ class SharedRideRequestServiceImplTest {
         // Assert
         assertNotNull(response);
         verify(rideFundCoordinatingService).releaseRideFunds(any(RideHoldReleaseRequest.class));
-        verify(rideRepository).decrementPassengerCount(1);
     }
 
     @Test
@@ -1180,7 +1171,6 @@ class SharedRideRequestServiceImplTest {
         // Assert
         assertNotNull(response);
         verify(rideFundCoordinatingService).releaseRideFunds(any(RideHoldReleaseRequest.class));
-        verify(rideRepository).decrementPassengerCount(1);
     }
 
     @Test
@@ -1283,7 +1273,7 @@ class SharedRideRequestServiceImplTest {
         CreateRideRequestDto minimalRequest = new CreateRideRequestDto(
             quote.quoteId(),
             null, // No pickup time
-            null  // No notes
+            null
         );
         when(riderRepository.findByUserUserId(1)).thenReturn(Optional.of(rider));
         when(quoteService.getQuote(any(UUID.class))).thenReturn(quote);

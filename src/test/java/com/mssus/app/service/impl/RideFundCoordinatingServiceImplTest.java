@@ -123,7 +123,7 @@ class RideFundCoordinatingServiceImplTest {
         assertThat(capturedRequest.type()).isEqualTo(TransactionType.HOLD_CREATE);
         assertThat(capturedRequest.actorKind()).isEqualTo(ActorKind.USER);
         assertThat(capturedRequest.actorUserId()).isEqualTo(10);
-        assertThat(capturedRequest.bookingId()).isEqualTo(500);
+        assertThat(capturedRequest.sharedRideRequestId()).isEqualTo(500);
         assertThat(capturedRequest.amount()).isEqualByComparingTo(ONE_HUNDRED);
         assertThat(capturedRequest.direction()).isEqualTo(TransactionDirection.INTERNAL);
         assertThat(capturedRequest.beforeAvail()).isEqualTo(wallet.getShadowBalance());
@@ -318,8 +318,6 @@ class RideFundCoordinatingServiceImplTest {
         UUID groupId = UUID.randomUUID();
         User riderUser = createUser(10, "rider@example.com");
         Transaction initialTransaction = Transaction.builder()
-            .bookingId(900)
-            .riderUser(riderUser)
             .groupId(groupId)
             .build();
         Transaction holdTransaction = Transaction.builder()
@@ -327,7 +325,6 @@ class RideFundCoordinatingServiceImplTest {
             .type(TransactionType.HOLD_CREATE)
             .status(TransactionStatus.SUCCESS)
             .amount(ONE_HUNDRED)
-            .riderUser(riderUser)
             .build();
         Wallet riderWallet = Wallet.builder()
             .shadowBalance(BigDecimal.valueOf(50_000))
@@ -375,8 +372,6 @@ class RideFundCoordinatingServiceImplTest {
         UUID groupId = UUID.randomUUID();
         User riderUser = createUser(10, "rider@example.com");
         Transaction initialTransaction = Transaction.builder()
-            .bookingId(1000)
-            .riderUser(riderUser)
             .groupId(groupId)
             .build();
         Transaction holdTransaction = Transaction.builder()
@@ -384,14 +379,12 @@ class RideFundCoordinatingServiceImplTest {
             .type(TransactionType.HOLD_CREATE)
             .status(TransactionStatus.SUCCESS)
             .amount(ONE_HUNDRED)
-            .riderUser(riderUser)
             .build();
         Transaction releaseTransaction = Transaction.builder()
             .groupId(groupId)
             .type(TransactionType.HOLD_RELEASE)
             .status(TransactionStatus.SUCCESS)
             .amount(ONE_HUNDRED)
-            .riderUser(riderUser)
             .build();
 
         doReturn(List.of(initialTransaction)).when(transactionRepository).findAll();

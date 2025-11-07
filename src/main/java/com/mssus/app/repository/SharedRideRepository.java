@@ -28,7 +28,7 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
 
     @Query("SELECT r FROM SharedRide r " +
         "WHERE r.status = 'SCHEDULED' OR r.status = 'ONGOING' " +
-        "AND r.currentPassengers < r.maxPassengers " +
+        "AND r.sharedRideRequest IS NULL " +
         "AND r.scheduledTime BETWEEN :startTime AND :endTime " +
         "AND r.sharedRideId IS NULL " +
         "ORDER BY r.scheduledTime ASC")
@@ -40,16 +40,6 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM SharedRide r WHERE r.sharedRideId = :sharedRideId")
     Optional<SharedRide> findByIdForUpdate(@Param("sharedRideId") Integer sharedRideId);
-
-    @Modifying
-    @Query("UPDATE SharedRide r SET r.currentPassengers = r.currentPassengers + 1 " +
-        "WHERE r.sharedRideId = :sharedRideId")
-    void incrementPassengerCount(@Param("sharedRideId") Integer sharedRideId);
-
-    @Modifying
-    @Query("UPDATE SharedRide r SET r.currentPassengers = r.currentPassengers - 1 " +
-        "WHERE r.sharedRideId = :sharedRideId AND r.currentPassengers > 0")
-    void decrementPassengerCount(@Param("sharedRideId") Integer sharedRideId);
 
     @Modifying
     @Query("UPDATE SharedRide r SET r.status = :status WHERE r.sharedRideId = :sharedRideId")
@@ -66,8 +56,8 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
     boolean existsByDriverDriverIdAndStatus(Integer driverId, SharedRideStatus status);
 
     @Query("SELECT r FROM SharedRide r " +
-        "WHERE r.status = 'SCHEDULED' OR r.status = 'ONGOING'" +
-        "AND r.currentPassengers < r.maxPassengers " +
+        "WHERE (r.status = 'SCHEDULED' OR r.status = 'ONGOING') " +
+        "AND r.sharedRideRequest IS NULL " +
         "AND r.scheduledTime BETWEEN :startTime AND :endTime")
     List<SharedRide> findCandidateRidesForMatching(
         @Param("startTime") LocalDateTime startTime,

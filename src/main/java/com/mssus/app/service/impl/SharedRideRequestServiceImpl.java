@@ -9,14 +9,17 @@ import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
+import com.mssus.app.infrastructure.config.properties.RideMessagingProperties;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
 import com.mssus.app.dto.domain.ride.AcceptRequestDto;
 import com.mssus.app.dto.domain.ride.BroadcastAcceptRequest;
 import com.mssus.app.dto.domain.ride.CreateRideRequestDto;
 import com.mssus.app.dto.request.ride.JoinRideRequest;
 import com.mssus.app.dto.request.wallet.RideConfirmHoldRequest;
+import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.BroadcastingRideRequestResponse;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
+import com.mssus.app.dto.response.ride.RouteSummaryResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.dto.domain.ride.LatLng;
 import com.mssus.app.entity.*;
@@ -24,9 +27,11 @@ import com.mssus.app.mapper.SharedRideRequestMapper;
 import com.mssus.app.service.domain.pricing.model.Quote;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.*;
+import com.mssus.app.service.domain.matching.QueueRideMatchingOrchestrator;
 import com.mssus.app.service.domain.matching.RideMatchingCoordinator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -64,13 +69,16 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     private final QuoteService quoteService;
     private final RideMatchingService matchingService;
     private final RideConfigurationProperties rideConfig;
+    private final RideMessagingProperties rideMessagingProperties;
     private final RideMatchingCoordinator matchingCoordinator;
+    private final ObjectProvider<QueueRideMatchingOrchestrator> queueOrchestratorProvider;
     private final ApplicationEventPublisherService eventPublisherService;
     private final PricingConfigRepository pricingConfigRepository;
     private final NotificationService notificationService;
     private final RideFundCoordinatingService rideFundCoordinatingService;
     private final RoutingService routingService;
     private final RideTrackingService rideTrackingService;
+    private final RouteAssignmentService routeAssignmentService;
 
     @Override
     @Transactional
@@ -224,10 +232,6 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 Map.of("currentState", ride.getStatus()));
         }
 
-        if (ride.getCurrentPassengers() >= ride.getMaxPassengers()) {
-            throw BaseDomainException.of("ride.validation.no-seats-available");
-        }
-
         BigDecimal fareAmount = quote.fare().total().amount();
         BigDecimal subtotalFare = quote.fare().subtotal().amount();
         PricingConfig pricingConfig = pricingConfigRepository.findByVersion(quote.fare().pricingVersion())
@@ -286,7 +290,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         log.info("Join ride request created - ID: {}, rider: {}, ride: {}, fare: {}, status: {}",
             savedRequest.getSharedRideRequestId(), rider.getRiderId(), rideId, fareAmount, savedRequest.getStatus());
 
-        matchingCoordinator.initiateRideJoining(savedRequest.getSharedRideRequestId());
+        // Publish event to MQ (if enabled) or use legacy coordinator
+        eventPublisherService.publishRideRequestCreatedEvent(savedRequest.getSharedRideRequestId());
+        
         notificationService.sendNotification(user,
             NotificationType.JOIN_RIDE_REQUEST_CREATED,
             "Join Ride Request Created",
@@ -355,11 +361,19 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 Map.of("currentState", rideRequest.getStatus()));
         }
 
-        boolean locked = matchingCoordinator.beginBroadcastAcceptance(requestId, driver.getDriverId());
-        if (!locked) {
-            throw BaseDomainException.of("ride.validation.request-invalid-state",
-                "Broadcast offer is no longer available or already processed");
+        boolean usingMqMode = rideMessagingProperties != null && 
+            rideMessagingProperties.isEnabled() && 
+            rideMessagingProperties.isMatchingEnabled();
+        
+        if (!usingMqMode) {
+            // Legacy mode: validate via in-memory coordinator
+            boolean locked = matchingCoordinator.beginBroadcastAcceptance(requestId, driver.getDriverId());
+            if (!locked) {
+                throw BaseDomainException.of("ride.validation.request-invalid-state",
+                    "Broadcast offer is no longer available or already processed");
+            }
         }
+        // MQ mode: validation happens in queue orchestrator
 
         try {
 
@@ -375,6 +389,18 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             Location startLocation = findOrCreateLocation(request.startLocationId(), request.startLatLng(), "Start");
             Location endLocation = rideRequest.getDropoffLocation();
 
+            RouteResponse rideRoute = null;
+            try {
+                rideRoute = routingService.getRoute(
+                    startLocation.getLat(),
+                    startLocation.getLng(),
+                    endLocation.getLat(),
+                    endLocation.getLng()
+                );
+            } catch (Exception routeEx) {
+                log.warn("Failed to fetch start->end route for request {}: {}", requestId, routeEx.getMessage());
+            }
+
             SharedRide newRide = new SharedRide();
             newRide.setDriver(driver);
             newRide.setVehicle(vehicle);
@@ -385,12 +411,20 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             if (capacity <= 0) {
                 capacity = 1;
             }
-            newRide.setMaxPassengers(capacity);
-            newRide.setCurrentPassengers(1);
             newRide.setPricingConfig(rideRequest.getPricingConfig());
             newRide.setScheduledTime(scheduledTime);
             newRide.setStartLocation(startLocation);
             newRide.setEndLocation(endLocation);
+            newRide.setRoute(routeAssignmentService.resolveRoute(
+                null,
+                startLocation,
+                endLocation,
+                rideRoute != null ? rideRoute.polyline() : null
+            ));
+            if (rideRoute != null) {
+                newRide.setEstimatedDuration((int) Math.ceil(rideRoute.time() / 60.0));
+                newRide.setEstimatedDistance((float) rideRoute.distance() / 1000);
+            }
             newRide.setCreatedAt(LocalDateTime.now());
             newRide.setStartedAt(LocalDateTime.now());
 
@@ -411,6 +445,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             rideRequest.setEstimatedDropoffTime(estimatedDropoffTime);
             requestRepository.save(rideRequest);
 
+            newRide.setSharedRideRequest(rideRequest);
+            rideRepository.save(newRide);
+
             RideMatchProposalResponse proposal = RideMatchProposalResponse.builder()
                 .sharedRideId(savedRide.getSharedRideId())
                 .driverId(driver.getDriverId())
@@ -419,15 +456,23 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 .vehicleModel(vehicle.getModel())
                 .vehiclePlate(vehicle.getPlateNumber())
                 .scheduledTime(savedRide.getScheduledTime())
-                .availableSeats(Math.max(0,
-                    (savedRide.getMaxPassengers() == null ? 0 : savedRide.getMaxPassengers())
-                        - savedRide.getCurrentPassengers()))
                 .totalFare(rideRequest.getTotalFare())
                 .estimatedPickupTime(estimatedPickupTime)
                 .estimatedDropoffTime(estimatedDropoffTime)
                 .build();
 
-            matchingCoordinator.completeBroadcastAcceptance(requestId, proposal);
+            if (usingMqMode) {
+                // MQ mode: only publish to queue orchestrator
+                queueOrchestratorProvider.ifAvailable(orchestrator ->
+                    orchestrator.publishDriverResponse(
+                        requestId,
+                        driver.getDriverId(),
+                        savedRide.getSharedRideId(),
+                        true));
+            } else {
+                // Legacy mode: use in-memory coordinator
+                matchingCoordinator.completeBroadcastAcceptance(requestId, proposal);
+            }
 
             log.info("Broadcast request {} accepted by driver {} - new ride {}",
                 requestId, driver.getDriverId(), savedRide.getSharedRideId());
@@ -443,7 +488,11 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
 
             return buildRequestResponse(rideRequest, polylineFromDriverToPickup);
         } catch (RuntimeException ex) {
-            matchingCoordinator.failBroadcastAcceptance(requestId, ex.getMessage());
+            if (!usingMqMode) {
+                // Legacy mode: notify coordinator of failure
+                matchingCoordinator.failBroadcastAcceptance(requestId, ex.getMessage());
+            }
+            // MQ mode: failure is handled by transaction rollback and timeout
             throw ex;
         }
     }
@@ -567,32 +616,39 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 Map.of("currentState", request.getStatus()));
         }
 
-        if (ride.getCurrentPassengers() >= ride.getMaxPassengers()) {
-            throw BaseDomainException.of("ride.validation.no-seats-available");
-        }
 
         boolean trackingAcceptance = false;
-        if (request.getRequestKind() == RequestKind.BOOKING) {
-            boolean accepted = matchingCoordinator.beginDriverAcceptance(
-                requestId,
-                acceptDto.rideId(),
-                driver.getDriverId());
+        boolean usingMqMode = rideMessagingProperties != null && 
+            rideMessagingProperties.isEnabled() && 
+            rideMessagingProperties.isMatchingEnabled();
+        
+        if (!usingMqMode) {
+            // Legacy mode: validate via in-memory coordinator
+            if (request.getRequestKind() == RequestKind.BOOKING) {
+                boolean accepted = matchingCoordinator.beginDriverAcceptance(
+                    requestId,
+                    acceptDto.rideId(),
+                    driver.getDriverId());
 
-            if (!accepted) {
-                throw BaseDomainException.of("ride.validation.request-invalid-state",
-                    "Ride offer is no longer available or already processed");
-            }
-            trackingAcceptance = true;
-        } else if (request.getRequestKind() == RequestKind.JOIN_RIDE) {
-            boolean accepted = matchingCoordinator.beginJoinAcceptance(
-                requestId,
-                acceptDto.rideId(),
-                driver.getDriverId());
+                if (!accepted) {
+                    throw BaseDomainException.of("ride.validation.request-invalid-state",
+                        "Ride offer is no longer available or already processed");
+                }
+                trackingAcceptance = true;
+            } else if (request.getRequestKind() == RequestKind.JOIN_RIDE) {
+                boolean accepted = matchingCoordinator.beginJoinAcceptance(
+                    requestId,
+                    acceptDto.rideId(),
+                    driver.getDriverId());
 
-            if (!accepted) {
-                throw BaseDomainException.of("ride.validation.request-invalid-state",
-                    "Ride offer is no longer available or already processed");
+                if (!accepted) {
+                    throw BaseDomainException.of("ride.validation.request-invalid-state",
+                        "Ride offer is no longer available or already processed");
+                }
+                trackingAcceptance = true;
             }
+        } else {
+            // MQ mode: validation happens in queue orchestrator
             trackingAcceptance = true;
         }
 
@@ -622,18 +678,33 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             request.setEstimatedDropoffTime(estimatedDropoffTime);
             requestRepository.save(request);
 
-            rideRepository.incrementPassengerCount(ride.getSharedRideId());
 
             log.info("Request {} accepted successfully for ride {}", requestId, acceptDto.rideId());
 
             if (trackingAcceptance) {
-                matchingCoordinator.completeDriverAcceptance(requestId);
+                if (usingMqMode) {
+                    // MQ mode: only publish to queue orchestrator
+                    queueOrchestratorProvider.ifAvailable(orchestrator ->
+                        orchestrator.publishDriverResponse(
+                            requestId,
+                            driver.getDriverId(),
+                            acceptDto.rideId(),
+                            false));
+                } else {
+                    // Legacy mode: use in-memory coordinator
+                    matchingCoordinator.completeDriverAcceptance(requestId);
+                }
             }
 
+            ride.setSharedRideRequest(request);
+            rideRepository.save(ride);
+
         } catch (RuntimeException e) {
-            if (trackingAcceptance) {
+            if (trackingAcceptance && !usingMqMode) {
+                // Legacy mode: notify coordinator of failure
                 matchingCoordinator.failDriverAcceptance(requestId, e.getMessage());
             }
+            // MQ mode: failure is handled by transaction rollback and timeout
             throw e;
         }
 
@@ -721,6 +792,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         if (request.getRequestKind() == RequestKind.BOOKING &&
             request.getStatus() == SharedRideRequestStatus.PENDING) {
             matchingCoordinator.cancelMatching(requestId);
+            queueOrchestratorProvider.ifAvailable(orchestrator -> orchestrator.publishCancellation(requestId));
         }
 
         // Calculate cancellation fee if CONFIRMED
@@ -778,9 +850,9 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             // Continue with cancellation even if release fails
         }
 
-        if (request.getStatus() == SharedRideRequestStatus.CONFIRMED && request.getSharedRide() != null) {
-            rideRepository.decrementPassengerCount(request.getSharedRide().getSharedRideId());
-        }
+//        if (request.getStatus() == SharedRideRequestStatus.CONFIRMED && request.getSharedRide() != null) {
+//            rideRepository.decrementPassengerCount(request.getSharedRide().getSharedRideId());
+//        }
 
         // Update request status
         request.setStatus(SharedRideRequestStatus.CANCELLED);
@@ -797,12 +869,15 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
     }
 
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request) {
-        return requestMapper.toResponse(request);
+        SharedRideRequestResponse response = requestMapper.toResponse(request);
+        applyRouteSummary(request, response);
+        return response;
     }
 
     private SharedRideRequestResponse buildRequestResponse(SharedRideRequest request, String polylineFromDriverToPickup) {
         var response = requestMapper.toResponse(request);
         response.setPolylineFromDriverToPickup(polylineFromDriverToPickup);
+        applyRouteSummary(request, response);
         return response;
     }
 
@@ -814,6 +889,31 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
             request.getDropoffLocation(),
             request.getPickupTime() != null ? request.getPickupTime().format(ISO_DATE_TIME) : null
         );
+    }
+
+    private void applyRouteSummary(SharedRideRequest request, SharedRideRequestResponse response) {
+        if (response == null || request == null) {
+            return;
+        }
+        SharedRide ride = request.getSharedRide();
+        if (ride != null) {
+            response.setRoute(toRouteSummary(ride.getRoute()));
+        }
+    }
+
+    private RouteSummaryResponse toRouteSummary(Route route) {
+        if (route == null) {
+            return null;
+        }
+        return RouteSummaryResponse.builder()
+            .routeId(route.getRouteId())
+            .name(route.getName())
+            .routeType(route.getRouteType() != null ? route.getRouteType().name() : null)
+            .defaultPrice(route.getDefaultPrice())
+            .polyline(route.getPolyline())
+            .validFrom(route.getValidFrom())
+            .validUntil(route.getValidUntil())
+            .build();
     }
 
     private Location findOrCreateLocation(Integer locationId, LatLng latLng, String pointType) {

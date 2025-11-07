@@ -3,6 +3,7 @@ package com.mssus.app.service.domain.matching;
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
+import com.mssus.app.infrastructure.config.properties.RideMessagingProperties;
 import com.mssus.app.dto.domain.notification.DriverRideOfferNotification;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.DriverProfile;
@@ -67,6 +68,7 @@ public class RideMatchingCoordinator {
     private final ThreadPoolTaskExecutor matchingExecutor;
     private final RideFundCoordinatingService rideFundCoordinatingService;
     private final ScheduledExecutorService matchingScheduler;
+    private final RideMessagingProperties rideMessagingProperties;
 
     public RideMatchingCoordinator(
         SharedRideRequestRepository requestRepository,
@@ -79,7 +81,8 @@ public class RideMatchingCoordinator {
         MatchingResponseAssembler responseAssembler,
         @Qualifier("matchingTaskExecutor") ThreadPoolTaskExecutor matchingExecutor,
         @Qualifier("matchingScheduler") ScheduledExecutorService matchingScheduler,
-        RideFundCoordinatingService rideFundCoordinatingService) {
+        RideFundCoordinatingService rideFundCoordinatingService,
+        RideMessagingProperties rideMessagingProperties) {
 
         this.requestRepository = requestRepository;
         this.driverRepository = driverRepository;
@@ -92,6 +95,7 @@ public class RideMatchingCoordinator {
         this.matchingExecutor = matchingExecutor;
         this.rideFundCoordinatingService = rideFundCoordinatingService;
         this.matchingScheduler = matchingScheduler;
+        this.rideMessagingProperties = rideMessagingProperties;
     }
 
     @Autowired
@@ -103,6 +107,10 @@ public class RideMatchingCoordinator {
     @TransactionalEventListener(fallbackExecution = true)
     public void onRideRequestCreated(RideRequestCreatedEvent event) {
         log.info("Received RideRequestCreatedEvent for request ID: {}", event.getRequestId());
+        if (rideMessagingProperties.isEnabled() && rideMessagingProperties.isMatchingEnabled()) {
+            log.debug("Legacy coordinator skipping request {} - queue orchestrator active", event.getRequestId());
+            return;
+        }
         self.initiateMatching(event.getRequestId());
     }
 

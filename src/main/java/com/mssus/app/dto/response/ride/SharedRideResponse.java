@@ -61,6 +61,10 @@ public class SharedRideResponse {
     @Schema(description = "End location details")
     private LocationResponse endLocation;
 
+    @JsonProperty("route")
+    @Schema(description = "Route summary information")
+    private RouteSummaryResponse route;
+
 //    @JsonProperty("start_location_id")
 //    @Schema(description = "Start location ID", example = "1")
 //    private Integer startLocationId;
@@ -80,17 +84,17 @@ public class SharedRideResponse {
     @Schema(description = "Ride status (SCHEDULED, ONGOING, COMPLETED, CANCELLED)", example = "SCHEDULED")
     private String status;
 
-    @JsonProperty("max_passengers")
-    @Schema(description = "Maximum passenger capacity", example = "2")
-    private Integer maxPassengers;
-
-    @JsonProperty("current_passengers")
-    @Schema(description = "Current passenger count", example = "1")
-    private Integer currentPassengers;
-
-    @JsonProperty("available_seats")
-    @Schema(description = "Available seats", example = "1")
-    private Integer availableSeats;
+//    @JsonProperty("max_passengers")
+//    @Schema(description = "Maximum passenger capacity", example = "2")
+//    private Integer maxPassengers;
+//
+//    @JsonProperty("current_passengers")
+//    @Schema(description = "Current passenger count", example = "1")
+//    private Integer currentPassengers;
+//
+//    @JsonProperty("available_seats")
+//    @Schema(description = "Available seats", example = "1")
+//    private Integer availableSeats;
 
     @JsonProperty("base_fare")
     @Schema(description = "Base fare amount", example = "15000.00")

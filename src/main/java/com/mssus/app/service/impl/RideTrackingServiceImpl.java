@@ -24,6 +24,8 @@ import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.RoutingService;
 import com.mssus.app.common.util.GeoUtil;
 import com.mssus.app.dto.domain.ride.RealTimeTrackingUpdateDto;
+import com.mssus.app.messaging.RideEventPublisher;
+import com.mssus.app.messaging.dto.DriverLocationUpdateMessage;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +52,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     private final UserRepository userRepository;
     private final DriverProfileRepository driverRepository;
     private final RealTimeNotificationService notificationService;
+    private final RideEventPublisher rideEventPublisher;
 
     private final SimpMessagingTemplate messagingTemplate;
     @Override
@@ -76,6 +79,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             throw BaseDomainException.of("tracking.invalid-points", "No points provided");
         }
         validatePoints(points);  // Custom method: Check speed, accuracy
+        publishDriverLocationUpdate(rideId, driver, points);
 
         // Get or create track
         RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
@@ -290,6 +294,30 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             log.debug("Published real-time tracking update for ride {}", rideId);
         } catch (Exception e) {
             log.error("Failed to publish real-time tracking update for ride {}: {}", rideId, e.getMessage(), e);
+        }
+    }
+
+    private void publishDriverLocationUpdate(Integer rideId,
+                                             DriverProfile driver,
+                                             List<LocationPoint> points) {
+        if (rideEventPublisher == null || driver == null || points == null || points.isEmpty()) {
+            return;
+        }
+        try {
+            // Use the latest location point from the list
+            LocationPoint latest = points.get(points.size() - 1);
+            DriverLocationUpdateMessage message = DriverLocationUpdateMessage.builder()
+                .driverId(driver.getDriverId())
+                .latitude(latest.lat())
+                .longitude(latest.lng())
+                .rideId(rideId)
+                .timestamp(latest.timestamp() != null ? 
+                    latest.timestamp().toInstant() : java.time.Instant.now())
+                .correlationId(java.util.UUID.randomUUID().toString())
+                .build();
+            rideEventPublisher.publishDriverLocationUpdate(message);
+        } catch (Exception ex) {
+            log.warn("Failed to publish driver location update for ride {}: {}", rideId, ex.getMessage(), ex);
         }
     }
 

@@ -3,9 +3,12 @@ package com.mssus.app.service.impl;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.dto.request.QuoteRequest;
 import com.mssus.app.dto.domain.ride.LatLng;
+import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.entity.Location;
+import com.mssus.app.service.RouteAssignmentService;
 import com.mssus.app.service.domain.pricing.PricingService;
 import com.mssus.app.service.domain.pricing.QuoteCache;
+import com.mssus.app.service.domain.pricing.model.FareBreakdown;
 import com.mssus.app.service.domain.pricing.model.PriceInput;
 import com.mssus.app.service.domain.pricing.model.Quote;
 import com.mssus.app.repository.LocationRepository;
@@ -19,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -29,6 +33,7 @@ public class QuoteServiceImpl implements QuoteService {
     private final RoutingService routingService;
     private final PricingService pricingService;
     private final LocationRepository locationRepository;
+    private final RouteAssignmentService routeAssignmentService;
 
     private static final double LOCATION_TOLERANCE = 0.001;
 
@@ -37,6 +42,9 @@ public class QuoteServiceImpl implements QuoteService {
     public Quote generateQuote(QuoteRequest request, int userId) {
         Location pickupLoc;
         Location dropoffLoc;
+        RouteResponse route;
+        FareBreakdown fareBreakdown;
+        Quote quote;
 
         Location fptuLoc = locationRepository.findByLatAndLng(10.841480, 106.809844)
             .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
@@ -46,47 +54,70 @@ public class QuoteServiceImpl implements QuoteService {
             .orElseThrow(() -> BaseDomainException.formatted("ride.validation.invalid-location",
                 "Student Culture House location not found"));
 
-        pickupLoc = findOrCreateLocation(request.pickupLocationId(), request.pickup());
-        dropoffLoc = findOrCreateLocation(request.dropoffLocationId(), request.dropoff());
+        if (request.routeId() != null) {
+            var predefinedRoute = routeAssignmentService.getRoute(request.routeId());
+            pickupLoc = predefinedRoute.getFromLocation();
+            dropoffLoc = predefinedRoute.getToLocation();
 
-        if (Objects.equals(pickupLoc.getLat(), dropoffLoc.getLat()) &&
-            Objects.equals(pickupLoc.getLng(), dropoffLoc.getLng())) {
-            throw BaseDomainException.formatted("ride.validation.invalid-location",
-                "Pickup and dropoff locations cannot be the same");
+            fareBreakdown = pricingService.quote(new PriceInput(predefinedRoute.getDistanceMeters(), Optional.empty(), userId));
+
+            quote = new Quote(
+                UUID.randomUUID(),
+                userId,
+                pickupLoc,
+                dropoffLoc,
+                predefinedRoute.getDistanceMeters(),
+                predefinedRoute.getDurationSeconds(),
+                predefinedRoute.getPolyline(),
+                fareBreakdown,
+                Instant.now(),
+                Instant.now().plusSeconds(300)
+            );
+
+        } else {
+            pickupLoc = findOrCreateLocation(request.pickupLocationId(), request.pickup());
+            dropoffLoc = findOrCreateLocation(request.dropoffLocationId(), request.dropoff());
+
+            validateRequiredLocations(pickupLoc, dropoffLoc, fptuLoc, schLoc);
+
+            if (Objects.equals(pickupLoc.getLat(), dropoffLoc.getLat()) &&
+                Objects.equals(pickupLoc.getLng(), dropoffLoc.getLng())) {
+                throw BaseDomainException.formatted("ride.validation.invalid-location",
+                    "Pickup and dropoff locations cannot be the same");
+            }
+
+            double centerLat = fptuLoc.getLat();
+            double centerLng = fptuLoc.getLng();
+            double maxRadiusKm = 25.0; //TODO: Configurable via rideConfig.getServiceArea().getRadiusKm()
+
+            double pickupDistKm = GeoUtil.haversineMeters(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng()) / 1000.0;
+            double dropoffDistKm = GeoUtil.haversineMeters(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng()) / 1000.0;
+
+            if (pickupDistKm > maxRadiusKm || dropoffDistKm > maxRadiusKm) {
+                throw BaseDomainException.of("ride.validation.service-area-violation",
+                    "Pickup " + pickupDistKm + "km or dropoff " + dropoffDistKm + "km outside 25 km service area from FPT University");
+            }
+
+            route = routingService.getRoute(
+                pickupLoc.getLat(), pickupLoc.getLng(),
+                dropoffLoc.getLat(), dropoffLoc.getLng()
+            );
+
+            fareBreakdown = pricingService.quote(new PriceInput(route.distance(), null, userId));
+
+            quote = new Quote(
+                UUID.randomUUID(),
+                userId,
+                pickupLoc,
+                dropoffLoc,
+                route.distance(),
+                route.time(),
+                route.polyline(),
+                fareBreakdown,
+                Instant.now(),
+                Instant.now().plusSeconds(300) // Quote valid for 5 minutes
+            );
         }
-
-        validateRequiredLocations(pickupLoc, dropoffLoc, fptuLoc, schLoc);
-
-        double centerLat = fptuLoc.getLat();
-        double centerLng = fptuLoc.getLng();
-        double maxRadiusKm = 25.0; //TODO: Configurable via rideConfig.getServiceArea().getRadiusKm()
-
-        double pickupDistKm = GeoUtil.haversineMeters(centerLat, centerLng, pickupLoc.getLat(), pickupLoc.getLng()) / 1000.0;
-        double dropoffDistKm = GeoUtil.haversineMeters(centerLat, centerLng, dropoffLoc.getLat(), dropoffLoc.getLng()) / 1000.0;
-
-        if (pickupDistKm > maxRadiusKm || dropoffDistKm > maxRadiusKm) {
-            throw BaseDomainException.of("ride.validation.service-area-violation",
-                "Pickup " + pickupDistKm + "km or dropoff " + dropoffDistKm + "km outside 25 km service area from FPT University");
-        }
-
-        var route = routingService.getRoute(
-            pickupLoc.getLat(), pickupLoc.getLng(),
-            dropoffLoc.getLat(), dropoffLoc.getLng()
-        );
-
-        var fareBreakdown = pricingService.quote(new PriceInput(route.distance(), null, userId));
-        var quote = new Quote(
-            UUID.randomUUID(),
-            userId,
-            pickupLoc,
-            dropoffLoc,
-            route.distance(),
-            route.time(),
-            route.polyline(),
-            fareBreakdown,
-            Instant.now(),
-            Instant.now().plusSeconds(300) // Quote valid for 5 minutes
-        );
 
         quoteCache.save(quote);
 
@@ -118,7 +149,7 @@ public class QuoteServiceImpl implements QuoteService {
                 });
         }
 
-        if (hasId) { // If we reach here, hasCoords must be true, so we only need to check hasId
+        if (hasId) {
             throw BaseDomainException.of("ride.validation.invalid-location",
                 "Provide either locationId or coordinates, not both");
         }
