@@ -6,6 +6,7 @@ import com.mssus.app.dto.request.SwitchProfileRequest;
 import com.mssus.app.dto.request.UpdatePasswordRequest;
 import com.mssus.app.dto.request.UpdateProfileRequest;
 import com.mssus.app.dto.response.*;
+import com.mssus.app.dto.domain.sos.EmergencyContactRequest;
 import com.mssus.app.dto.domain.sos.EmergencyContactResponse;
 import com.mssus.app.service.AuthService;
 import com.mssus.app.service.EmergencyContactService;
@@ -102,16 +103,87 @@ public class ProfileServiceImpl implements ProfileService {
     @Transactional
     @Retryable(value = {OptimisticLockingFailureException.class}, maxAttempts = 3)
     public UserProfileResponse updateProfile(String username, UpdateProfileRequest request) {
-        throw new UnsupportedOperationException("Not implemented yet");
-//        User user = findUserWithLock(username);
-//        updateBasicInfo(user, request);
-//        updateEmailIfChanged(user, request);
-//        updatePhoneIfChanged(user, request);
-//        updateRiderProfileIfExists(user, request);
-//
-//        user = userRepository.save(user);
-////        return userMapper.toProfileResponse(user);
-//        return UserProfileResponse.builder().build();
+        // This method is reserved for admin updates
+        throw new UnsupportedOperationException("Use updateMyProfile for user self-updates");
+    }
+
+    @Override
+    @Transactional
+    @Retryable(value = {OptimisticLockingFailureException.class}, maxAttempts = 3)
+    public UserProfileResponse updateMyProfile(String username, UpdateProfileRequest request) {
+        User user = userRepository.findByEmailWithProfiles(username)
+                .orElseThrow(() -> NotFoundException.userNotFound(username));
+
+        // Update full name
+        if (request.getFullName() != null && !request.getFullName().trim().isEmpty()) {
+            user.setFullName(request.getFullName().trim());
+        }
+
+        // Update phone (check uniqueness if changed)
+        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+            String newPhone = request.getPhone().trim();
+            String currentPhone = user.getPhone();
+            if (!newPhone.equals(currentPhone)) {
+                // Check if phone is already taken by another user
+                userRepository.findByPhone(newPhone).ifPresent(existingUser -> {
+                    if (!existingUser.getUserId().equals(user.getUserId())) {
+                        throw BaseDomainException.of("user.conflict.phone-exists");
+                    }
+                });
+                user.setPhone(newPhone);
+            }
+        }
+
+        // Update student ID (check uniqueness if changed)
+        if (request.getStudentId() != null && !request.getStudentId().trim().isEmpty()) {
+            String newStudentId = request.getStudentId().trim();
+            String currentStudentId = user.getStudentId();
+            if (!newStudentId.equals(currentStudentId)) {
+                // Check if student ID is already taken by another user
+                if (userRepository.existsByStudentId(newStudentId)) {
+                    throw BaseDomainException.of("user.conflict.student-id-exists");
+                }
+                user.setStudentId(newStudentId);
+            }
+        } else if (request.getStudentId() != null && request.getStudentId().trim().isEmpty()) {
+            // Allow clearing student ID
+            user.setStudentId(null);
+        }
+
+        // Update emergency contact (update primary contact if exists, or create new one)
+        if (request.getEmergencyContact() != null && !request.getEmergencyContact().trim().isEmpty()) {
+            String emergencyPhone = request.getEmergencyContact().trim();
+            List<EmergencyContactResponse> existingContacts = emergencyContactService.getContacts(user);
+            
+            // Find primary contact
+            EmergencyContactResponse primaryContact = existingContacts.stream()
+                .filter(EmergencyContactResponse::getPrimary)
+                .findFirst()
+                .orElse(null);
+
+            if (primaryContact != null) {
+                // Update existing primary contact phone
+                EmergencyContactRequest updateRequest = EmergencyContactRequest.builder()
+                    .name(primaryContact.getName())
+                    .phone(emergencyPhone)
+                    .relationship(primaryContact.getRelationship())
+                    .primary(true)
+                    .build();
+                emergencyContactService.updateContact(user, primaryContact.getContactId(), updateRequest);
+            } else {
+                // Create new primary emergency contact
+                EmergencyContactRequest createRequest = EmergencyContactRequest.builder()
+                    .name("Emergency Contact")
+                    .phone(emergencyPhone)
+                    .relationship("Emergency")
+                    .primary(true)
+                    .build();
+                emergencyContactService.createContact(user, createRequest);
+            }
+        }
+
+        userRepository.save(user);
+        return getCurrentUserProfile(username);
     }
 
     @Override

@@ -40,6 +40,21 @@ public interface TransactionService {
     List<Transaction> refundRide(UUID originalGroupId, Integer riderId, Integer driverId,
                                 BigDecimal refundAmount, String description);
 
+    // Additional refund methods for different scenarios
+    List<Transaction> refundTopup(Integer userId, BigDecimal refundAmount, String pspRef, String description);
+    
+    List<Transaction> refundPayout(Integer driverId, BigDecimal refundAmount, String pspRef, String description);
+    
+    List<Transaction> refundAdjustment(Integer userId, BigDecimal refundAmount, Integer adminUserId, String reason);
+    
+    List<Transaction> refundPromoCredit(Integer userId, BigDecimal refundAmount, String promoCode, String description);
+    
+    List<Transaction> processRefund(Integer refundId, String pspRef, String description);
+    
+    void handleRefundSuccess(String pspRef);
+    
+    void handleRefundFailed(String pspRef, String reason);
+
     List<Transaction> getTransactionsByGroupId(UUID groupId);
 
     BigDecimal calculateCommission(BigDecimal amount, BigDecimal commissionRate);
