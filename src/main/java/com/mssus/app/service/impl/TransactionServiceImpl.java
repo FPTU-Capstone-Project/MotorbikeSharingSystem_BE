@@ -764,7 +764,6 @@ public class TransactionServiceImpl implements TransactionService {
                 .direction(TransactionDirection.IN)
                 .actorKind(ActorKind.USER)
                 .actorUser(driver)
-                .driverUser(driver)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
@@ -914,38 +913,39 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public List<Transaction> processRefund(Integer refundId, String pspRef, String description) {
-        if (refundId == null) {
-            throw new ValidationException("Refund ID cannot be null");
-        }
-        if (pspRef == null || pspRef.trim().isEmpty()) {
-            throw new ValidationException("PSP reference cannot be null or empty");
-        }
-
-        // Find the original transaction to refund
-        Transaction originalTransaction = transactionRepository.findById(refundId)
-                .orElseThrow(() -> new NotFoundException("Transaction not found with ID: " + refundId));
-
-        if (originalTransaction.getStatus() != TransactionStatus.SUCCESS) {
-            throw new ValidationException("Can only refund successful transactions");
-        }
-
-        // Determine refund type based on original transaction type
-        switch (originalTransaction.getType()) {
-            case TOPUP:
-                return refundTopup(originalTransaction.getActorUser().getUserId(), 
-                                 originalTransaction.getAmount(), pspRef, description);
-            case PAYOUT:
-                return refundPayout(originalTransaction.getDriverUser().getUserId(), 
-                                   originalTransaction.getAmount(), pspRef, description);
-            case CAPTURE_FARE:
-                // For ride refunds, we need the original group ID
-                return refundRide(originalTransaction.getGroupId(), 
-                                 originalTransaction.getRiderUser().getUserId(),
-                                 originalTransaction.getDriverUser().getUserId(),
-                                 originalTransaction.getAmount(), description);
-            default:
-                throw new ValidationException("Cannot refund transaction type: " + originalTransaction.getType());
-        }
+//        if (refundId == null) {
+//            throw new ValidationException("Refund ID cannot be null");
+//        }
+//        if (pspRef == null || pspRef.trim().isEmpty()) {
+//            throw new ValidationException("PSP reference cannot be null or empty");
+//        }
+//
+//        // Find the original transaction to refund
+//        Transaction originalTransaction = transactionRepository.findById(refundId)
+//                .orElseThrow(() -> new NotFoundException("Transaction not found with ID: " + refundId));
+//
+//        if (originalTransaction.getStatus() != TransactionStatus.SUCCESS) {
+//            throw new ValidationException("Can only refund successful transactions");
+//        }
+//
+//        // Determine refund type based on original transaction type
+//        switch (originalTransaction.getType()) {
+//            case TOPUP:
+//                return refundTopup(originalTransaction.getActorUser().getUserId(),
+//                                 originalTransaction.getAmount(), pspRef, description);
+//            case PAYOUT:
+//                return refundPayout(originalTransaction.getSharedRide().getDriver().getDriverId(),
+//                                   originalTransaction.getAmount(), pspRef, description);
+//            case CAPTURE_FARE:
+//                // For ride refunds, we need the original group ID
+//                return refundRide(originalTransaction.getGroupId(),
+//                                 originalTransaction.getSharedRide().get,
+//                                 originalTransaction.getSharedRide().getDriver().getDriverId(),
+//                                 originalTransaction.getAmount(), description);
+//            default:
+//                throw new ValidationException("Cannot refund transaction type: " + originalTransaction.getType());
+//        }
+        throw new UnsupportedOperationException("Method not implemented yet");
     }
 
     @Override
