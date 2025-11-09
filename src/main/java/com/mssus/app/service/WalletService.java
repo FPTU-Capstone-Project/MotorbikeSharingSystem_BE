@@ -34,6 +34,12 @@ public interface WalletService {
 
     DriverEarningsResponse getDriverEarnings(Authentication authentication);
 
+    // Admin payout processing methods
+    java.util.List<com.mssus.app.dto.response.wallet.PendingPayoutResponse> getPendingPayouts();
+    com.mssus.app.dto.response.wallet.PayoutProcessResponse processPayout(String payoutRef, Authentication authentication);
+    com.mssus.app.dto.response.wallet.PayoutProcessResponse completePayout(String payoutRef, org.springframework.web.multipart.MultipartFile evidenceFile, String notes, Authentication authentication);
+    com.mssus.app.dto.response.wallet.PayoutProcessResponse failPayout(String payoutRef, String reason, Authentication authentication);
+
     Wallet createWalletForUser(Integer userId);
 
     boolean hasSufficientBalance(Integer userId, BigDecimal amount);

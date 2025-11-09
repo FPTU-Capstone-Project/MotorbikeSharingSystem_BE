@@ -43,4 +43,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
                                       @Param("type") TransactionType type,
                                       @Param("status") TransactionStatus status,
                                       Pageable pageable);
+
+    @Query("SELECT t FROM Transaction t WHERE t.type = :type AND t.status = :status AND t.actorKind = com.mssus.app.common.enums.ActorKind.USER")
+    List<Transaction> findByTypeAndStatusAndActorKindUser(@Param("type") TransactionType type,
+                                                           @Param("status") TransactionStatus status);
 }

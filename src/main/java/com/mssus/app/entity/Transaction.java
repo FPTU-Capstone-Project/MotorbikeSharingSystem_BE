@@ -87,4 +87,7 @@ public class Transaction {
 
     @Column(name = "note")
     private String note;
+
+    @Column(name = "evidence_url", length = 500)
+    private String evidenceUrl;
 }
