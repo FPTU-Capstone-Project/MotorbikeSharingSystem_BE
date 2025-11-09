@@ -98,7 +98,8 @@ public class SecurityConfig {
                 "/api/v1/refunds/requests/user/*",
                 // Profile management (admin view)
                 "/api/v1/me/all",
-                "/api/v1/vehicles/**"
+                "/api/v1/vehicles/**",
+                "/api/v1/user-reports/**"
         };
 
         // Endpoints requiring ADMIN or STAFF role
