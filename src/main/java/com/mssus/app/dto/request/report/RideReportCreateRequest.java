@@ -1,5 +1,6 @@
 package com.mssus.app.dto.request.report;
 
+import com.mssus.app.common.enums.ReportPriority;
 import com.mssus.app.common.enums.ReportType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -25,5 +26,8 @@ public class RideReportCreateRequest {
     @Size(max = 2000, message = "Description cannot exceed 2000 characters")
     @Schema(description = "Detailed description of the issue encountered during the ride", example = "Driver arrived late and was unprofessional.")
     private String description;
+
+    @Schema(description = "Priority level of the report", example = "MEDIUM", defaultValue = "MEDIUM")
+    private ReportPriority priority;
 }
 

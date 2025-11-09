@@ -1,5 +1,7 @@
 package com.mssus.app.service.impl;
 
+import com.mssus.app.common.enums.DriverProfileStatus;
+import com.mssus.app.common.enums.RiderProfileStatus;
 import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.enums.UserType;
 import com.mssus.app.dto.request.CreateUserRequest;
@@ -7,6 +9,8 @@ import com.mssus.app.dto.request.UpdateUserRequest;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.UserResponse;
 import com.mssus.app.entity.User;
+import com.mssus.app.repository.DriverProfileRepository;
+import com.mssus.app.repository.RiderProfileRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.UserService;
 import com.mssus.app.service.WalletService;
@@ -29,6 +33,8 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final RiderProfileRepository riderProfileRepository;
+    private final DriverProfileRepository driverProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final WalletService walletService;
 
@@ -175,7 +181,23 @@ public class UserServiceImpl implements UserService {
         user.setStatus(UserStatus.SUSPENDED);
         userRepository.save(user);
 
-        log.info("Soft deleted user with ID: {}", userId);
+        // Update rider profile status to SUSPENDED if exists
+        riderProfileRepository.findByUserUserId(userId)
+                .ifPresent(riderProfile -> {
+                    riderProfile.setStatus(RiderProfileStatus.SUSPENDED);
+                    riderProfileRepository.save(riderProfile);
+                    log.info("Suspended rider profile for user ID: {}", userId);
+                });
+
+        // Update driver profile status to SUSPENDED if exists
+        driverProfileRepository.findByUserUserId(userId)
+                .ifPresent(driverProfile -> {
+                    driverProfile.setStatus(DriverProfileStatus.SUSPENDED);
+                    driverProfileRepository.save(driverProfile);
+                    log.info("Suspended driver profile for user ID: {}", userId);
+                });
+
+        log.info("Soft deleted user with ID: {} and suspended associated profiles", userId);
     }
 
     @Override

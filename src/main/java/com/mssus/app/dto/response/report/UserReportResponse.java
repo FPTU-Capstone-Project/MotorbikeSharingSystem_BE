@@ -1,5 +1,6 @@
 package com.mssus.app.dto.response.report;
 
+import com.mssus.app.common.enums.ReportPriority;
 import com.mssus.app.common.enums.ReportStatus;
 import com.mssus.app.common.enums.ReportType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,6 +26,9 @@ public class UserReportResponse {
 
     @Schema(description = "Current status of the report", example = "RESOLVED")
     private ReportStatus status;
+
+    @Schema(description = "Priority level of the report", example = "MEDIUM")
+    private ReportPriority priority;
 
     @Schema(description = "Detailed description from the reporting user")
     private String description;
@@ -53,8 +57,23 @@ public class UserReportResponse {
     @Schema(description = "Identifier of the driver (if this is a ride-specific report)", example = "45")
     private Integer driverId;
 
+    @Schema(description = "Full name of the driver (if this is a ride-specific report)", example = "Tran Van B")
+    private String driverName;
+
     @Schema(description = "Admin notes explaining the status change or resolution")
     private String adminNotes;
+
+    @Schema(description = "Driver's response to the report")
+    private String driverResponse;
+
+    @Schema(description = "Timestamp when driver responded")
+    private LocalDateTime driverRespondedAt;
+
+    @Schema(description = "Timestamp when report was escalated")
+    private LocalDateTime escalatedAt;
+
+    @Schema(description = "Reason for escalation")
+    private String escalationReason;
 
     @Schema(description = "Timestamp when the report was created")
     private LocalDateTime createdAt;

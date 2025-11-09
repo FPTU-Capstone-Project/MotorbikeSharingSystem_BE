@@ -2,11 +2,13 @@ package com.mssus.app.controller;
 
 import com.mssus.app.common.enums.ReportStatus;
 import com.mssus.app.common.enums.ReportType;
+import com.mssus.app.dto.request.report.DriverReportResponseRequest;
 import com.mssus.app.dto.request.report.UpdateRideReportRequest;
 import com.mssus.app.dto.request.report.UserReportCreateRequest;
 import com.mssus.app.dto.request.report.UserReportResolveRequest;
 import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;
+import com.mssus.app.dto.response.report.ReportAnalyticsResponse;
 import com.mssus.app.dto.response.report.UserReportResponse;
 import com.mssus.app.dto.response.report.UserReportSummaryResponse;
 import com.mssus.app.service.UserReportService;
@@ -140,6 +142,63 @@ public class UserReportController {
     ) {
         log.info("Admin {} updating ride report {} status to {}", authentication.getName(), reportId, request.getStatus());
         UserReportResponse response = userReportService.updateRideReportStatus(reportId, request, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/my-reports")
+    @Operation(summary = "Get user's own reports")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "User reports retrieved successfully",
+            content = @Content(schema = @Schema(implementation = PageResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public ResponseEntity<PageResponse<UserReportSummaryResponse>> getMyReports(
+        @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+        @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
+        @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir,
+        Authentication authentication
+    ) {
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        log.info("User {} fetching their reports - page: {}, size: {}", authentication.getName(), page, size);
+        PageResponse<UserReportSummaryResponse> response = userReportService.getMyReports(authentication, pageable);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{reportId}/driver-response")
+    @Operation(summary = "Submit driver response to a report")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Driver response submitted successfully",
+            content = @Content(schema = @Schema(implementation = UserReportResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid request or already responded"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - Driver can only respond to reports about them"),
+        @ApiResponse(responseCode = "404", description = "Report not found")
+    })
+    public ResponseEntity<UserReportResponse> submitDriverResponse(
+        @Parameter(description = "Identifier of the report") @PathVariable Integer reportId,
+        @Valid @RequestBody DriverReportResponseRequest request,
+        Authentication authentication
+    ) {
+        log.info("Driver {} submitting response to report {}", authentication.getName(), reportId);
+        UserReportResponse response = userReportService.submitDriverResponse(reportId, request, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/analytics")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Get report analytics and statistics")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Analytics retrieved successfully",
+            content = @Content(schema = @Schema(implementation = ReportAnalyticsResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - Admin role required")
+    })
+    public ResponseEntity<ReportAnalyticsResponse> getReportAnalytics() {
+        log.info("Fetching report analytics");
+        ReportAnalyticsResponse response = userReportService.getReportAnalytics();
         return ResponseEntity.ok(response);
     }
 }

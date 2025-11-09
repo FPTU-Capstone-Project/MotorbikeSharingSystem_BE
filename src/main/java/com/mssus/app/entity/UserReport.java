@@ -1,5 +1,6 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.ReportPriority;
 import com.mssus.app.common.enums.ReportStatus;
 import com.mssus.app.common.enums.ReportType;
 import jakarta.persistence.*;
@@ -60,6 +61,23 @@ public class UserReport {
 
     @Column(name = "admin_notes", columnDefinition = "TEXT")
     private String adminNotes;
+
+    @Column(name = "priority", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private ReportPriority priority = ReportPriority.MEDIUM;
+
+    @Column(name = "driver_response", columnDefinition = "TEXT")
+    private String driverResponse;
+
+    @Column(name = "driver_responded_at")
+    private LocalDateTime driverRespondedAt;
+
+    @Column(name = "escalated_at")
+    private LocalDateTime escalatedAt;
+
+    @Column(name = "escalation_reason", columnDefinition = "TEXT")
+    private String escalationReason;
 
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;

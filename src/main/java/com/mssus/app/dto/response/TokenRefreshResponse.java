@@ -1,5 +1,6 @@
 package com.mssus.app.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,6 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Schema(description = "Token refreshing response")
 public class TokenRefreshResponse {
+    @JsonProperty("access_token")
     @Schema(description = "New JWT access token")
     private String accessToken;
 }
