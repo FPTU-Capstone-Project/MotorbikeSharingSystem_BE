@@ -2,8 +2,10 @@ package com.mssus.app.controller;
 
 import com.mssus.app.common.enums.ReportStatus;
 import com.mssus.app.common.enums.ReportType;
+import com.mssus.app.dto.request.report.UpdateRideReportRequest;
 import com.mssus.app.dto.request.report.UserReportCreateRequest;
 import com.mssus.app.dto.request.report.UserReportResolveRequest;
+import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.report.UserReportResponse;
 import com.mssus.app.dto.response.report.UserReportSummaryResponse;
@@ -115,6 +117,29 @@ public class UserReportController {
     ) {
         log.info("Admin {} resolving report {}", authentication.getName(), reportId);
         UserReportResponse response = userReportService.resolveReport(reportId, request, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{reportId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Update ride report status")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Report status updated successfully",
+            content = @Content(schema = @Schema(implementation = UserReportResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid request payload or invalid status transition",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - Admin role required"),
+        @ApiResponse(responseCode = "404", description = "Report not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<UserReportResponse> updateRideReportStatus(
+        @Parameter(description = "Identifier of the report") @PathVariable Integer reportId,
+        @Valid @RequestBody UpdateRideReportRequest request,
+        Authentication authentication
+    ) {
+        log.info("Admin {} updating ride report {} status to {}", authentication.getName(), reportId, request.getStatus());
+        UserReportResponse response = userReportService.updateRideReportStatus(reportId, request, authentication);
         return ResponseEntity.ok(response);
     }
 }

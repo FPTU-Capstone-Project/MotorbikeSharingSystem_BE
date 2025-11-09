@@ -20,4 +20,10 @@ public interface UserReportRepository extends JpaRepository<UserReport, Integer>
     Page<UserReport> findByReporterUserId(Integer userId, Pageable pageable);
 
     Optional<UserReport> findByReportIdAndReporterUserId(Integer reportId, Integer userId);
+
+    Optional<UserReport> findBySharedRideSharedRideIdAndReporterUserId(Integer sharedRideId, Integer userId);
+
+    Page<UserReport> findBySharedRideSharedRideId(Integer sharedRideId, Pageable pageable);
+
+    Page<UserReport> findByDriverDriverId(Integer driverId, Pageable pageable);
 }

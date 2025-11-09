@@ -7,16 +7,22 @@ import com.mssus.app.common.enums.NotificationType;
 import com.mssus.app.common.enums.Priority;
 import com.mssus.app.common.enums.ReportStatus;
 import com.mssus.app.common.enums.ReportType;
+import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.enums.UserType;
 import com.mssus.app.common.exception.BaseDomainException;
+import com.mssus.app.dto.request.report.RideReportCreateRequest;
+import com.mssus.app.dto.request.report.UpdateRideReportRequest;
 import com.mssus.app.dto.request.report.UserReportCreateRequest;
 import com.mssus.app.dto.request.report.UserReportResolveRequest;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.report.UserReportResponse;
 import com.mssus.app.dto.response.report.UserReportSummaryResponse;
+import com.mssus.app.entity.DriverProfile;
+import com.mssus.app.entity.SharedRide;
 import com.mssus.app.entity.User;
 import com.mssus.app.entity.UserReport;
 import com.mssus.app.mapper.UserReportMapper;
+import com.mssus.app.repository.SharedRideRepository;
 import com.mssus.app.repository.UserReportRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.NotificationService;
@@ -42,9 +48,11 @@ import java.util.Objects;
 public class UserReportServiceImpl implements UserReportService {
 
     private static final String DEFAULT_QUEUE = "/queue/notifications";
+    private static final int REPORT_WINDOW_DAYS = 7;
 
     private final UserReportRepository userReportRepository;
     private final UserRepository userRepository;
+    private final SharedRideRepository sharedRideRepository;
     private final NotificationService notificationService;
     private final UserReportMapper userReportMapper;
     private final ObjectMapper objectMapper;
@@ -130,6 +138,218 @@ public class UserReportServiceImpl implements UserReportService {
         notifyReporterOfResolution(saved);
 
         return userReportMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public UserReportResponse submitRideReport(Integer rideId, Authentication authentication, RideReportCreateRequest request) {
+        User reporter = resolveUser(authentication);
+        SharedRide ride = sharedRideRepository.findById(rideId)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+
+        // Validate ride is completed
+        if (ride.getStatus() != SharedRideStatus.COMPLETED) {
+            throw BaseDomainException.validation("Ride must be completed before a report can be submitted");
+        }
+
+        // Validate time window (7 days after completion)
+        if (ride.getCompletedAt() == null) {
+            throw BaseDomainException.validation("Ride completion time is missing");
+        }
+
+        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(REPORT_WINDOW_DAYS);
+        if (ride.getCompletedAt().isBefore(cutoffDate)) {
+            throw BaseDomainException.validation(
+                String.format("Reporting window has expired. Reports must be submitted within %d days of ride completion.", REPORT_WINDOW_DAYS));
+        }
+
+        // Check for duplicate report
+        userReportRepository.findBySharedRideSharedRideIdAndReporterUserId(rideId, reporter.getUserId())
+            .ifPresent(existing -> {
+                throw BaseDomainException.validation("A report already exists for this ride");
+            });
+
+        // Validate report type for ride reports
+        if (request.getReportType() != ReportType.SAFETY &&
+            request.getReportType() != ReportType.BEHAVIOR &&
+            request.getReportType() != ReportType.PAYMENT &&
+            request.getReportType() != ReportType.ROUTE &&
+            request.getReportType() != ReportType.OTHER) {
+            throw BaseDomainException.validation("Invalid report type for ride reports. Valid types: SAFETY, BEHAVIOR, PAYMENT, ROUTE, OTHER");
+        }
+
+        String description = request.getDescription().trim();
+        DriverProfile driver = ride.getDriver();
+
+        UserReport report = UserReport.builder()
+            .reporter(reporter)
+            .sharedRide(ride)
+            .driver(driver)
+            .reportType(request.getReportType())
+            .status(ReportStatus.PENDING)
+            .description(description)
+            .build();
+
+        UserReport saved = userReportRepository.save(report);
+        log.info("User {} submitted ride report {} for ride {} of type {}", 
+            reporter.getUserId(), saved.getReportId(), rideId, saved.getReportType());
+
+        notifyAdminsOfRideReport(saved);
+
+        // Send confirmation notification to user
+        notifyUserOfReportSubmission(saved);
+
+        return userReportMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public UserReportResponse updateRideReportStatus(Integer reportId, UpdateRideReportRequest request, Authentication authentication) {
+        User admin = resolveUser(authentication);
+        if (!Objects.equals(admin.getUserType(), UserType.ADMIN)) {
+            throw BaseDomainException.unauthorized("Only administrators can update report status");
+        }
+
+        UserReport report = userReportRepository.findById(reportId)
+            .orElseThrow(() -> BaseDomainException.of("user-report.not-found", "Report not found"));
+
+        if (report.getSharedRide() == null) {
+            throw BaseDomainException.validation("This endpoint is only for ride-specific reports");
+        }
+
+        // Validate status transition
+        ReportStatus currentStatus = report.getStatus();
+        ReportStatus newStatus = request.getStatus();
+
+        if (currentStatus == ReportStatus.RESOLVED || currentStatus == ReportStatus.DISMISSED) {
+            throw BaseDomainException.validation(String.format("Cannot change status from %s", currentStatus));
+        }
+
+        // Update status and admin notes
+        report.setStatus(newStatus);
+        if (request.getAdminNotes() != null && !request.getAdminNotes().trim().isEmpty()) {
+            report.setAdminNotes(request.getAdminNotes().trim());
+        }
+
+        // Set resolved_at if status is RESOLVED or DISMISSED
+        if (newStatus == ReportStatus.RESOLVED || newStatus == ReportStatus.DISMISSED) {
+            report.setResolvedAt(LocalDateTime.now());
+            report.setResolver(admin);
+            if (request.getAdminNotes() != null && !request.getAdminNotes().trim().isEmpty()) {
+                report.setResolutionMessage(request.getAdminNotes().trim());
+            }
+        }
+
+        UserReport saved = userReportRepository.save(report);
+        log.info("Admin {} updated ride report {} to status {}", admin.getUserId(), saved.getReportId(), saved.getStatus());
+
+        // Notify user of status change
+        notifyUserOfReportStatusChange(saved, newStatus);
+
+        return userReportMapper.toResponse(saved);
+    }
+
+    private void notifyAdminsOfRideReport(UserReport report) {
+        List<User> admins = userRepository.findByUserType(UserType.ADMIN);
+        if (admins.isEmpty()) {
+            log.warn("No admin users found to notify about ride report {}", report.getReportId());
+            return;
+        }
+
+        String title = "New ride report submitted";
+        String message = String.format("Ride report #%d (%s) for ride #%d requires review.", 
+            report.getReportId(), report.getReportType(), report.getSharedRide().getSharedRideId());
+        String payload = toJsonSafe(Map.of(
+            "reportId", report.getReportId(),
+            "rideId", report.getSharedRide().getSharedRideId(),
+            "status", report.getStatus(),
+            "reportType", report.getReportType()
+        ));
+
+        admins.forEach(admin -> notificationService.sendNotification(
+            admin,
+            NotificationType.RIDE_REPORT_SUBMITTED,
+            title,
+            message,
+            payload,
+            Priority.HIGH,
+            DeliveryMethod.IN_APP,
+            DEFAULT_QUEUE
+        ));
+    }
+
+    private void notifyUserOfReportSubmission(UserReport report) {
+        User reporter = report.getReporter();
+        if (reporter == null) {
+            return;
+        }
+
+        String title = "Ride report submitted";
+        String message = String.format("Your report #%d has been submitted and is under review.", report.getReportId());
+        String payload = toJsonSafe(Map.of(
+            "reportId", report.getReportId(),
+            "status", report.getStatus()
+        ));
+
+        notificationService.sendNotification(
+            reporter,
+            NotificationType.RIDE_REPORT_SUBMITTED,
+            title,
+            message,
+            payload,
+            Priority.MEDIUM,
+            DeliveryMethod.IN_APP,
+            DEFAULT_QUEUE
+        );
+    }
+
+    private void notifyUserOfReportStatusChange(UserReport report, ReportStatus newStatus) {
+        User reporter = report.getReporter();
+        if (reporter == null) {
+            return;
+        }
+
+        NotificationType notificationType;
+        String title;
+        String message;
+
+        switch (newStatus) {
+            case IN_PROGRESS:
+                notificationType = NotificationType.RIDE_REPORT_IN_PROGRESS;
+                title = "Your ride report is under review";
+                message = "Your report is being reviewed by our team.";
+                break;
+            case RESOLVED:
+                notificationType = NotificationType.RIDE_REPORT_RESOLVED;
+                title = "Your ride report has been resolved";
+                message = report.getResolutionMessage() != null ? report.getResolutionMessage() : 
+                    "Your report has been resolved. Thank you for your feedback.";
+                break;
+            case DISMISSED:
+                notificationType = NotificationType.RIDE_REPORT_DISMISSED;
+                title = "Your ride report has been dismissed";
+                message = report.getAdminNotes() != null ? report.getAdminNotes() : 
+                    "Your report has been reviewed and dismissed.";
+                break;
+            default:
+                return;
+        }
+
+        String payload = toJsonSafe(Map.of(
+            "reportId", report.getReportId(),
+            "status", newStatus
+        ));
+
+        notificationService.sendNotification(
+            reporter,
+            notificationType,
+            title,
+            message,
+            payload,
+            Priority.MEDIUM,
+            DeliveryMethod.IN_APP,
+            DEFAULT_QUEUE
+        );
     }
 
     private void notifyAdminsOfNewReport(UserReport report) {

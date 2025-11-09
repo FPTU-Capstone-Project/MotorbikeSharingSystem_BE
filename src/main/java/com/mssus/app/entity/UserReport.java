@@ -36,6 +36,14 @@ public class UserReport {
     @JoinColumn(name = "resolver_id")
     private User resolver;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shared_ride_id")
+    private SharedRide sharedRide;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "driver_id")
+    private DriverProfile driver;
+
     @Column(name = "report_type", nullable = false, length = 50)
     @Enumerated(EnumType.STRING)
     private ReportType reportType;
@@ -49,6 +57,9 @@ public class UserReport {
 
     @Column(name = "resolution_message", columnDefinition = "TEXT")
     private String resolutionMessage;
+
+    @Column(name = "admin_notes", columnDefinition = "TEXT")
+    private String adminNotes;
 
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;

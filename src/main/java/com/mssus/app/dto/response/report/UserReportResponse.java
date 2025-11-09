@@ -47,6 +47,15 @@ public class UserReportResponse {
     @Schema(description = "Resolution message provided by the admin")
     private String resolutionMessage;
 
+    @Schema(description = "Identifier of the shared ride (if this is a ride-specific report)", example = "123")
+    private Integer sharedRideId;
+
+    @Schema(description = "Identifier of the driver (if this is a ride-specific report)", example = "45")
+    private Integer driverId;
+
+    @Schema(description = "Admin notes explaining the status change or resolution")
+    private String adminNotes;
+
     @Schema(description = "Timestamp when the report was created")
     private LocalDateTime createdAt;
 
