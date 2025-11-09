@@ -8,6 +8,9 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -18,6 +21,8 @@ public interface SosAlertRepository extends JpaRepository<SosAlert, Integer> {
     List<SosAlert> findByTriggeredBy_UserIdAndStatusInOrderByCreatedAtDesc(Integer userId, Collection<SosAlertStatus> statuses);
 
     List<SosAlert> findByStatusInOrderByCreatedAtDesc(Collection<SosAlertStatus> statuses);
+    
+    Page<SosAlert> findByStatusIn(Collection<SosAlertStatus> statuses, Pageable pageable);
 
     @Query("""
         select alert from SosAlert alert
