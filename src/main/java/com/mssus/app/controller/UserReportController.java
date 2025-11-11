@@ -12,6 +12,8 @@ import com.mssus.app.dto.response.report.ReportAnalyticsResponse;
 import com.mssus.app.dto.response.report.UserReportResponse;
 import com.mssus.app.dto.response.report.UserReportSummaryResponse;
 import com.mssus.app.service.UserReportService;
+import com.mssus.app.dto.request.report.StartReportChatRequest;
+import com.mssus.app.dto.response.chat.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -199,6 +201,26 @@ public class UserReportController {
     public ResponseEntity<ReportAnalyticsResponse> getReportAnalytics() {
         log.info("Fetching report analytics");
         ReportAnalyticsResponse response = userReportService.getReportAnalytics();
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{reportId}/start-chat")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Admin starts a chat related to a report with reporter or reported user")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Chat started and initial message sent",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid request payload"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - Admin role required"),
+        @ApiResponse(responseCode = "404", description = "Report not found")
+    })
+    public ResponseEntity<MessageResponse> startReportChat(
+        @Parameter(description = "Identifier of the report") @PathVariable Integer reportId,
+        @Valid @RequestBody StartReportChatRequest request,
+        Authentication authentication
+    ) {
+        MessageResponse response = userReportService.startReportChat(reportId, request, authentication);
         return ResponseEntity.ok(response);
     }
 }

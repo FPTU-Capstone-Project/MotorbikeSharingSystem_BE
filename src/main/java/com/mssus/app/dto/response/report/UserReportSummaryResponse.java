@@ -50,4 +50,22 @@ public class UserReportSummaryResponse {
 
     @Schema(description = "Timestamp when the report was last updated", example = "2024-05-19T08:02:11")
     private LocalDateTime updatedAt;
+
+    @Schema(description = "Timestamp when admin first contacted the reporter", example = "2024-05-19T10:00:00")
+    private LocalDateTime reporterChatStartedAt;
+
+    @Schema(description = "Timestamp of the reporter's last reply", example = "2024-05-19T11:00:00")
+    private LocalDateTime reporterLastReplyAt;
+
+    @Schema(description = "Timestamp when admin first contacted the reported user", example = "2024-05-19T10:05:00")
+    private LocalDateTime reportedChatStartedAt;
+
+    @Schema(description = "Timestamp of the reported user's last reply", example = "2024-05-19T11:05:00")
+    private LocalDateTime reportedLastReplyAt;
+
+    @Schema(description = "Timestamp when the report was automatically closed (if applicable)")
+    private LocalDateTime autoClosedAt;
+
+    @Schema(description = "Reason for automatic closure", example = "REPORTER_NO_RESPONSE")
+    private String autoClosedReason;
 }

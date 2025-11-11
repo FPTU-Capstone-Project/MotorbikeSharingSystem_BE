@@ -7,7 +7,9 @@ import com.mssus.app.dto.request.report.RideReportCreateRequest;
 import com.mssus.app.dto.request.report.UpdateRideReportRequest;
 import com.mssus.app.dto.request.report.UserReportCreateRequest;
 import com.mssus.app.dto.request.report.UserReportResolveRequest;
+import com.mssus.app.dto.request.report.StartReportChatRequest;
 import com.mssus.app.dto.response.PageResponse;
+import com.mssus.app.dto.response.chat.MessageResponse;
 import com.mssus.app.dto.response.report.ReportAnalyticsResponse;
 import com.mssus.app.dto.response.report.UserReportResponse;
 import com.mssus.app.dto.response.report.UserReportSummaryResponse;
@@ -33,6 +35,8 @@ public interface UserReportService {
     UserReportResponse submitDriverResponse(Integer reportId, DriverReportResponseRequest request, Authentication authentication);
 
     ReportAnalyticsResponse getReportAnalytics();
+
+    MessageResponse startReportChat(Integer reportId, StartReportChatRequest request, Authentication authentication);
 
     void escalateStaleReports();
 }

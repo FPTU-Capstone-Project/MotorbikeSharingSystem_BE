@@ -16,7 +16,10 @@ import com.mssus.app.dto.request.report.RideReportCreateRequest;
 import com.mssus.app.dto.request.report.UpdateRideReportRequest;
 import com.mssus.app.dto.request.report.UserReportCreateRequest;
 import com.mssus.app.dto.request.report.UserReportResolveRequest;
+import com.mssus.app.dto.request.report.StartReportChatRequest;
+import com.mssus.app.dto.request.chat.SendMessageRequest;
 import com.mssus.app.dto.response.PageResponse;
+import com.mssus.app.dto.response.chat.MessageResponse;
 import com.mssus.app.dto.response.report.ReportAnalyticsResponse;
 import com.mssus.app.dto.response.report.UserReportResponse;
 import com.mssus.app.dto.response.report.UserReportSummaryResponse;
@@ -31,6 +34,7 @@ import com.mssus.app.repository.UserReportRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.service.NotificationService;
 import com.mssus.app.service.UserReportService;
+import com.mssus.app.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -60,6 +64,7 @@ public class UserReportServiceImpl implements UserReportService {
     private final SharedRideRepository sharedRideRepository;
     private final DriverProfileRepository driverProfileRepository;
     private final NotificationService notificationService;
+    private final MessageService messageService;
     private final UserReportMapper userReportMapper;
     private final ObjectMapper objectMapper;
 
@@ -309,6 +314,59 @@ public class UserReportServiceImpl implements UserReportService {
         notifyAdminsOfDriverResponse(saved);
 
         return userReportMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse startReportChat(Integer reportId, StartReportChatRequest request, Authentication authentication) {
+        User admin = resolveUser(authentication);
+        if (!Objects.equals(admin.getUserType(), UserType.ADMIN)) {
+            throw BaseDomainException.unauthorized("Only administrators can initiate report chats");
+        }
+
+        UserReport report = userReportRepository.findById(reportId)
+            .orElseThrow(() -> BaseDomainException.of("user-report.not-found", "Report not found"));
+
+        Integer reporterId = report.getReporter() != null ? report.getReporter().getUserId() : null;
+        Integer reportedUserId = resolveReportedUserId(report);
+
+        Integer targetUserId = request.getTargetUserId();
+        boolean contactingReporter = reporterId != null && Objects.equals(reporterId, targetUserId);
+        boolean contactingReported = reportedUserId != null && Objects.equals(reportedUserId, targetUserId);
+
+        if (!contactingReporter && !contactingReported) {
+            throw BaseDomainException.validation("Target user must be the reporter or the reported participant of this report");
+        }
+
+        String initialMessage = request.getInitialMessage();
+        if (initialMessage == null || initialMessage.trim().isEmpty()) {
+            initialMessage = "Xin chào, tôi là admin. Mình trao đổi về báo cáo này nhé.";
+        }
+
+        SendMessageRequest messageRequest = SendMessageRequest.builder()
+            .receiverId(targetUserId)
+            .reportId(reportId)
+            .messageType(com.mssus.app.common.enums.MessageType.TEXT)
+            .content(initialMessage.trim())
+            .build();
+
+        MessageResponse response = messageService.sendMessage(admin.getEmail(), messageRequest);
+
+        LocalDateTime now = LocalDateTime.now();
+        if (contactingReporter && report.getReporterChatStartedAt() == null) {
+            report.setReporterChatStartedAt(now);
+        }
+        if (contactingReported && report.getReportedChatStartedAt() == null) {
+            report.setReportedChatStartedAt(now);
+        }
+
+        if (!ReportStatus.RESOLVED.equals(report.getStatus()) && !ReportStatus.DISMISSED.equals(report.getStatus())) {
+            report.setStatus(ReportStatus.IN_PROGRESS);
+        }
+
+        userReportRepository.save(report);
+
+        return response;
     }
 
     @Override
@@ -693,5 +751,33 @@ public class UserReportServiceImpl implements UserReportService {
             log.error("Failed to serialize notification payload for report: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    private Integer resolveReportedUserId(UserReport report) {
+        if (report == null) {
+            return null;
+        }
+
+        // Prefer driver from ride context
+        Integer reporterUserId = report.getReporter() != null ? report.getReporter().getUserId() : null;
+
+        if (report.getDriver() != null && report.getDriver().getUser() != null) {
+            Integer driverUserId = report.getDriver().getUser().getUserId();
+            if (driverUserId != null && !Objects.equals(driverUserId, reporterUserId)) {
+                return driverUserId;
+            }
+        }
+
+        if (report.getSharedRide() != null
+            && report.getSharedRide().getSharedRideRequest() != null
+            && report.getSharedRide().getSharedRideRequest().getRider() != null
+            && report.getSharedRide().getSharedRideRequest().getRider().getUser() != null) {
+            Integer riderUserId = report.getSharedRide().getSharedRideRequest().getRider().getUser().getUserId();
+            if (riderUserId != null && !Objects.equals(riderUserId, reporterUserId)) {
+                return riderUserId;
+            }
+        }
+
+        return null;
     }
 }

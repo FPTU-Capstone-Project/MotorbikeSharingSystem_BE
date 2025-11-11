@@ -1,6 +1,7 @@
 package com.mssus.app.entity;
 
 import com.mssus.app.common.enums.MessageType;
+import com.mssus.app.common.enums.ConversationType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -29,11 +30,20 @@ public class Message {
     private Integer receiverId;
 
     @ManyToOne
-    @JoinColumn(name = "shared_ride_request_id", nullable = false)
+    @JoinColumn(name = "shared_ride_request_id")
     private SharedRideRequest sharedRideRequest;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "report_id")
+    private UserReport report;
 
     @Column(name = "conversation_id")
     private String conversationId;
+
+    @Column(name = "conversation_type", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private ConversationType conversationType = ConversationType.RIDE_REQUEST;
 
     @Column(name = "message_type")
     @Enumerated(EnumType.STRING)

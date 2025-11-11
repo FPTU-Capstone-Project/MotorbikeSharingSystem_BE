@@ -60,6 +60,12 @@ public class UserReportResponse {
     @Schema(description = "Full name of the driver (if this is a ride-specific report)", example = "Tran Van B")
     private String driverName;
 
+    @Schema(description = "User ID of the reported person (driver or rider)", example = "20")
+    private Integer reportedUserId;
+
+    @Schema(description = "Full name of the reported person", example = "Tran Van B")
+    private String reportedUserName;
+
     @Schema(description = "Admin notes explaining the status change or resolution")
     private String adminNotes;
 
@@ -83,4 +89,22 @@ public class UserReportResponse {
 
     @Schema(description = "Timestamp when the report was resolved")
     private LocalDateTime resolvedAt;
+
+    @Schema(description = "Timestamp when admin first contacted the reporter")
+    private LocalDateTime reporterChatStartedAt;
+
+    @Schema(description = "Timestamp of the reporter's last reply")
+    private LocalDateTime reporterLastReplyAt;
+
+    @Schema(description = "Timestamp when admin first contacted the reported user")
+    private LocalDateTime reportedChatStartedAt;
+
+    @Schema(description = "Timestamp of the reported user's last reply")
+    private LocalDateTime reportedLastReplyAt;
+
+    @Schema(description = "Timestamp when the report was automatically closed, if applicable")
+    private LocalDateTime autoClosedAt;
+
+    @Schema(description = "Reason for automatic closure, if applicable")
+    private String autoClosedReason;
 }

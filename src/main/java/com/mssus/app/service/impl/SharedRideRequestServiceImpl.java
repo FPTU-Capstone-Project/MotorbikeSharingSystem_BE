@@ -950,5 +950,23 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
         throw BaseDomainException.of("ride.validation.invalid-location", "Either " + pointType.toLowerCase() + "LocationId or " + pointType.toLowerCase() + "LatLng must be provided");
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SharedRideRequestResponse> getMyCompletedRideRequests(Pageable pageable, Authentication authentication) {
+        log.info("Fetching completed ride requests for authenticated rider: {}", authentication.getName());
+        
+        User user = userRepository.findByEmail(authentication.getName())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+
+        RiderProfile rider = riderRepository.findByUserUserId(user.getUserId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.rider-profile"));
+
+        Integer riderId = rider.getRiderId();
+        
+        Page<SharedRideRequest> requestPage = requestRepository.findByRiderRiderIdAndStatusOrderByCreatedAtDesc(
+            riderId, SharedRideRequestStatus.COMPLETED, pageable);
+
+        return requestPage.map(this::buildRequestResponse);
+    }
 
 }

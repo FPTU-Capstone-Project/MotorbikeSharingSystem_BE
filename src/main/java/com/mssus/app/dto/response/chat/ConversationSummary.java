@@ -1,5 +1,6 @@
 package com.mssus.app.dto.response.chat;
 
+import com.mssus.app.common.enums.ConversationType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +19,9 @@ public class ConversationSummary {
     private String otherUserName;
     private String otherUserPhotoUrl;
     private String otherUserType; // "DRIVER" or "RIDER"
+    private ConversationType conversationType;
     private Integer rideRequestId;
+    private Integer reportId;
     private String lastMessage;
     private LocalDateTime lastMessageTime;
     private Long unreadCount;

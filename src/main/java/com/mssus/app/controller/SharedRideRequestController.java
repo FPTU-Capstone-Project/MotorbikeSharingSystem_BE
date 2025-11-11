@@ -22,6 +22,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -143,6 +144,41 @@ public class SharedRideRequestController {
 //        List<RideMatchProposalResponse> response = requestService.getMatchProposals(requestId, authentication);
 //        return ResponseEntity.ok(response);
 //    }
+
+    @GetMapping("/ride-history")
+    @PreAuthorize("hasRole('RIDER')")
+    @Operation(
+            summary = "Get my completed ride requests (Rider)",
+            description = "Retrieve all completed ride requests for the authenticated rider. Requires login."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Completed ride requests retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = PageResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized - Login required"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - Rider role required",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<PageResponse<SharedRideRequestResponse>> getMyCompletedRideRequests(
+            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir,
+            Authentication authentication) {
+        log.info("Rider {} fetching their completed ride requests", authentication.getName());
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Page<SharedRideRequestResponse> pageData = requestService.getMyCompletedRideRequests(pageable, authentication);
+        PageResponse<SharedRideRequestResponse> response = PageResponse.<SharedRideRequestResponse>builder()
+                .data(pageData.getContent())
+                .pagination(PageResponse.PaginationInfo.builder()
+                        .page(pageData.getNumber() + 1)
+                        .pageSize(pageData.getSize())
+                        .totalPages(pageData.getTotalPages())
+                        .totalRecords(pageData.getTotalElements())
+                        .build())
+                .build();
+        return ResponseEntity.ok(response);
+    }
 
     @GetMapping("/rider/{riderId}")
     @PreAuthorize("hasAnyRole('RIDER', 'ADMIN')")

@@ -36,5 +36,13 @@ public interface SharedRideService {
 
     RideRequestCompletionResponse forceCompleteRideRequestOfRide(CompleteRideReqRequest request,
                                                                  Authentication authentication);
+
+    /**
+     * Get completed rides for the authenticated driver
+     * @param pageable Pagination parameters
+     * @param authentication Current user authentication
+     * @return Page of completed rides
+     */
+    Page<SharedRideResponse> getMyCompletedRides(Pageable pageable, Authentication authentication);
 }
 

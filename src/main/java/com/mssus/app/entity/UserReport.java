@@ -82,6 +82,24 @@ public class UserReport {
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
+    @Column(name = "reporter_chat_started_at")
+    private LocalDateTime reporterChatStartedAt;
+
+    @Column(name = "reporter_last_reply_at")
+    private LocalDateTime reporterLastReplyAt;
+
+    @Column(name = "reported_chat_started_at")
+    private LocalDateTime reportedChatStartedAt;
+
+    @Column(name = "reported_last_reply_at")
+    private LocalDateTime reportedLastReplyAt;
+
+    @Column(name = "auto_closed_at")
+    private LocalDateTime autoClosedAt;
+
+    @Column(name = "auto_closed_reason", length = 100)
+    private String autoClosedReason;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

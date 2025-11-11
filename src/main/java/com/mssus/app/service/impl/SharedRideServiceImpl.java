@@ -630,12 +630,12 @@ public class SharedRideServiceImpl implements SharedRideService {
                 Map.of("currentState", ride.getStatus()));
         }
 
-        List<SharedRideRequest> activeRequests = requestRepository.findActiveRequestsByRide(
-            rideId, SharedRideRequestStatus.CONFIRMED, SharedRideRequestStatus.ONGOING);
-        if (!activeRequests.isEmpty()) {
-            throw BaseDomainException.of("ride.validation.active-requests",
-                "Cannot complete ride while requests are still awaiting pickup/dropoff");
-        }
+//        List<SharedRideRequest> activeRequests = requestRepository.findActiveRequestsByRide(
+//            rideId, SharedRideRequestStatus.CONFIRMED, SharedRideRequestStatus.ONGOING);
+//        if (!activeRequests.isEmpty()) {
+//            throw BaseDomainException.of("ride.validation.active-requests",
+//                "Cannot complete ride while requests are still awaiting pickup/dropoff");
+//        }
 
 //        if (PolylineDistance.haversineMeters(driverCurrentLoc.latitude(),
 //            driverCurrentLoc.longitude(),
@@ -988,5 +988,12 @@ public class SharedRideServiceImpl implements SharedRideService {
             .validFrom(route.getValidFrom())
             .validUntil(route.getValidUntil())
             .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SharedRideResponse> getMyCompletedRides(Pageable pageable, Authentication authentication) {
+        log.info("Fetching completed rides for authenticated driver: {}", authentication.getName());
+        return getRidesByDriver("COMPLETED", pageable, authentication);
     }
 }

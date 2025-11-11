@@ -37,5 +37,13 @@ public interface SharedRideRequestService {
     SharedRideRequestResponse acceptBroadcast(Integer requestId, BroadcastAcceptRequest request, Authentication authentication);
 
     List<BroadcastingRideRequestResponse> getBroadcastingRideRequests(Authentication authentication);
+
+    /**
+     * Get completed ride requests for the authenticated rider
+     * @param pageable Pagination parameters
+     * @param authentication Current user authentication
+     * @return Page of completed ride requests
+     */
+    Page<SharedRideRequestResponse> getMyCompletedRideRequests(Pageable pageable, Authentication authentication);
 }
 

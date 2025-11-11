@@ -99,6 +99,21 @@ public class GlobalExceptionHandler {
     }
     
     /**
+     * Handle ForbiddenException - maps to catalog entry
+     */
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleForbiddenException(ForbiddenException ex, HttpServletRequest request) {
+        String traceId = generateTraceId();
+        log.warn("ForbiddenException [{}]: {}", traceId, ex.getMessage());
+        
+        ErrorEntry errorEntry = errorCatalogService.getErrorEntry("auth.unauthorized.access-denied", ex.getMessage());
+        ErrorResponse errorResponse = buildErrorResponse(errorEntry, "auth.unauthorized.access-denied", 
+                ex.getMessage(), null, traceId, request);
+        
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+    
+    /**
      * Handle legacy ValidationException - maps to catalog entry
      */
     @ExceptionHandler(ValidationException.class)
