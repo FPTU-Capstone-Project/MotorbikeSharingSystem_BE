@@ -691,7 +691,10 @@ Body:
 }
 ```
 
-**Sau bước này:** Report đã được đóng, cả reporter và reported user nhận notification.
+**Sau bước này:** 
+- Report đã được đóng (status = `RESOLVED` hoặc `DISMISSED`)
+- Cả reporter và reported user nhận notification
+- **⚠️ QUAN TRỌNG:** Sau khi report đóng, **KHÔNG THỂ** gửi tin nhắn nữa. Tất cả các bên (admin, reporter, reported user) sẽ nhận lỗi 403 nếu cố gắng gửi tin nhắn
 
 ---
 
@@ -730,8 +733,11 @@ Body:
 
 ### Quy tắc gửi tin nhắn trong report chat:
 
+**⚠️ QUAN TRỌNG:** Không thể gửi tin nhắn nếu report đã đóng (status = `RESOLVED` hoặc `DISMISSED`)
+
 1. **Admin:**
-   - ✅ Có thể gửi tin nhắn bất cứ lúc nào
+   - ✅ Có thể gửi tin nhắn bất cứ lúc nào (khi report chưa đóng)
+   - ❌ **KHÔNG THỂ** gửi tin nhắn nếu report status = `RESOLVED` hoặc `DISMISSED`
    - ✅ Chỉ có thể gửi cho reporter hoặc reported user của report đó
    - ✅ **Có 2 cách để khởi tạo chat:**
      - **Cách 1:** Gọi `POST /api/v1/user-reports/{reportId}/start-chat` (khuyến nghị - có initial message)
@@ -740,33 +746,55 @@ Body:
 
 2. **Reporter:**
    - ❌ **KHÔNG THỂ** gửi tin nhắn nếu admin chưa gửi tin nhắn đầu tiên (`reporterChatStartedAt = null`)
-   - ✅ **CHỈ CÓ THỂ** gửi tin nhắn sau khi admin đã gửi tin nhắn đầu tiên (qua `start-chat` hoặc trực tiếp qua `send-message`)
+   - ❌ **KHÔNG THỂ** gửi tin nhắn nếu report status = `RESOLVED` hoặc `DISMISSED`
+   - ✅ **CHỈ CÓ THỂ** gửi tin nhắn sau khi admin đã gửi tin nhắn đầu tiên (qua `start-chat` hoặc trực tiếp qua `send-message`) VÀ report chưa đóng
    - ✅ Chỉ có thể gửi cho admin (receiver phải là admin)
 
 3. **Reported User:**
    - ❌ **KHÔNG THỂ** gửi tin nhắn nếu admin chưa gửi tin nhắn đầu tiên (`reportedChatStartedAt = null`)
-   - ✅ **CHỈ CÓ THỂ** gửi tin nhắn sau khi admin đã gửi tin nhắn đầu tiên (qua `start-chat` hoặc trực tiếp qua `send-message`)
+   - ❌ **KHÔNG THỂ** gửi tin nhắn nếu report status = `RESOLVED` hoặc `DISMISSED`
+   - ✅ **CHỈ CÓ THỂ** gửi tin nhắn sau khi admin đã gửi tin nhắn đầu tiên (qua `start-chat` hoặc trực tiếp qua `send-message`) VÀ report chưa đóng
    - ✅ Chỉ có thể gửi cho admin (receiver phải là admin)
 
 **Lỗi nếu vi phạm:**
-- Reporter/Reported user gửi tin nhắn trước khi admin gửi tin nhắn đầu tiên:
-  ```
-  HTTP 403 Forbidden
-  {
-    "error": {
-      "message": "Admin has not started a chat with the reporter yet. Please wait for admin to initiate the conversation."
-    }
-  }
-  ```
-  hoặc
-  ```
-  HTTP 403 Forbidden
-  {
-    "error": {
-      "message": "Admin has not started a chat with you yet. Please wait for admin to initiate the conversation."
-    }
-  }
-  ```
+
+1. **Reporter/Reported user gửi tin nhắn trước khi admin gửi tin nhắn đầu tiên:**
+   ```
+   HTTP 403 Forbidden
+   {
+     "error": {
+       "message": "Admin has not started a chat with the reporter yet. Please wait for admin to initiate the conversation."
+     }
+   }
+   ```
+   hoặc
+   ```
+   HTTP 403 Forbidden
+   {
+     "error": {
+       "message": "Admin has not started a chat with you yet. Please wait for admin to initiate the conversation."
+     }
+   }
+   ```
+
+2. **Gửi tin nhắn khi report đã đóng (RESOLVED hoặc DISMISSED):**
+   ```
+   HTTP 403 Forbidden
+   {
+     "error": {
+       "message": "Cannot send messages to a closed report. Report status: RESOLVED"
+     }
+   }
+   ```
+   hoặc
+   ```
+   HTTP 403 Forbidden
+   {
+     "error": {
+       "message": "Cannot send messages to a closed report. Report status: DISMISSED"
+     }
+   }
+   ```
 
 ---
 

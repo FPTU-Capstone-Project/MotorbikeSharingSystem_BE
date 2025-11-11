@@ -2,6 +2,7 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.ConversationType;
 import com.mssus.app.common.enums.MessageType;
+import com.mssus.app.common.enums.ReportStatus;
 import com.mssus.app.common.enums.UserType;
 import com.mssus.app.common.exception.ForbiddenException;
 import com.mssus.app.dto.request.chat.SendMessageRequest;
@@ -59,6 +60,12 @@ public class MessageServiceImpl implements MessageService {
             // REPORT conversation
             report = userReportRepository.findById(request.getReportId())
                     .orElseThrow(() -> new RuntimeException("Report not found"));
+            
+            // Check if report is closed (RESOLVED or DISMISSED)
+            if (report.getStatus() == ReportStatus.RESOLVED || 
+                report.getStatus() == ReportStatus.DISMISSED) {
+                throw new ForbiddenException("Cannot send messages to a closed report. Report status: " + report.getStatus());
+            }
             
             // Validate report chat permissions
             validateReportChatPermission(report, sender, receiver);
