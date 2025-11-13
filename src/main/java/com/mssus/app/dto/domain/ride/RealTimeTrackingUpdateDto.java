@@ -13,4 +13,5 @@ public class RealTimeTrackingUpdateDto implements Serializable {
     private Double currentLat;
     private Double currentLng;
     private Double currentDistanceKm;
+    private boolean detoured;
 }

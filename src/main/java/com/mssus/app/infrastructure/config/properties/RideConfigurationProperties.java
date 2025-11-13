@@ -9,26 +9,28 @@ import java.time.Duration;
 /**
  * Configuration properties for ride module.
  * 
- * <p>Properties are loaded from application.yml under 'app.ride' prefix.</p>
+ * <p>
+ * Properties are loaded from application.yml under 'app.ride' prefix.
+ * </p>
  * 
  * @since 1.0.0 (Ride Module MVP)
  */
 @ConfigurationProperties(prefix = "app.ride")
 @Data
 public class RideConfigurationProperties {
-    
+
     /**
      * Request acceptance timeout (T_ACCEPT).
      * Duration after which pending AI_BOOKING requests expire if no driver accepts.
      * Default: 5 minutes
      */
     private Duration requestAcceptTimeout = Duration.ofMinutes(5);
-    
+
     /**
      * Matching algorithm parameters.
      */
     private Matching matching = new Matching();
-    
+
     /**
      * Cancellation fee configuration.
      */
@@ -48,7 +50,7 @@ public class RideConfigurationProperties {
      * Ride constraints.
      */
     private RideConstraints rideConstraints = new RideConstraints();
-    
+
     /**
      * Matching algorithm configuration.
      */
@@ -60,26 +62,26 @@ public class RideConfigurationProperties {
          * Default: 2.0 km (as per BR-25)
          */
         private Double maxProximityKm = 2.0;
-        
+
         /**
          * Time window (minutes) for matching rides.
          * Candidate rides must be scheduled within ±window of requested pickup time.
          * Default: 15 minutes (as per BR-26)
          */
         private Integer timeWindowMinutes = 15;
-        
+
         /**
          * Maximum detour distance (km) for pickup.
          * Default: 1.5 km (can be overridden by driver profile setting)
          */
         private Double maxDetourKm = 1.5;
-        
+
         /**
          * Maximum detour time (minutes) for pickup.
          * Default: 8 minutes (as per BR-26, BR-27)
          */
         private Integer maxDetourMinutes = 8;
-        
+
         /**
          * Maximum number of match proposals to return.
          * Default: 10
@@ -98,13 +100,13 @@ public class RideConfigurationProperties {
          * Default: 90 seconds.
          */
         private Integer driverResponseSeconds = 90;
-        
+
         /**
          * Scoring weights for matching algorithm.
          */
         private Scoring scoring = new Scoring();
     }
-    
+
     /**
      * Scoring weights for AI matching algorithm.
      * Total must sum to 1.0 for balanced scoring.
@@ -116,26 +118,26 @@ public class RideConfigurationProperties {
          * Default: 0.4 (40%)
          */
         private Double proximityWeight = 0.4;
-        
+
         /**
          * Weight for time alignment score (0.0-1.0).
          * Default: 0.3 (30%)
          */
         private Double timeWeight = 0.3;
-        
+
         /**
          * Weight for driver rating score (0.0-1.0).
          * Default: 0.2 (20%)
          */
         private Double ratingWeight = 0.2;
-        
+
         /**
          * Weight for detour penalty score (0.0-1.0).
          * Default: 0.1 (10%)
          */
         private Double detourWeight = 0.1;
     }
-    
+
     /**
      * Cancellation fee configuration.
      */
@@ -147,7 +149,7 @@ public class RideConfigurationProperties {
          * Default: 0.2 (20%)
          */
         private BigDecimal feePercentage = new BigDecimal("0.20");
-        
+
         /**
          * Grace period (minutes) for free cancellation after confirmation.
          * Cancellations within this period are free.
@@ -198,13 +200,15 @@ public class RideConfigurationProperties {
         private Duration rideAutoCompleteLeeway = Duration.ofMinutes(15);
 
         /**
-         * Maximum time a confirmed request can wait for pickup before auto-start (minutes).
+         * Maximum time a confirmed request can wait for pickup before auto-start
+         * (minutes).
          * Default: 5 minutes.
          */
         private Duration requestPickupTimeout = Duration.ofMinutes(30);
 
         /**
-         * Maximum time an ongoing request can remain active before auto-completion (minutes).
+         * Maximum time an ongoing request can remain active before auto-completion
+         * (minutes).
          * Default: 15 minutes.
          */
         private Duration requestDropoffTimeout = Duration.ofMinutes(60);
@@ -221,4 +225,3 @@ public class RideConfigurationProperties {
         private Duration minIntervalBetweenRides = Duration.ofHours(1);
     }
 }
-

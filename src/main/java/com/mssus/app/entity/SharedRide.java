@@ -79,4 +79,16 @@ public class SharedRide {
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "driver_approach_polyline", columnDefinition = "TEXT")
+    private String driverApproachPolyline;
+
+    @Column(name = "driver_approach_distance_meters")
+    private Integer driverApproachDistanceMeters;
+
+    @Column(name = "driver_approach_duration_seconds")
+    private Integer driverApproachDurationSeconds;
+
+    @Column(name = "driver_approach_eta")
+    private LocalDateTime driverApproachEta;
 }

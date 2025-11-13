@@ -290,6 +290,8 @@ Final delivery: `RealTimeNotificationService` → WebSocket (STOMP) + Database
 1. **`MATCHING`**: Sequential offers being sent to ranked drivers
 2. **`AWAITING_CONFIRMATION`**: Driver has an active offer, waiting for response
 3. **`BROADCASTING`**: All eligible drivers notified simultaneously
+
+> **Marketplace-Only Broadcast:** When no eligible drivers are available for push notifications, the orchestrator still transitions the request/session into `BROADCASTING` so it remains discoverable from the driver marketplace feed while skipping outbound offers. This prevents requests from getting stuck in `PENDING` once sequential matching is exhausted.
 4. **`COMPLETED`**: Driver accepted and request confirmed
 5. **`EXPIRED`**: No driver accepted within timeout
 6. **`CANCELLED`**: Rider cancelled the request
@@ -344,6 +346,20 @@ if (!state.shouldProcess(command.getCorrelationId())) {
 // ... process command ...
 sessionRepository.save(state, sessionTtl()); // Persist idempotency marker
 ```
+
+---
+
+### 5.5 Stale Session Detection
+
+Local developers frequently reset the PostgreSQL database while leaving Redis untouched. Because Redis keys are keyed by `requestId`, an old session such as `ride:matching:session:1` can linger and cause the orchestrator to treat a brand-new ride request as a duplicate.  
+
+To prevent that silent no-op:
+
+- Every session snapshot now stores `requestCreatedAt` (captured from the DB row).
+- When a new `ride.request.created` event arrives, the orchestrator compares the DB timestamp with the Redis value.
+- If the database record is newer by more than a small skew, the Redis entry is considered stale; it is deleted and matching restarts from scratch.
+
+This automatic purge keeps the queue-driven flow working even after DB truncations without requiring operators to flush Redis manually.
 
 ---
 
@@ -457,6 +473,8 @@ sessionRepository.save(state, sessionTtl()); // Persist idempotency marker
 
 **Scenario:** Rider directly joins an existing shared ride
 
+**Key Difference from BOOKING:** JOIN requests target a specific driver/ride. If the driver times out or rejects, the request **immediately fails** and releases the wallet hold. **NO broadcast phase, NO retry to other drivers.**
+
 ```
 ┌──────┐                 ┌─────────┐              ┌──────────┐             ┌───────┐
 │Rider │                 │  API    │              │RabbitMQ  │             │ Redis │
@@ -478,7 +496,7 @@ sessionRepository.save(state, sessionTtl()); // Persist idempotency marker
    │                          │                    Fetch ride & driver info    │
    │                          │                        │                       │
    │                          │                    Initialize session          │
-   │                          │                    (proposals=[], JOIN mode)   │
+   │                          │                    (requestKind=JOIN_RIDE)     │
    │                          │                        ├──────────────────────▶│
    │                          │                        │                       │
    │                          │                    Send offer to driver        │
@@ -490,6 +508,8 @@ sessionRepository.save(state, sessionTtl()); // Persist idempotency marker
 ┌────────┐                   │                        │                       │
 │Driver12│ receives offer    │                        │                       │
 └────┬───┘                   │                        │                       │
+     │                       │                        │                       │
+     │ [CASE 1: Driver Accepts]                      │                       │
      │ POST /accept          │                        │                       │
      ├──────────────────────▶│                        │                       │
      │                       │ Update request (CONFIRMED)                     │
@@ -508,7 +528,33 @@ sessionRepository.save(state, sessionTtl()); // Persist idempotency marker
    ┌─┴──┐                   │                        │                       │
    │Rider│ receives "Driver  │                        │                       │
    └────┘ accepted" via WS   │                        │                       │
+     │                       │                        │                       │
+     │                       │                        │                       │
+     │ [CASE 2: Driver Timeout - 90s expires]        │                       │
+     │                       │                        │                       │
+     │                       │           [Timeout message expires]            │
+     │                       │                        │                       │
+     │                       │           [Orchestrator handles DRIVER_TIMEOUT]│
+     │                       │                        │                       │
+     │                       │                    Detect requestKind=JOIN_RIDE│
+     │                       │                    Mark EXPIRED (no retry!)     │
+     │                       │                        ├──────────────────────▶│
+     │                       │                        │                       │
+     │                       │                    Send rider notification      │
+     │                       │                    (JOIN failed - timeout)     │
+   ┌─┴──┐                   │                        │                       │
+   │Rider│ receives "Driver  │                        │                       │
+   └────┘ did not respond"   │                        │                       │
+          via WS             │                        │                       │
 ```
+
+**Critical Behavior:**
+- ✅ JOIN requests have `requestKind = JOIN_RIDE` stored in session
+- ✅ If driver times out → immediate failure notification to rider
+- ✅ If driver rejects → immediate failure notification to rider
+- ❌ **NEVER enters broadcast mode** (only BOOKING requests broadcast)
+- ❌ **NEVER tries next candidate** (JOIN targets one specific driver)
+- ✅ Wallet hold released immediately on failure
 
 ---
 
@@ -1112,6 +1158,84 @@ WARN - No session found in Redis for request 42 (key: ride:matching:session:42)
    - Purge DLQ if messages no longer valid
    - Re-publish corrected messages if needed
 
+### 12.5 Scenario: JOIN Request Entering Broadcast Mode (FIXED)
+
+**Symptoms (before fix):**
+- JOIN_RIDE requests unexpectedly entering `BROADCASTING` phase
+- Rider receives multiple driver offers for a direct join request
+- Wallet hold not released immediately on driver timeout
+
+**Root Cause:**
+The orchestrator was treating all request types the same way. When a JOIN request's driver timed out, it would:
+1. Try to send the next offer (but JOIN requests have no proposals)
+2. Call `handleNoMoreCandidates` → `tryEnterBroadcast`
+3. Enter broadcast mode and notify all eligible drivers
+
+**This was incorrect because:**
+- JOIN requests target a **specific driver/ride combination**
+- If that driver rejects/times out, the request should **immediately fail**
+- Broadcast mode only makes sense for BOOKING requests (AI matching)
+
+**Fix Applied:**
+
+1. **Added `requestKind` field to `MatchingSessionState`:**
+   ```java
+   private RequestKind requestKind; // BOOKING or JOIN_RIDE
+   ```
+
+2. **Set `requestKind` when creating sessions:**
+   - BOOKING: `requestKind = RequestKind.BOOKING`
+   - JOIN_RIDE: `requestKind = RequestKind.JOIN_RIDE`
+
+3. **Modified `handleDriverTimeout` to check request type:**
+   ```java
+   if (state.isJoinRequest()) {
+       // Immediately fail - no retry, no broadcast
+       state.markExpired();
+       dispatchRiderStatus(request, 
+           responseAssembler.toRiderJoinRequestFailed(
+               request, "Driver did not respond in time"));
+       return;
+   }
+   // BOOKING requests continue to next candidate
+   ```
+
+4. **Modified `handleNoMoreCandidates` to block broadcast for JOIN:**
+   ```java
+   if (state.isJoinRequest()) {
+       // Never enter broadcast for JOIN requests
+       state.markExpired();
+       dispatchRiderStatus(request, 
+           responseAssembler.toRiderJoinRequestFailed(...));
+       return;
+   }
+   ```
+
+5. **Added safety check in `tryEnterBroadcast`:**
+   ```java
+   if (state.isJoinRequest()) {
+       log.warn("Attempted to enter broadcast mode for JOIN_RIDE - should never happen");
+       return false;
+   }
+   ```
+
+**Verification:**
+```bash
+# Check session requestKind in Redis
+redis-cli GET "ride:matching:session:42"
+# Should show: "requestKind":"JOIN_RIDE"
+
+# Check logs for JOIN timeout
+grep "JOIN_RIDE request .* timed out" application.log
+# Should show: "Marking as expired" (not "entering broadcast")
+```
+
+**Impact:**
+- ✅ JOIN requests fail fast on driver timeout
+- ✅ Wallet holds released immediately
+- ✅ No unexpected broadcast notifications to other drivers
+- ✅ Clearer rider feedback (timeout vs. no drivers available)
+
 ---
 
 ## 13. Future Enhancements
@@ -1488,6 +1612,10 @@ For questions, clarifications, or contributions, refer to the codebase documenta
 **Maintained by:** Backend Team  
 **Last Review:** November 2025  
 **Next Review:** After Phase 4 deployment (Location Services)
+
+
+
+
 
 
 

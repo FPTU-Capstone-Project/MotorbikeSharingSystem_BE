@@ -27,6 +27,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @ConditionalOnProperty(prefix = "app.messaging.ride", name = {"enabled", "matching-enabled"}, havingValue = "true")
 public class QueueRideMatchingOrchestrator {
+
+    private static final Duration STALE_SESSION_SKEW = Duration.ofSeconds(5);
 
     private final SharedRideRequestRepository requestRepository;
     private final DriverProfileRepository driverRepository;
@@ -65,15 +69,24 @@ public class QueueRideMatchingOrchestrator {
         }
 
         Integer requestId = message.getRequestId();
-        if (sessionRepository.find(requestId).isPresent()) {
-            log.debug("Matching session already exists for request {}, skipping duplicate create event", requestId);
-            return;
-        }
 
         SharedRideRequest request = requestRepository.findById(requestId).orElse(null);
         if (request == null) {
             log.warn("Ride request {} not found when handling created event", requestId);
             return;
+        }
+
+        Optional<MatchingSessionState> existingSession = sessionRepository.find(requestId);
+        if (existingSession.isPresent()) {
+            MatchingSessionState state = existingSession.get();
+            if (!isStaleSession(state, request)) {
+                log.debug("Matching session already exists for request {}, skipping duplicate create event", requestId);
+                return;
+            }
+
+            log.info("Detected stale matching session for request {} (session created {}, request created {}). Purging.",
+                requestId, state.getRequestCreatedAt(), request.getCreatedAt());
+            sessionRepository.delete(requestId);
         }
 
         if (request.getStatus() != SharedRideRequestStatus.PENDING) {
@@ -99,11 +112,15 @@ public class QueueRideMatchingOrchestrator {
         
         List<RideMatchProposalResponse> proposals = rideMatchingService.findMatches(request);
         log.info("Matching service returned {} proposals for request {}", proposals.size(), requestId);
+
+        Instant requestCreatedAt = Optional.ofNullable(toInstant(request.getCreatedAt()))
+            .orElse(Instant.now());
         
         MatchingSessionState session = MatchingSessionState.initialize(
             requestId,
             Instant.now().plus(sessionTtl()),
-            proposals);
+            proposals,
+            requestCreatedAt);
         
         log.info("Initialized session for request {} - saving to Redis", requestId);
         sessionRepository.save(session, sessionTtl());
@@ -140,8 +157,13 @@ public class QueueRideMatchingOrchestrator {
         Integer driverId = request.getSharedRide().getDriver().getDriverId();
 
         // Create a simple session for join request (no proposals needed)
+        Instant requestCreatedAt = Optional.ofNullable(toInstant(request.getCreatedAt()))
+            .orElse(Instant.now());
+
         MatchingSessionState session = MatchingSessionState.builder()
             .requestId(requestId)
+            .requestKind(RequestKind.JOIN_RIDE) // Explicitly mark as JOIN_RIDE
+            .requestCreatedAt(requestCreatedAt)
             .phase(MatchingSessionPhase.MATCHING)
             .proposals(List.of()) // Empty proposals for join requests
             .nextProposalIndex(0)
@@ -149,6 +171,9 @@ public class QueueRideMatchingOrchestrator {
             .notifiedDrivers(new HashSet<>())
             .build();
         sessionRepository.save(session, sessionTtl());
+
+        log.info("Initialized JOIN_RIDE session for request {} targeting driver {} on ride {}", 
+            requestId, driverId, rideId);
 
         // Send notification to the specific driver
         sendJoinRequestNotification(session, request, rideId, driverId);
@@ -331,7 +356,26 @@ public class QueueRideMatchingOrchestrator {
                 state.getRequestId(), command.getDriverId(), command.getRideId());
             return;
         }
+        
         state.setActiveOffer(null);
+        
+        // JOIN_RIDE requests should fail immediately on timeout (no retry, no broadcast)
+        if (state.isJoinRequest()) {
+            log.info("JOIN_RIDE request {} timed out - driver {} did not respond. Marking as expired.",
+                state.getRequestId(), command.getDriverId());
+            state.markExpired();
+            sessionRepository.save(state, sessionTtl());
+            
+            SharedRideRequest request = requestRepository.findById(state.getRequestId()).orElse(null);
+            if (request != null) {
+                markRequestExpired(request);
+                dispatchRiderStatus(request, responseAssembler.toRiderJoinRequestFailed(
+                    request, "Driver did not respond in time"));
+            }
+            return;
+        }
+        
+        // BOOKING requests continue to next candidate
         state.setPhase(MatchingSessionPhase.MATCHING);
         sessionRepository.save(state, sessionTtl());
         commandPublisher.publish(MatchingCommandMessage.sendNext(state.getRequestId(), state.getNextProposalIndex()));
@@ -410,8 +454,10 @@ public class QueueRideMatchingOrchestrator {
         }
         state.markExpired();
         sessionRepository.save(state, sessionTtl());
-        requestRepository.findById(state.getRequestId()).ifPresent(request ->
-            dispatchRiderStatus(request, responseAssembler.toRiderNoMatch(request)));
+        requestRepository.findById(state.getRequestId()).ifPresent(request -> {
+            markRequestExpired(request);
+            dispatchRiderStatus(request, responseAssembler.toRiderNoMatch(request));
+        });
     }
 
     private void handleCancel(MatchingSessionState state) {
@@ -428,18 +474,39 @@ public class QueueRideMatchingOrchestrator {
             return;
         }
 
+        // JOIN_RIDE requests should never enter broadcast mode
+        if (state.isJoinRequest()) {
+            log.info("JOIN_RIDE request {} has no more candidates (should never happen for direct join). Marking as expired.",
+                state.getRequestId());
+            state.markExpired();
+            sessionRepository.save(state, sessionTtl());
+            markRequestExpired(request);
+            dispatchRiderStatus(request, responseAssembler.toRiderJoinRequestFailed(
+                request, "Unable to process join request"));
+            return;
+        }
+
+        // Only BOOKING requests can enter broadcast mode
         if (tryEnterBroadcast(state, request)) {
-            log.info("Entered broadcast mode for request {}", state.getRequestId());
+            log.info("Entered broadcast mode for BOOKING request {}", state.getRequestId());
             return;
         }
 
         // No broadcast or broadcast not configured - mark as expired
         state.markExpired();
         sessionRepository.save(state, sessionTtl());
+        markRequestExpired(request);
         dispatchRiderStatus(request, responseAssembler.toRiderNoMatch(request));
     }
 
     private boolean tryEnterBroadcast(MatchingSessionState state, SharedRideRequest request) {
+        // JOIN_RIDE requests should NEVER enter broadcast mode
+        if (state.isJoinRequest()) {
+            log.warn("Attempted to enter broadcast mode for JOIN_RIDE request {} - this should never happen", 
+                state.getRequestId());
+            return false;
+        }
+        
         if (state.isBroadcasting() || state.isTerminal()) {
             log.debug("Cannot enter broadcast - state is {} for request {}", 
                 state.getPhase(), state.getRequestId());
@@ -463,13 +530,10 @@ public class QueueRideMatchingOrchestrator {
         // Find ALL eligible drivers (excluding already notified ones from sequential phase)
         List<Integer> excludedDriverIds = state.getNotifiedDrivers() == null ? 
             List.of() : List.copyOf(state.getNotifiedDrivers());
-        List<DriverProfile> candidates = driverRepository.findBroadcastEligibleDrivers(excludedDriverIds);
-
-        if (candidates.isEmpty()) {
-            log.info("Broadcast skipped - no eligible drivers for request {}", 
-                state.getRequestId());
-            return false;
-        }
+        List<DriverProfile> candidates = Optional
+            .ofNullable(driverRepository.findBroadcastEligibleDrivers(excludedDriverIds))
+            .orElse(List.of());
+        boolean hasPushCandidates = !candidates.isEmpty();
 
         // Broadcast window = remaining time from 15-minute total
         Instant deadline = state.getRequestDeadline();
@@ -480,8 +544,15 @@ public class QueueRideMatchingOrchestrator {
         requestRepository.save(request);
         sessionRepository.save(state, sessionTtl());
 
-        // Send broadcast offers to all eligible drivers
-        sendBroadcastOffers(state, request, candidates, deadline, (int) broadcastWindowSeconds);
+        // Send broadcast offers to all eligible drivers when push is enabled
+        if (hasPushCandidates && properties.isBroadcastPushEnabled()) {
+            sendBroadcastOffers(state, request, candidates, deadline, (int) broadcastWindowSeconds);
+        } else if (hasPushCandidates) {
+            log.info("Broadcast push disabled - request {} will be discoverable via marketplace only", state.getRequestId());
+        } else {
+            log.info("No eligible drivers to push - request {} stays discoverable via marketplace feed only",
+                state.getRequestId());
+        }
 
         // Schedule broadcast timeout using remaining time
         commandPublisher.publishBroadcastTimeout(
@@ -573,8 +644,77 @@ public class QueueRideMatchingOrchestrator {
             Map.of()));
     }
 
+    /**
+     * Registers that a driver has proactively claimed a broadcast request via the marketplace feed.
+     * This allows the subsequent driver response to pass the {@code wasDriverNotified} validation.
+     *
+     * @return {@code true} when the session is in broadcasting state and the driver is recorded.
+     */
+    public boolean registerBroadcastInterest(Integer requestId, Integer driverId) {
+        if (requestId == null || driverId == null) {
+            return false;
+        }
+
+        MatchingSessionState state = sessionRepository.find(requestId).orElse(null);
+        if (state == null) {
+            log.warn("Cannot register broadcast interest - no session for request {}", requestId);
+            return false;
+        }
+
+        if (!state.isBroadcasting() || state.isTerminal()) {
+            log.info("Cannot register broadcast interest for request {} - state {}", requestId, state.getPhase());
+            return false;
+        }
+
+        if (state.wasDriverNotified(driverId)) {
+            return true;
+        }
+
+        state.recordNotifiedDriver(driverId);
+        sessionRepository.save(state, sessionTtl());
+        log.debug("Registered driver {} for broadcast request {}", driverId, requestId);
+        return true;
+    }
+
     public void publishCancellation(Integer requestId) {
         commandPublisher.publish(MatchingCommandMessage.cancel(requestId));
+    }
+
+    private void markRequestExpired(SharedRideRequest request) {
+        if (request == null) {
+            return;
+        }
+        if (request.getStatus() == SharedRideRequestStatus.EXPIRED) {
+            return;
+        }
+        request.setStatus(SharedRideRequestStatus.EXPIRED);
+        requestRepository.save(request);
+    }
+
+    private boolean isStaleSession(MatchingSessionState state, SharedRideRequest request) {
+        Instant requestCreated = toInstant(request.getCreatedAt());
+        Instant sessionCreated = state.getRequestCreatedAt();
+
+        if (sessionCreated == null) {
+            Instant lastProcessed = state.getLastProcessedAt();
+            if (lastProcessed == null || requestCreated == null) {
+                return true;
+            }
+            return requestCreated.isAfter(lastProcessed.plus(STALE_SESSION_SKEW));
+        }
+
+        if (requestCreated == null) {
+            return false;
+        }
+
+        return requestCreated.isAfter(sessionCreated.plus(STALE_SESSION_SKEW));
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        if (value == null) {
+            return null;
+        }
+        return value.atZone(ZoneId.systemDefault()).toInstant();
     }
 
     // Metrics recording methods

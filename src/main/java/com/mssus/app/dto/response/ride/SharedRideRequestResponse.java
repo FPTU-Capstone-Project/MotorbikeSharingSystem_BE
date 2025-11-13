@@ -45,9 +45,9 @@ public class SharedRideRequestResponse {
     @Schema(description = "Rider's full name", example = "Jane Smith")
     private String riderName;
 
-    @JsonProperty("rider_rating")
-    @Schema(description = "Rider's average rating", example = "4.9")
-    private Float riderRating;
+    @JsonProperty("rider_phone")
+    @Schema(description = "Rider's phone number in standard VN +84 format", example = "0123456789")
+    private String riderPhone;
 
     @JsonProperty("pickup_location")
     @Schema(description = "Pickup location details in JSON format")
@@ -107,6 +107,18 @@ public class SharedRideRequestResponse {
     @JsonProperty("polyline_from_driver_to_pickup")
     @Schema(description = "Polyline from driver's current location to pickup point", example = "abcdEfghIjklMnopQrstuVwxyz")
     private String polylineFromDriverToPickup;
+
+    @JsonProperty("driver_approach_distance_meters")
+    @Schema(description = "Distance in meters between the driver and pickup point when the ride was accepted", example = "1500")
+    private Integer driverApproachDistanceMeters;
+
+    @JsonProperty("driver_approach_duration_seconds")
+    @Schema(description = "Estimated travel time in seconds for the driver to reach pickup when the ride was accepted", example = "240")
+    private Integer driverApproachDurationSeconds;
+
+    @JsonProperty("driver_approach_eta")
+    @Schema(description = "Estimated time the driver arrives at pickup", example = "2025-10-05T08:10:00")
+    private LocalDateTime driverApproachEta;
 
     @JsonProperty("route")
     @Schema(description = "Associated route summary when a ride has been confirmed")

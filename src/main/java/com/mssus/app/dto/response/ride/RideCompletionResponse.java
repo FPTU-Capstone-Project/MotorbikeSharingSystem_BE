@@ -25,10 +25,13 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Ride completion summary")
 public class RideCompletionResponse {
-
     @JsonProperty("shared_ride_id")
     @Schema(description = "Ride ID", example = "300")
     private Integer sharedRideId;
+
+    @JsonProperty("shared_ride_request_id")
+    @Schema(description = "Ride request ID", example = "1500")
+    private Integer sharedRideRequestId;
 
     @JsonProperty("actual_distance")
     @Schema(description = "Actual distance traveled (km)", example = "8.7")
@@ -38,28 +41,12 @@ public class RideCompletionResponse {
     @Schema(description = "Actual duration (minutes)", example = "27")
     private Integer actualDuration;
 
-    @JsonProperty("total_fare_collected")
-    @Schema(description = "Total fare from all riders", example = "75000.00")
-    private BigDecimal totalFareCollected;
-
     @JsonProperty("driver_earnings")
     @Schema(description = "Driver's earnings after commission", example = "63750.00")
     private BigDecimal driverEarnings;
 
-    @JsonProperty("platform_commission")
-    @Schema(description = "Platform commission amount", example = "11250.00")
-    private BigDecimal platformCommission;
-
-    @JsonProperty("completed_requests_count")
-    @Schema(description = "Number of completed requests", example = "3")
-    private Integer completedRequestsCount;
-
     @JsonProperty("completed_at")
     @Schema(description = "Completion timestamp", example = "2025-10-05T08:32:00")
     private LocalDateTime completedAt;
-
-    @JsonProperty("completed_requests")
-    @Schema(description = "List of completed request IDs")
-    private List<Integer> completedRequests;
 }
 

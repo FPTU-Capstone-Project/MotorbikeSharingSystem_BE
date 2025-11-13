@@ -633,6 +633,7 @@ class SharedRideRequestServiceImplTest {
         when(rideRepository.existsByDriverDriverIdAndStatus(1, SharedRideStatus.ONGOING)).thenReturn(false);
         when(matchingCoordinator.beginBroadcastAcceptance(anyInt(), anyInt())).thenReturn(true);
         when(locationRepository.save(any(Location.class))).thenReturn(pickupLocation, dropoffLocation);
+        when(locationRepository.findById(1)).thenReturn(Optional.of(pickupLocation));
         when(rideRepository.save(any(SharedRide.class))).thenReturn(ride);
         when(requestRepository.save(any(SharedRideRequest.class))).thenReturn(rideRequest);
 

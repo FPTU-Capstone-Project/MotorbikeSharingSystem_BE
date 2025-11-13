@@ -65,6 +65,22 @@ public class SharedRideResponse {
     @Schema(description = "Route summary information")
     private RouteSummaryResponse route;
 
+    @JsonProperty("driver_approach_polyline")
+    @Schema(description = "Polyline representing the driver's path to the pickup point")
+    private String driverApproachPolyline;
+
+    @JsonProperty("driver_approach_distance_meters")
+    @Schema(description = "Distance in meters from driver's current position to pickup when the ride was accepted", example = "1500")
+    private Integer driverApproachDistanceMeters;
+
+    @JsonProperty("driver_approach_duration_seconds")
+    @Schema(description = "Estimated duration in seconds for the driver to reach the pickup when the ride was accepted", example = "240")
+    private Integer driverApproachDurationSeconds;
+
+    @JsonProperty("driver_approach_eta")
+    @Schema(description = "Estimated time the driver will arrive at pickup", example = "2025-10-05T08:10:00")
+    private LocalDateTime driverApproachEta;
+
 //    @JsonProperty("start_location_id")
 //    @Schema(description = "Start location ID", example = "1")
 //    private Integer startLocationId;

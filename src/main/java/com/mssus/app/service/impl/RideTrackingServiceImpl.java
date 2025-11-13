@@ -6,14 +6,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mssus.app.common.enums.SharedRideRequestStatus;
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
+import com.mssus.app.dto.response.RouteResponse;
+import com.mssus.app.dto.response.ride.RideTrackingSnapshotResponse;
 import com.mssus.app.dto.response.ride.TrackingResponse;
 import com.mssus.app.dto.domain.ride.LatLng;
 import com.mssus.app.dto.domain.ride.LocationPoint;
 import com.mssus.app.entity.DriverProfile;
+import com.mssus.app.entity.Location;
 import com.mssus.app.entity.RideTrack;
 import com.mssus.app.entity.SharedRide;
+import com.mssus.app.entity.SharedRideRequest;
 import com.mssus.app.entity.User;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.RideTrackRepository;
@@ -30,6 +35,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -53,8 +59,10 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     private final DriverProfileRepository driverRepository;
     private final RealTimeNotificationService notificationService;
     private final RideEventPublisher rideEventPublisher;
+    private final RoutingService routingService;
 
     private final SimpMessagingTemplate messagingTemplate;
+    private static final double ROUTE_DEVIATION_THRESHOLD_METERS = 120d;
     @Override
     @Transactional
     public TrackingResponse appendGpsPoints(Integer rideId, List<LocationPoint> points, String username) {
@@ -78,7 +86,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         if (points.isEmpty()) {
             throw BaseDomainException.of("tracking.invalid-points", "No points provided");
         }
-        validatePoints(points);  // Custom method: Check speed, accuracy
+//        validatePoints(points);  // Custom method: Check speed, accuracy
         publishDriverLocationUpdate(rideId, driver, points);
 
         // Get or create track
@@ -115,12 +123,23 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             throw BaseDomainException.of("tracking.append-failed", "Could not save GPS points");
         }
 
-        publishRealTimeTrackingUpdate(rideId);
+        TrackingPolylineResult result = determinePolyline(
+            ride,
+            ride.getSharedRideRequest(),
+            getLatestPosition(rideId, 5).orElse(null));
+
+        publishRealTimeTrackingUpdate(rideId, result);
 
         double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
-        String polyline = generatePolylineFromPoints(rideId);
+        LatLng latest = getLatestPosition(rideId, 5).orElse(null);
 
-        return new TrackingResponse(currentDistanceKm, polyline, "OK");
+        return new TrackingResponse(
+            currentDistanceKm,
+            result.polyline(),
+            "OK",
+            latest != null ? latest.latitude() : null,
+            latest != null ? latest.longitude() : null,
+            result.detoured());
     }
 
     private void validatePoints(List<LocationPoint> points) {
@@ -246,6 +265,53 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         log.info("Stopped tracking for ride {}", rideId);
     }
 
+    @Override
+    @Transactional
+    public RideTrackingSnapshotResponse getTrackingSnapshot(Integer rideId, Authentication authentication) {
+        if (authentication == null) {
+            throw BaseDomainException.of("ride.unauthorized.not-owner");
+        }
+
+        SharedRide ride = rideRepository.findById(rideId)
+            .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
+
+        SharedRideRequest request = ride.getSharedRideRequest();
+        if (request == null) {
+            throw BaseDomainException.of("ride.validation.request-invalid-state",
+                "Ride is not linked to a request");
+        }
+
+        User currentUser = userRepository.findByEmail(authentication.getName())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
+
+        boolean isDriver = ride.getDriver() != null
+            && ride.getDriver().getUser() != null
+            && ride.getDriver().getUser().getUserId().equals(currentUser.getUserId());
+        boolean isRider = request.getRider() != null
+            && request.getRider().getUser() != null
+            && request.getRider().getUser().getUserId().equals(currentUser.getUserId());
+        boolean isAdmin = authentication.getAuthorities().stream()
+            .anyMatch(auth -> "ROLE_ADMIN".equals(auth.getAuthority()));
+
+        if (!isDriver && !isRider && !isAdmin) {
+            throw BaseDomainException.of("ride.unauthorized.not-owner");
+        }
+
+        LatLng latestPosition = getLatestPosition(rideId, 5).orElse(null);
+        TrackingPolylineResult polylineResult = determinePolyline(ride, request, latestPosition);
+
+        return RideTrackingSnapshotResponse.builder()
+            .rideId(rideId)
+            .driverLat(latestPosition != null ? latestPosition.latitude() : null)
+            .driverLng(latestPosition != null ? latestPosition.longitude() : null)
+            .requestStatus(request.getStatus() != null ? request.getStatus().name() : null)
+            .rideStatus(ride.getStatus() != null ? ride.getStatus().name() : null)
+            .polyline(polylineResult.polyline())
+            .detoured(polylineResult.detoured())
+            .estimatedArrival(resolveEta(request))
+            .build();
+    }
+
     private String generatePolylineFromPoints(Integer rideId) {
         RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
@@ -273,21 +339,21 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         return polyline;
     }
 
-    private void publishRealTimeTrackingUpdate(Integer rideId) {
+    private void publishRealTimeTrackingUpdate(Integer rideId, TrackingPolylineResult override) {
         try {
             RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
                 .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
-            String polyline = generatePolylineFromPoints(rideId);
             Optional<LatLng> latestPos = getLatestPosition(rideId, 3); // Get latest position, max 1 min stale
             double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
 
             RealTimeTrackingUpdateDto updateDto = RealTimeTrackingUpdateDto.builder()
                 .rideId(rideId)
-                .polyline(polyline)
+                .polyline(override.polyline())
                 .currentLat(latestPos.map(LatLng::latitude).orElse(null))
                 .currentLng(latestPos.map(LatLng::longitude).orElse(null))
                 .currentDistanceKm(currentDistanceKm)
+                .detoured(override.detoured())
                 .build();
 
             messagingTemplate.convertAndSend("/topic/ride.tracking." + rideId, updateDto);
@@ -296,6 +362,113 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             log.error("Failed to publish real-time tracking update for ride {}: {}", rideId, e.getMessage(), e);
         }
     }
+
+    private TrackingPolylineResult determinePolyline(SharedRide ride,
+                                                     SharedRideRequest request,
+                                                     LatLng latestPosition) {
+        SharedRideRequestStatus status = request.getStatus();
+        boolean approachingPickup = status == SharedRideRequestStatus.CONFIRMED;
+        boolean inTransit = status == SharedRideRequestStatus.ONGOING;
+        Location target = null;
+        String baseline = null;
+
+        if (approachingPickup) {
+            baseline = ride.getDriverApproachPolyline();
+            target = request.getPickupLocation();
+        } else if (inTransit) {
+            baseline = ride.getRoute() != null ? ride.getRoute().getPolyline() : null;
+            target = request.getDropoffLocation();
+        } else if (ride.getRoute() != null) {
+            baseline = ride.getRoute().getPolyline();
+            target = request.getDropoffLocation();
+        }
+
+        if (baseline != null && latestPosition != null) {
+            double deviation = distanceFromPointToPolylineMeters(latestPosition, baseline);
+            if (deviation > ROUTE_DEVIATION_THRESHOLD_METERS && target != null) {
+                RouteResponse recomputed = routingService.getRoute(
+                    latestPosition.latitude(),
+                    latestPosition.longitude(),
+                    target.getLat(),
+                    target.getLng());
+                return new TrackingPolylineResult(recomputed.polyline(), true);
+            }
+        }
+
+        if ((baseline == null || baseline.isBlank()) && latestPosition != null && target != null) {
+            RouteResponse recomputed = routingService.getRoute(
+                latestPosition.latitude(),
+                latestPosition.longitude(),
+                target.getLat(),
+                target.getLng());
+            return new TrackingPolylineResult(recomputed.polyline(), false);
+        }
+
+        return new TrackingPolylineResult(baseline, false);
+    }
+
+    private LocalDateTime resolveEta(SharedRideRequest request) {
+        if (request.getStatus() == SharedRideRequestStatus.CONFIRMED) {
+            return request.getEstimatedPickupTime();
+        }
+        if (request.getStatus() == SharedRideRequestStatus.ONGOING) {
+            return request.getEstimatedDropoffTime();
+        }
+        return null;
+    }
+
+    private double distanceFromPointToPolylineMeters(LatLng point, String encodedPolyline) {
+        if (point == null || encodedPolyline == null || encodedPolyline.isBlank()) {
+            return Double.MAX_VALUE;
+        }
+        List<double[]> coords = GeoUtil.decode(encodedPolyline, 5);
+        if (coords.size() < 2) {
+            return Double.MAX_VALUE;
+        }
+        double minDistance = Double.MAX_VALUE;
+        for (int i = 0; i < coords.size() - 1; i++) {
+            double[] start = coords.get(i);
+            double[] end = coords.get(i + 1);
+            double segmentDistance = distancePointToSegmentMeters(
+                point.latitude(),
+                point.longitude(),
+                start[0],
+                start[1],
+                end[0],
+                end[1]);
+            minDistance = Math.min(minDistance, segmentDistance);
+        }
+        return minDistance;
+    }
+
+    private double distancePointToSegmentMeters(double lat, double lng,
+                                                double lat1, double lng1,
+                                                double lat2, double lng2) {
+        double refLat = Math.toRadians((lat1 + lat2) / 2.0);
+        double metersPerDegLat = 111132.92;
+        double metersPerDegLon = 111412.84 * Math.cos(refLat);
+
+        double x = (lng - lng1) * metersPerDegLon;
+        double y = (lat - lat1) * metersPerDegLat;
+        double x2 = (lng2 - lng1) * metersPerDegLon;
+        double y2 = (lat2 - lat1) * metersPerDegLat;
+
+        double segmentLengthSq = x2 * x2 + y2 * y2;
+        if (segmentLengthSq == 0) {
+            return Math.hypot(x, y);
+        }
+
+        double projection = ((x * x2) + (y * y2)) / segmentLengthSq;
+        double clamped = Math.max(0, Math.min(1, projection));
+        double projX = clamped * x2;
+        double projY = clamped * y2;
+
+        double dx = x - projX;
+        double dy = y - projY;
+        return Math.hypot(dx, dy);
+    }
+
+    private record TrackingPolylineResult(String polyline, boolean detoured) {}
 
     private void publishDriverLocationUpdate(Integer rideId,
                                              DriverProfile driver,

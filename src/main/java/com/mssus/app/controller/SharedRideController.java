@@ -1,14 +1,12 @@
 package com.mssus.app.controller;
 
 import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
-import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
 import com.mssus.app.dto.request.ride.StartRideReqRequest;
 import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
-import com.mssus.app.dto.response.ride.RideRequestCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
 import com.mssus.app.dto.response.ride.TrackingResponse;
@@ -27,6 +25,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -198,35 +197,11 @@ public class SharedRideController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/complete-ride-request")
-    @PreAuthorize("hasRole('DRIVER')")
-    @Operation(
-            summary = "Complete a ride request (Driver)",
-            description = "Mark a specific ride request as COMPLETED. Captures fare from the rider."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Ride request completed successfully",
-                    content = @Content(schema = @Schema(implementation = RideRequestCompletionResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Not the ride owner",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Ride or ride request not found",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Invalid ride/request state",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<RideRequestCompletionResponse> completeRideRequest(
-        @Valid @RequestBody CompleteRideReqRequest request,
-        Authentication authentication) {
-        RideRequestCompletionResponse response = sharedRideService.completeRideRequestOfRide(
-            request, authentication);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/{rideId}/complete")
+    @PostMapping("/complete")
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(
             summary = "Complete a ride (Driver)",
-            description = "Transition ride from ONGOING to COMPLETED. Captures fares from all riders."
+            description = "Complete a specific ride request and automatically finalize the ride when all requests are done."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Ride completed successfully",
@@ -235,15 +210,14 @@ public class SharedRideController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Ride not found",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Invalid ride state",
+            @ApiResponse(responseCode = "409", description = "Invalid ride/request state",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<RideCompletionResponse> completeRide(
-            @Valid @RequestBody CompleteRideRequest request,
+            @Valid @RequestBody CompleteRideReqRequest request,
             Authentication authentication) {
-        log.info("Driver {} completing ride {}", authentication.getName(), request.rideId());
-        RideCompletionResponse response = sharedRideService.completeRide(
-            request, authentication);
+        log.info("Driver {} completing ride {} request {}", authentication.getName(), request.rideId(), request.rideRequestId());
+        RideCompletionResponse response = sharedRideService.completeRide(request, authentication);
         return ResponseEntity.ok(response);
     }
 
@@ -325,4 +299,6 @@ public class SharedRideController {
         SharedRideResponse response = sharedRideService.getRideById(rideId);
         return ResponseEntity.ok(response);
     }
+
+
 }
