@@ -34,6 +34,11 @@ public class RideMessagingProperties {
     private boolean notificationsEnabled = false;
 
     /**
+     * Controls whether broadcast offers are pushed to drivers or only exposed in the marketplace feed.
+     */
+    private boolean broadcastPushEnabled = false;
+
+    /**
      * Exchange that receives ride events (topic exchange works for routing by type).
      */
     private String exchange = "ride.events";

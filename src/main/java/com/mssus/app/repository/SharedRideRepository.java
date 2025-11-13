@@ -22,20 +22,19 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
     Page<SharedRide> findByDriverDriverIdOrderByScheduledTimeDesc(Integer driverId, Pageable pageable);
 
     Page<SharedRide> findByDriverDriverIdAndStatusOrderByScheduledTimeDesc(
-        Integer driverId, SharedRideStatus status, Pageable pageable);
+            Integer driverId, SharedRideStatus status, Pageable pageable);
 
     Long countByDriverDriverIdAndStatus(Integer driverId, SharedRideStatus status);
 
     @Query("SELECT r FROM SharedRide r " +
-        "WHERE r.status = 'SCHEDULED' OR r.status = 'ONGOING' " +
-        "AND r.sharedRideRequest IS NULL " +
-        "AND r.scheduledTime BETWEEN :startTime AND :endTime " +
-        "AND r.sharedRideId IS NULL " +
-        "ORDER BY r.scheduledTime ASC")
+            "WHERE r.status = 'SCHEDULED' OR r.status = 'ONGOING' " +
+            "AND r.sharedRideRequest IS NULL " +
+            // "AND r.scheduledTime BETWEEN :startTime AND :endTime " +
+            "ORDER BY r.scheduledTime ASC")
     Page<SharedRide> findAvailableRides(
-        @Param("startTime") LocalDateTime startTime,
-        @Param("endTime") LocalDateTime endTime,
-        Pageable pageable);
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM SharedRide r WHERE r.sharedRideId = :sharedRideId")
@@ -47,39 +46,42 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
 
     @Modifying
     @Query("UPDATE SharedRide r SET r.actualDistance = :actualDistance, " +
-        "r.actualDuration = :actualDuration WHERE r.sharedRideId = :sharedRideId")
+            "r.actualDuration = :actualDuration WHERE r.sharedRideId = :sharedRideId")
     void updateActualMetrics(
-        @Param("sharedRideId") Integer sharedRideId,
-        @Param("actualDistance") Float actualDistance,
-        @Param("actualDuration") Integer actualDuration);
+            @Param("sharedRideId") Integer sharedRideId,
+            @Param("actualDistance") Float actualDistance,
+            @Param("actualDuration") Integer actualDuration);
 
     boolean existsByDriverDriverIdAndStatus(Integer driverId, SharedRideStatus status);
 
     @Query("SELECT r FROM SharedRide r " +
-        "WHERE (r.status = 'SCHEDULED' OR r.status = 'ONGOING') " +
-        "AND r.sharedRideRequest IS NULL " +
-        "AND r.scheduledTime BETWEEN :startTime AND :endTime")
+            "WHERE (r.status = 'SCHEDULED' OR r.status = 'ONGOING') " +
+            "AND r.sharedRideRequest IS NULL " +
+            "AND r.scheduledTime BETWEEN :startTime AND :endTime")
     List<SharedRide> findCandidateRidesForMatching(
-        @Param("startTime") LocalDateTime startTime,
-        @Param("endTime") LocalDateTime endTime);
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime);
 
     @Query("SELECT r FROM SharedRide r WHERE r.status = 'SCHEDULED' " +
-        "AND r.scheduledTime <= :cutoff")
+            "AND r.scheduledTime <= :cutoff")
     List<SharedRide> findScheduledAndOverdue(LocalDateTime cutoff);
 
     @Query("SELECT r FROM SharedRide r " +
-        "WHERE r.status = 'SCHEDULED' AND r.scheduledTime <= :cutoff")
+            "WHERE r.status = 'SCHEDULED' AND r.scheduledTime <= :cutoff")
     List<SharedRide> findScheduledForAutoStart(@Param("cutoff") LocalDateTime cutoff);
 
     @Query("SELECT r FROM SharedRide r " +
-        "WHERE r.status = 'ONGOING' AND r.startedAt IS NOT NULL AND r.startedAt <= :cutoff")
+            "WHERE r.status = 'ONGOING' AND r.startedAt IS NOT NULL AND r.startedAt <= :cutoff")
     List<SharedRide> findOngoingForAutoCompletion(@Param("cutoff") LocalDateTime cutoff);
 
     @Query("SELECT r FROM SharedRide r " +
-        "WHERE r.driver.driverId = :driverId " +
-        "ORDER BY r.scheduledTime DESC LIMIT 1")
+            "WHERE r.driver.driverId = :driverId " +
+            "ORDER BY r.scheduledTime DESC LIMIT 1")
     Optional<SharedRide> findLatestScheduledRideByDriverId(@Param("driverId") Integer driverId);
 
+    @Query("SELECT r FROM SharedRide r " +
+            "WHERE r.sharedRideRequest.rider.riderId = :riderId " +
+            "AND r.status = 'ONGOING'")
+    Page<SharedRide> findOngoingRidesOfRider(Integer riderId, Pageable pageable);
 
 }
-

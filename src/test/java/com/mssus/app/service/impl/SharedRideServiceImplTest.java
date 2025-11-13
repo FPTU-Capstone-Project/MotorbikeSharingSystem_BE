@@ -634,7 +634,7 @@ class SharedRideServiceImplTest {
     }
 
     @Test
-    void completeRideRequestOfRide_WithValidRequest_CompletesRequestSuccessfully() {
+    void completeRide_WithValidRequest_CompletesRequestSuccessfully() {
         CompleteRideReqRequest request = new CompleteRideReqRequest(1, 1);
         ride.setStatus(SharedRideStatus.ONGOING);
         ride.setStartedAt(LocalDateTime.now().minusMinutes(30));
@@ -654,19 +654,25 @@ class SharedRideServiceImplTest {
         when(rideFundCoordinatingService.settleRideFunds(any(RideCompleteSettlementRequest.class),
             any(FareBreakdown.class))).thenReturn(settledResponse);
         when(requestRepository.save(any(SharedRideRequest.class))).thenReturn(rideRequest);
+        when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
+            SharedRideRequestStatus.ONGOING)).thenReturn(List.of(new SharedRideRequest()));
+        when(trackRepository.findBySharedRideSharedRideId(1)).thenReturn(Optional.empty());
+        when(routingService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+            .thenReturn(new RouteResponse(10500L, 1800L, "polyline"));
 
-        RideRequestCompletionResponse response = sharedRideService.completeRideRequestOfRide(
-            request, authentication);
+        RideCompletionResponse response = sharedRideService.completeRide(request, authentication);
 
         assertNotNull(response);
-        assertEquals(BigDecimal.valueOf(40000), response.getDriverEarningsOfRequest());
+        assertEquals(rideRequest.getSharedRideRequestId(), response.getSharedRideRequestId());
+        assertEquals(BigDecimal.valueOf(40000), response.getDriverEarnings());
         verify(requestRepository).save(any(SharedRideRequest.class));
         verify(rideFundCoordinatingService).settleRideFunds(
             any(RideCompleteSettlementRequest.class), any(FareBreakdown.class));
+        verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
     @Test
-    void completeRideRequestOfRide_RideNotOngoing_ThrowsBaseDomainException() {
+    void completeRide_RideNotOngoing_ThrowsBaseDomainException() {
         CompleteRideReqRequest request = new CompleteRideReqRequest(1, 1);
         ride.setStatus(SharedRideStatus.SCHEDULED);
 
@@ -677,11 +683,11 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-            () -> sharedRideService.completeRideRequestOfRide(request, authentication));
+            () -> sharedRideService.completeRide(request, authentication));
     }
 
     @Test
-    void completeRideRequestOfRide_RequestNotOngoing_ThrowsBaseDomainException() {
+    void completeRide_RequestNotOngoing_ThrowsBaseDomainException() {
         CompleteRideReqRequest request = new CompleteRideReqRequest(1, 1);
         ride.setStatus(SharedRideStatus.ONGOING);
         rideRequest.setStatus(SharedRideRequestStatus.CONFIRMED);
@@ -693,11 +699,11 @@ class SharedRideServiceImplTest {
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
 
         assertThrows(BaseDomainException.class,
-            () -> sharedRideService.completeRideRequestOfRide(request, authentication));
+            () -> sharedRideService.completeRide(request, authentication));
     }
 
     @Test
-    void completeRideRequestOfRide_DriverTooFarFromDropoff_ThrowsBaseDomainException() {
+    void completeRide_DriverTooFarFromDropoff_ThrowsBaseDomainException() {
         CompleteRideReqRequest request = new CompleteRideReqRequest(1, 1);
         ride.setStatus(SharedRideStatus.ONGOING);
         rideRequest.setStatus(SharedRideRequestStatus.ONGOING);
@@ -711,120 +717,34 @@ class SharedRideServiceImplTest {
             .thenReturn(Optional.of(new LatLng(11.0, 107.0)));
 
         assertThrows(BaseDomainException.class,
-            () -> sharedRideService.completeRideRequestOfRide(request, authentication));
-    }
-
-    @Test
-    void completeRide_WithValidRequest_CompletesRideSuccessfully() {
-        CompleteRideRequest request = new CompleteRideRequest(1);
-        ride.setStatus(SharedRideStatus.ONGOING);
-        ride.setStartedAt(LocalDateTime.now().minusMinutes(30));
-        rideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
-
-        RideTrack track = new RideTrack();
-        track.setSharedRide(ride);
-
-        when(authentication.getName()).thenReturn("driver@test.com");
-        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
-        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
-        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(rideTrackingService.getLatestPosition(1, 3))
-            .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
-        when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
-            SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.COMPLETED))
-            .thenReturn(List.of(rideRequest));
-//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
-//                .thenReturn(Collections.emptyList());
-        when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
-        when(trackRepository.findBySharedRideSharedRideId(1)).thenReturn(Optional.of(track));
-
-
-        RideCompletionResponse response = sharedRideService.completeRide(request, authentication);
-
-        assertNotNull(response);
-        verify(rideRepository).save(any(SharedRide.class));
-        verify(driverRepository).updateRideStats(eq(1), any(BigDecimal.class));
-        verify(rideTrackingService).stopTracking(1);
-    }
-
-    @Test
-    void completeRide_RideNotOngoing_ThrowsBaseDomainException() {
-        CompleteRideRequest request = new CompleteRideRequest(1);
-        ride.setStatus(SharedRideStatus.SCHEDULED);
-
-        when(authentication.getName()).thenReturn("driver@test.com");
-        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
-        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
-        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-
-        assertThrows(BaseDomainException.class,
             () -> sharedRideService.completeRide(request, authentication));
-        verify(rideRepository, never()).save(any(SharedRide.class));
     }
 
     @Test
-    void completeRide_HasActiveRequests_ThrowsBaseDomainException() {
-        CompleteRideRequest request = new CompleteRideRequest(1);
-        ride.setStatus(SharedRideStatus.ONGOING);
-
-        when(authentication.getName()).thenReturn("driver@test.com");
-        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
-        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
-        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
-            SharedRideRequestStatus.ONGOING)).thenReturn(List.of(rideRequest));
-
-        assertThrows(BaseDomainException.class,
-            () -> sharedRideService.completeRide(request, authentication));
-        verify(rideRepository, never()).save(any(SharedRide.class));
-    }
-
-    @Test
-    void completeRide_HasOngoingRequests_ThrowsBaseDomainException() {
-        CompleteRideRequest request = new CompleteRideRequest(1);
+    void completeRide_NoActiveRequests_CompletesRideSuccessfully() {
+        CompleteRideReqRequest request = new CompleteRideReqRequest(1, 1);
         ride.setStatus(SharedRideStatus.ONGOING);
         ride.setStartedAt(LocalDateTime.now().minusMinutes(30));
         rideRequest.setStatus(SharedRideRequestStatus.ONGOING);
 
+        RideRequestSettledResponse settledResponse = new RideRequestSettledResponse(
+            BigDecimal.valueOf(40000), BigDecimal.valueOf(10000));
+
         when(authentication.getName()).thenReturn("driver@test.com");
         when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
+        when(requestRepository.findById(1)).thenReturn(Optional.of(rideRequest));
         when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
         when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
         when(rideTrackingService.getLatestPosition(1, 3))
             .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
-        when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
-            SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
-        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.COMPLETED))
-            .thenReturn(Collections.emptyList());
-//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
-//                .thenReturn(List.of(rideRequest));
-
-        assertThrows(BaseDomainException.class,
-            () -> sharedRideService.completeRide(request, authentication));
-        verify(rideRepository, never()).save(any(SharedRide.class));
-    }
-
-    @Test
-    void completeRide_WithFallbackRouteDistance_CompletesSuccessfully() {
-        CompleteRideRequest request = new CompleteRideRequest(1);
-        ride.setStatus(SharedRideStatus.ONGOING);
-        ride.setStartedAt(LocalDateTime.now().minusMinutes(30));
-        rideRequest.setStatus(SharedRideRequestStatus.COMPLETED);
-
-        when(authentication.getName()).thenReturn("driver@test.com");
-        when(rideRepository.findByIdForUpdate(1)).thenReturn(Optional.of(ride));
-        when(userRepository.findByEmail("driver@test.com")).thenReturn(Optional.of(user));
-        when(driverRepository.findByUserUserId(1)).thenReturn(Optional.of(driver));
-        when(rideTrackingService.getLatestPosition(1, 3))
-            .thenReturn(Optional.of(new LatLng(10.772622, 106.670172)));
+        when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
+        when(rideFundCoordinatingService.settleRideFunds(any(RideCompleteSettlementRequest.class),
+            any(FareBreakdown.class))).thenReturn(settledResponse);
+        when(requestRepository.save(any(SharedRideRequest.class))).thenReturn(rideRequest);
         when(requestRepository.findActiveRequestsByRide(1, SharedRideRequestStatus.CONFIRMED,
             SharedRideRequestStatus.ONGOING)).thenReturn(Collections.emptyList());
         when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.COMPLETED))
             .thenReturn(List.of(rideRequest));
-//        when(requestRepository.findBySharedRideSharedRideIdAndStatus(1, SharedRideRequestStatus.ONGOING))
-//                .thenReturn(Collections.emptyList());
-        when(pricingConfigRepository.findActive(any(Instant.class))).thenReturn(Optional.of(pricingConfig));
         when(trackRepository.findBySharedRideSharedRideId(1)).thenReturn(Optional.empty());
         when(routingService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
             .thenReturn(new RouteResponse(10500L, 1800L, "polyline"));
@@ -833,6 +753,13 @@ class SharedRideServiceImplTest {
         RideCompletionResponse response = sharedRideService.completeRide(request, authentication);
 
         assertNotNull(response);
+        assertEquals(ride.getSharedRideId(), response.getSharedRideId());
+        assertEquals(rideRequest.getSharedRideRequestId(), response.getSharedRideRequestId());
+        assertEquals(BigDecimal.valueOf(40000), response.getDriverEarnings());
+        assertNotNull(response.getCompletedAt());
+        verify(rideRepository).save(any(SharedRide.class));
+        verify(driverRepository).updateRideStats(eq(1), eq(BigDecimal.valueOf(40000)));
+        verify(rideTrackingService).stopTracking(1);
         verify(routingService).getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble());
     }
 

@@ -2,6 +2,7 @@ package com.mssus.app.service.domain.matching;
 
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
+import com.mssus.app.dto.domain.notification.RiderMatchStatusNotification;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Location;
@@ -33,6 +34,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -185,6 +187,93 @@ class QueueRideMatchingOrchestratorTest {
     }
 
     @Test
+    void testOnRideRequestCreated_WithStaleSession_ShouldPurgeAndRestart() {
+        // Arrange
+        Integer requestId = 99;
+        RideRequestCreatedMessage message = RideRequestCreatedMessage.builder()
+            .requestId(requestId)
+            .build();
+
+        SharedRideRequest request = createMockRequest(requestId, RequestKind.BOOKING);
+        request.setCreatedAt(LocalDateTime.now());
+
+        MatchingSessionState staleSession = MatchingSessionState.builder()
+            .requestId(requestId)
+            .requestKind(RequestKind.BOOKING)
+            .requestCreatedAt(Instant.now().minus(Duration.ofMinutes(10)))
+            .phase(MatchingSessionPhase.MATCHING)
+            .proposals(List.of())
+            .nextProposalIndex(0)
+            .requestDeadline(Instant.now().minusSeconds(30))
+            .build();
+
+        RideMatchProposalResponse proposal = createMockProposal();
+
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(sessionRepository.find(requestId)).thenReturn(Optional.of(staleSession));
+        when(rideMatchingService.findMatches(request)).thenReturn(List.of(proposal));
+
+        // Act
+        orchestrator.onRideRequestCreated(message);
+
+        // Assert
+        verify(sessionRepository).delete(requestId);
+        verify(rideMatchingService).findMatches(request);
+        verify(sessionRepository, atLeastOnce()).save(any(MatchingSessionState.class), any(Duration.class));
+        verify(commandPublisher).publish(any(MatchingCommandMessage.class));
+    }
+
+    @Test
+    void testOnRideRequestCreated_LegacySessionWithoutCreatedAt_ShouldStillPurge() {
+        Integer requestId = 100;
+        RideRequestCreatedMessage message = RideRequestCreatedMessage.builder()
+            .requestId(requestId)
+            .build();
+
+        SharedRideRequest request = createMockRequest(requestId, RequestKind.BOOKING);
+
+        MatchingSessionState legacySession = MatchingSessionState.builder()
+            .requestId(requestId)
+            .phase(MatchingSessionPhase.MATCHING)
+            .lastProcessedAt(Instant.now().minus(Duration.ofMinutes(20)))
+            .proposals(List.of())
+            .nextProposalIndex(0)
+            .build();
+
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(sessionRepository.find(requestId)).thenReturn(Optional.of(legacySession));
+        when(rideMatchingService.findMatches(request)).thenReturn(List.of(createMockProposal()));
+
+        orchestrator.onRideRequestCreated(message);
+
+        verify(sessionRepository).delete(requestId);
+        verify(rideMatchingService).findMatches(request);
+    }
+
+    @Test
+    void testBroadcastTimeout_ShouldMarkRequestExpired() {
+        Integer requestId = 55;
+        MatchingCommandMessage command = MatchingCommandMessage.broadcastTimeout(requestId);
+
+        MatchingSessionState session = MatchingSessionState.builder()
+            .requestId(requestId)
+            .phase(MatchingSessionPhase.BROADCASTING)
+            .requestDeadline(Instant.now().minusSeconds(10))
+            .build();
+
+        SharedRideRequest request = createMockRequest(requestId, RequestKind.BOOKING);
+
+        when(sessionRepository.find(requestId)).thenReturn(Optional.of(session));
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(responseAssembler.toRiderNoMatch(request)).thenReturn(mock(RiderMatchStatusNotification.class));
+
+        orchestrator.onMatchingCommand(command);
+
+        verify(requestRepository).save(argThat(saved -> 
+            saved.getStatus() == SharedRideRequestStatus.EXPIRED));
+    }
+
+    @Test
     void testOnMatchingCommand_DuplicateMessage_ShouldSkip() {
         // Arrange
         Integer requestId = 1;
@@ -285,6 +374,36 @@ class QueueRideMatchingOrchestratorTest {
         assertEquals(MatchingSessionPhase.COMPLETED, savedSession.getPhase());
     }
 
+    @Test
+    void testSendNextWithoutRemainingCandidates_ShouldEnterBroadcastEvenWhenNoDrivers() {
+        // Arrange
+        Integer requestId = 42;
+        MatchingCommandMessage command = MatchingCommandMessage.sendNext(requestId, 1);
+
+        MatchingSessionState session = MatchingSessionState.builder()
+            .requestId(requestId)
+            .phase(MatchingSessionPhase.MATCHING)
+            .proposals(List.of())
+            .nextProposalIndex(0)
+            .requestDeadline(Instant.now().plusSeconds(300))
+            .build();
+
+        SharedRideRequest request = createMockRequest(requestId, RequestKind.BOOKING);
+
+        when(sessionRepository.find(requestId)).thenReturn(Optional.of(session));
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(driverRepository.findBroadcastEligibleDrivers(anyList())).thenReturn(List.of());
+
+        // Act
+        orchestrator.onMatchingCommand(command);
+
+        // Assert
+        verify(requestRepository).save(argThat(saved -> 
+            saved.getStatus() == SharedRideRequestStatus.BROADCASTING));
+        verify(commandPublisher).publishBroadcastTimeout(any(MatchingCommandMessage.class), any(Duration.class));
+        assertEquals(MatchingSessionPhase.BROADCASTING, session.getPhase());
+    }
+
     // Helper methods
     private SharedRideRequest createMockRequest(Integer requestId, RequestKind kind) {
         SharedRideRequest request = new SharedRideRequest();
@@ -307,6 +426,8 @@ class QueueRideMatchingOrchestratorTest {
         dropoff.setLat(10.772622);
         dropoff.setLng(106.670172);
         request.setDropoffLocation(dropoff);
+
+        request.setCreatedAt(LocalDateTime.now());
         
         return request;
     }
