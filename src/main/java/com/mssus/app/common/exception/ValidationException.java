@@ -33,7 +33,7 @@ public class ValidationException extends DomainException {
     }
 
     public static BaseDomainException passwordMismatch() {
-        return BaseDomainException.formatted("user.validation.password-too-weak", "Old password is incorrect");
+        return BaseDomainException.formatted("user.validation.old-password-incorrect", "Old password is incorrect");
     }
 
     public static BaseDomainException invalidFileType(String expectedType) {

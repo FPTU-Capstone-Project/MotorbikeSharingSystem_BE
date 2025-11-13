@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Test - Motorbike Sharing</title>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #007AFF;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007AFF;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.secondary {
+            background: #6c757d;
+        }
+        button.secondary:hover {
+            background: #5a6268;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .messages {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .message {
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 6px;
+            background: #e3f2fd;
+        }
+        .message.sent {
+            background: #007AFF;
+            color: white;
+            margin-left: 20%;
+        }
+        .message.received {
+            background: #f0f0f0;
+            margin-right: 20%;
+        }
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        .log {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 4px;
+        }
+        .log-entry.error {
+            color: #dc3545;
+        }
+        .log-entry.success {
+            color: #28a745;
+        }
+        .log-entry.info {
+            color: #17a2b8;
+        }
+        label {
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-top: 10px;
+        }
+        .helper-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💬 Chat Test Tool</h1>
+        <p class="subtitle">Test chat functionality between Browser (Driver) and Emulator (Rider)</p>
+
+        <!-- Configuration Section -->
+        <div class="section">
+            <h3>⚙️ Configuration</h3>
+            <label>Backend URL:</label>
+            <input type="text" id="backendUrl" value="http://10.87.64.91:8080" placeholder="http://localhost:8080">
+            <div class="helper-text">Change to your backend IP address</div>
+
+            <label>JWT Token (Driver):</label>
+            <textarea id="jwtToken" rows="3" placeholder="Paste driver JWT token here"></textarea>
+            <div class="helper-text">Login as driver in Postman/app and copy the token</div>
+
+            <label>Your User ID (Driver):</label>
+            <input type="number" id="driverUserId" placeholder="e.g., 2">
+
+            <label>Target User ID (Rider):</label>
+            <input type="number" id="riderUserId" placeholder="e.g., 1">
+
+            <label>Ride Request ID:</label>
+            <input type="number" id="rideRequestId" placeholder="e.g., 123">
+            <div class="helper-text">Must have an active ride request for chat</div>
+
+            <button onclick="connectWebSocket()">🔌 Connect WebSocket</button>
+            <button class="secondary" onclick="disconnectWebSocket()">❌ Disconnect</button>
+            
+            <div id="connectionStatus" class="status disconnected">
+                ⚠️ Not Connected
+            </div>
+        </div>
+
+        <!-- Send Message Section -->
+        <div class="section">
+            <h3>📤 Send Message</h3>
+            <label>Message:</label>
+            <textarea id="messageContent" rows="3" placeholder="Type your message here..."></textarea>
+            
+            <button onclick="sendMessage()">Send Message</button>
+            <button class="secondary" onclick="sendQuickMessage('Hello!')">Quick: Hello!</button>
+            <button class="secondary" onclick="sendQuickMessage('I\'m on my way')">Quick: On my way</button>
+        </div>
+
+        <!-- Messages Display -->
+        <div class="section">
+            <h3>💬 Conversation</h3>
+            <div id="messages" class="messages">
+                <div style="text-align: center; color: #999; padding: 20px;">
+                    No messages yet. Send a message to start!
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Section -->
+        <div class="section">
+            <h3>📋 Logs</h3>
+            <div id="logs" class="log">
+                <div class="log-entry info">Ready to connect...</div>
+            </div>
+            <button class="secondary" onclick="clearLogs()">Clear Logs</button>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let isConnected = false;
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsDiv.appendChild(entry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        function updateStatus(status, message) {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.className = `status ${status}`;
+            statusDiv.textContent = message;
+        }
+
+        function connectWebSocket() {
+            const backendUrl = document.getElementById('backendUrl').value;
+            const token = document.getElementById('jwtToken').value.trim();
+
+            if (!token) {
+                alert('Please enter JWT token');
+                return;
+            }
+
+            log('Connecting to WebSocket...', 'info');
+            updateStatus('connecting', '🔄 Connecting...');
+
+            const wsUrl = backendUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+            const wsEndpoint = `${wsUrl}/ws-native?token=${encodeURIComponent(token)}`;
+
+            stompClient = new StompJs.Client({
+                brokerURL: wsEndpoint,
+                connectHeaders: {
+                    Authorization: `Bearer ${token}`
+                },
+                debug: function (str) {
+                    console.log('STOMP Debug:', str);
+                },
+                reconnectDelay: 0,
+                heartbeatIncoming: 0,
+                heartbeatOutgoing: 0,
+            });
+
+            stompClient.onConnect = function (frame) {
+                log('✅ WebSocket connected successfully!', 'success');
+                updateStatus('connected', '✅ Connected');
+                isConnected = true;
+                
+                // Subscribe to chat messages
+                stompClient.subscribe('/user/queue/chat', function (message) {
+                    log('📨 Received message from WebSocket', 'success');
+                    const data = JSON.parse(message.body);
+                    displayMessage(data, 'received');
+                });
+                
+                log('📡 Subscribed to /user/queue/chat', 'success');
+            };
+
+            stompClient.onStompError = function (frame) {
+                log('❌ STOMP Error: ' + frame.headers['message'], 'error');
+                log('Error details: ' + frame.body, 'error');
+                updateStatus('disconnected', '❌ Connection Error');
+                isConnected = false;
+            };
+
+            stompClient.onWebSocketError = function (error) {
+                log('❌ WebSocket Error: ' + error, 'error');
+                updateStatus('disconnected', '❌ Connection Failed');
+                isConnected = false;
+            };
+
+            stompClient.onDisconnect = function () {
+                log('🔌 WebSocket disconnected', 'info');
+                updateStatus('disconnected', '⚠️ Disconnected');
+                isConnected = false;
+            };
+
+            stompClient.activate();
+        }
+
+        function disconnectWebSocket() {
+            if (stompClient && isConnected) {
+                stompClient.deactivate();
+                log('Disconnected from WebSocket', 'info');
+                updateStatus('disconnected', '⚠️ Disconnected');
+                isConnected = false;
+            }
+        }
+
+        function sendMessage() {
+            const content = document.getElementById('messageContent').value.trim();
+            if (!content) {
+                alert('Please enter a message');
+                return;
+            }
+            sendMessageContent(content);
+            document.getElementById('messageContent').value = '';
+        }
+
+        function sendQuickMessage(content) {
+            sendMessageContent(content);
+        }
+
+        function sendMessageContent(content) {
+            if (!isConnected || !stompClient) {
+                alert('Not connected to WebSocket. Please connect first.');
+                return;
+            }
+
+            const receiverId = parseInt(document.getElementById('riderUserId').value);
+            const rideRequestId = parseInt(document.getElementById('rideRequestId').value);
+
+            if (!receiverId || !rideRequestId) {
+                alert('Please enter Rider User ID and Ride Request ID');
+                return;
+            }
+
+            const messageData = {
+                receiverId: receiverId,
+                rideRequestId: rideRequestId,
+                messageType: 'TEXT',
+                content: content
+            };
+
+            try {
+                stompClient.publish({
+                    destination: '/app/chat.send',
+                    body: JSON.stringify(messageData)
+                });
+                
+                log(`📤 Sent: "${content}"`, 'success');
+                displayMessage({
+                    content: content,
+                    senderId: parseInt(document.getElementById('driverUserId').value),
+                    sentAt: new Date().toISOString()
+                }, 'sent');
+            } catch (error) {
+                log('❌ Error sending message: ' + error, 'error');
+            }
+        }
+
+        function displayMessage(messageData, type) {
+            const messagesDiv = document.getElementById('messages');
+            
+            // Clear placeholder if it exists
+            if (messagesDiv.querySelector('div[style*="text-align: center"]')) {
+                messagesDiv.innerHTML = '';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = messageData.content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = new Date(messageData.sentAt).toLocaleTimeString();
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            messagesDiv.appendChild(messageDiv);
+            
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '<div class="log-entry info">Logs cleared</div>';
+        }
+    </script>
+</body>
+</html>
+

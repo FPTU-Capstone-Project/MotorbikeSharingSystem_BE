@@ -1,6 +1,7 @@
 package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.ActorKind;
+import com.mssus.app.common.enums.SystemWallet;
 import com.mssus.app.common.enums.TransactionDirection;
 import com.mssus.app.common.enums.TransactionStatus;
 import com.mssus.app.common.enums.TransactionType;
@@ -33,6 +34,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -212,6 +215,25 @@ public class WalletServiceImpl implements WalletService {
             throw new ValidationException("Wallet is frozen. Please contact support.");
         }
 
+        // Validate minimum payout amount (50,000 VND)
+        BigDecimal minimumAmount = new BigDecimal("50000");
+        if (request.getAmount().compareTo(minimumAmount) < 0) {
+            throw new ValidationException("Minimum payout amount is 50,000 VND. Requested: " + request.getAmount());
+        }
+
+        // Validate bank account number format (9-16 digits)
+        String bankAccountNumber = request.getBankAccountNumber().trim();
+        Pattern accountNumberPattern = Pattern.compile("^\\d{9,16}$");
+        if (!accountNumberPattern.matcher(bankAccountNumber).matches()) {
+            throw new ValidationException("Bank account number must be 9-16 digits");
+        }
+
+        // Validate account holder name (at least 2 characters)
+        String accountHolderName = request.getAccountHolderName().trim();
+        if (accountHolderName.length() < 2) {
+            throw new ValidationException("Account holder name must be at least 2 characters");
+        }
+
         // Check sufficient balance
         if (wallet.getShadowBalance().compareTo(request.getAmount()) < 0) {
             throw new ValidationException("Insufficient balance. Available: " +
@@ -220,22 +242,87 @@ public class WalletServiceImpl implements WalletService {
 
         // Generate payout reference
         String payoutRef = "PAYOUT-" + System.currentTimeMillis();
+        UUID groupId = UUID.randomUUID();
 
-        // TODO: Integrate with actual bank payout service
-        log.warn("Bank payout integration not implemented. Creating mock payout for user {} - amount: {}",
-                user.getUserId(), request.getAmount());
+        // Create description with bank account information
+        String description = String.format("Payout to %s - %s (%s)",
+                request.getBankName(),
+                maskAccountNumber(bankAccountNumber),
+                accountHolderName);
+
+        // Get current wallet balances before transaction
+        BigDecimal beforeAvail = wallet.getShadowBalance();
+        BigDecimal beforePending = wallet.getPendingBalance();
+
+        // Calculate balances after transaction
+        BigDecimal afterAvail = beforeAvail.subtract(request.getAmount());
+        BigDecimal afterPending = beforePending.add(request.getAmount());
+
+        // Create USER transaction (OUT direction, PENDING status)
+        Transaction userTransaction = Transaction.builder()
+                .type(TransactionType.PAYOUT)
+                .groupId(groupId)
+                .direction(TransactionDirection.OUT)
+                .actorKind(ActorKind.USER)
+                .actorUser(user)
+                .amount(request.getAmount())
+                .currency("VND")
+                .status(TransactionStatus.PENDING)
+                .pspRef(payoutRef)
+                .beforeAvail(beforeAvail)
+                .afterAvail(afterAvail)
+                .beforePending(beforePending)
+                .afterPending(afterPending)
+                .note(description)
+                .build();
+
+        // Create SYSTEM.MASTER transaction (OUT direction, PENDING status) - mirror transaction
+        Transaction systemTransaction = Transaction.builder()
+                .type(TransactionType.PAYOUT)
+                .groupId(groupId)
+                .direction(TransactionDirection.OUT)
+                .actorKind(ActorKind.SYSTEM)
+                .systemWallet(SystemWallet.MASTER)
+                .amount(request.getAmount())
+                .currency("VND")
+                .status(TransactionStatus.PENDING)
+                .pspRef(payoutRef)
+                .note("System payout debit - " + description)
+                .build();
+
+        // Save transactions
+        transactionRepository.save(userTransaction);
+        transactionRepository.save(systemTransaction);
+
+        // Update wallet balance: move from shadow_balance to pending_balance
+        wallet.setShadowBalance(afterAvail);
+        wallet.setPendingBalance(afterPending);
+        walletRepository.save(wallet);
 
         // Mask account number (show only last 4 digits)
-        String maskedAccount = "****" + request.getBankAccountNumber()
-                .substring(Math.max(0, request.getBankAccountNumber().length() - 4));
+        String maskedAccount = maskAccountNumber(bankAccountNumber);
+
+        log.info("Initiated payout for user {} with amount {} and pspRef {}. Balance: {} -> {} (available), {} -> {} (pending)",
+                user.getUserId(), request.getAmount(), payoutRef,
+                beforeAvail, afterAvail, beforePending, afterPending);
 
         return PayoutInitResponse.builder()
                 .payoutRef(payoutRef)
                 .amount(request.getAmount())
-                .status("PROCESSING")
+                .status("PENDING")
                 .estimatedCompletionTime(LocalDateTime.now().plusHours(24).toString())
                 .maskedAccountNumber(maskedAccount)
                 .build();
+    }
+
+    /**
+     * Mask bank account number (show only last 4 digits)
+     */
+    private String maskAccountNumber(String accountNumber) {
+        if (accountNumber == null || accountNumber.length() < 4) {
+            return "****";
+        }
+        return "****" + accountNumber.substring(accountNumber.length() - 4);
     }
 
     @Override

@@ -12,6 +12,8 @@ public interface ProfileService {
 
     UserProfileResponse updateProfile(String username, UpdateProfileRequest request);
 
+    UserProfileResponse updateMyProfile(String username, UpdateProfileRequest request);
+
     MessageResponse updatePassword(String username, UpdatePasswordRequest request);
 
     MessageResponse updateAvatar(String username, MultipartFile avatarFile);

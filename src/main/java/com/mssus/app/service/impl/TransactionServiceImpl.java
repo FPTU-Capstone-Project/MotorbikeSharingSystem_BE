@@ -683,6 +683,329 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional
+    public List<Transaction> refundTopup(Integer userId, BigDecimal refundAmount, String pspRef, String description) {
+        validateRefundTopupInput(userId, refundAmount, pspRef);
+
+        Wallet userWallet = walletRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new NotFoundException("User wallet not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        // Check if user has sufficient balance for refund
+        if (userWallet.getShadowBalance().compareTo(refundAmount) < 0) {
+            throw new ValidationException("User has insufficient balance for refund. Available: " + userWallet.getShadowBalance());
+        }
+
+        UUID groupId = generateGroupId();
+        List<Transaction> transactions = new ArrayList<>();
+
+        // Create refund transaction (debit from user)
+        Transaction userDebit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.OUT)
+                .actorKind(ActorKind.USER)
+                .actorUser(user)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.PENDING)
+                .pspRef(pspRef)
+                .beforeAvail(userWallet.getShadowBalance())
+                .afterAvail(userWallet.getShadowBalance().subtract(refundAmount))
+                .beforePending(userWallet.getPendingBalance())
+                .afterPending(userWallet.getPendingBalance().add(refundAmount))
+                .note("Topup refund - " + description)
+                .build();
+
+        // Create system credit transaction (credit to system master wallet)
+        Transaction systemCredit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.IN)
+                .actorKind(ActorKind.SYSTEM)
+                .systemWallet(SystemWallet.MASTER)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.PENDING)
+                .pspRef(pspRef)
+                .note("System refund credit - " + description)
+                .build();
+
+        transactions.add(transactionRepository.save(userDebit));
+        transactions.add(transactionRepository.save(systemCredit));
+
+        // Move money from available to pending (until PSP confirms)
+        userWallet.setShadowBalance(userWallet.getShadowBalance().subtract(refundAmount));
+        userWallet.setPendingBalance(userWallet.getPendingBalance().add(refundAmount));
+        walletRepository.save(userWallet);
+
+        log.info("Initiated topup refund for user {} with amount {} and pspRef {}", userId, refundAmount, pspRef);
+        return transactions;
+    }
+
+    @Override
+    @Transactional
+    public List<Transaction> refundPayout(Integer driverId, BigDecimal refundAmount, String pspRef, String description) {
+        validateRefundPayoutInput(driverId, refundAmount, pspRef);
+
+        Wallet driverWallet = walletRepository.findByUser_UserId(driverId)
+                .orElseThrow(() -> new NotFoundException("Driver wallet not found"));
+        User driver = userRepository.findById(driverId)
+                .orElseThrow(() -> new NotFoundException("Driver not found"));
+
+        UUID groupId = generateGroupId();
+        List<Transaction> transactions = new ArrayList<>();
+
+        // Create refund transaction (credit to driver)
+        Transaction driverCredit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.IN)
+                .actorKind(ActorKind.USER)
+                .actorUser(driver)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.PENDING)
+                .pspRef(pspRef)
+                .beforeAvail(driverWallet.getShadowBalance())
+                .afterAvail(driverWallet.getShadowBalance().add(refundAmount))
+                .beforePending(driverWallet.getPendingBalance())
+                .afterPending(driverWallet.getPendingBalance())
+                .note("Payout refund - " + description)
+                .build();
+
+        // Create system debit transaction (debit from system master wallet)
+        Transaction systemDebit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.OUT)
+                .actorKind(ActorKind.SYSTEM)
+                .systemWallet(SystemWallet.MASTER)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.PENDING)
+                .pspRef(pspRef)
+                .note("System refund debit - " + description)
+                .build();
+
+        transactions.add(transactionRepository.save(driverCredit));
+        transactions.add(transactionRepository.save(systemDebit));
+
+        // Credit driver's available balance
+        driverWallet.setShadowBalance(driverWallet.getShadowBalance().add(refundAmount));
+        walletRepository.save(driverWallet);
+
+        log.info("Initiated payout refund for driver {} with amount {} and pspRef {}", driverId, refundAmount, pspRef);
+        return transactions;
+    }
+
+    @Override
+    @Transactional
+    public List<Transaction> refundAdjustment(Integer userId, BigDecimal refundAmount, Integer adminUserId, String reason) {
+        validateRefundAdjustmentInput(userId, refundAmount, adminUserId, reason);
+
+        Wallet userWallet = walletRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new NotFoundException("User wallet not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        userRepository.findById(adminUserId)
+                .orElseThrow(() -> new NotFoundException("Admin user not found"));
+
+        UUID groupId = generateGroupId();
+        List<Transaction> transactions = new ArrayList<>();
+
+        // Create refund transaction (credit to user)
+        Transaction userCredit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.IN)
+                .actorKind(ActorKind.USER)
+                .actorUser(user)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.SUCCESS)
+                .beforeAvail(userWallet.getShadowBalance())
+                .afterAvail(userWallet.getShadowBalance().add(refundAmount))
+                .beforePending(userWallet.getPendingBalance())
+                .afterPending(userWallet.getPendingBalance())
+                .note("Adjustment refund - " + reason)
+                .build();
+
+        // Create system debit transaction (debit from system master wallet)
+        Transaction systemDebit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.OUT)
+                .actorKind(ActorKind.SYSTEM)
+                .systemWallet(SystemWallet.MASTER)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.SUCCESS)
+                .note("System adjustment refund - " + reason)
+                .build();
+
+        transactions.add(transactionRepository.save(userCredit));
+        transactions.add(transactionRepository.save(systemDebit));
+
+        // Credit user's available balance
+        userWallet.setShadowBalance(userWallet.getShadowBalance().add(refundAmount));
+        walletRepository.save(userWallet);
+
+        log.info("Processed adjustment refund for user {} with amount {} by admin {}", userId, refundAmount, adminUserId);
+        return transactions;
+    }
+
+    @Override
+    @Transactional
+    public List<Transaction> refundPromoCredit(Integer userId, BigDecimal refundAmount, String promoCode, String description) {
+        validateRefundPromoInput(userId, refundAmount, promoCode);
+
+        Wallet userWallet = walletRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new NotFoundException("User wallet not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        UUID groupId = generateGroupId();
+        List<Transaction> transactions = new ArrayList<>();
+
+        // Create refund transaction (debit from user)
+        Transaction userDebit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.OUT)
+                .actorKind(ActorKind.USER)
+                .actorUser(user)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.SUCCESS)
+                .beforeAvail(userWallet.getShadowBalance())
+                .afterAvail(userWallet.getShadowBalance().subtract(refundAmount))
+                .beforePending(userWallet.getPendingBalance())
+                .afterPending(userWallet.getPendingBalance())
+                .note("Promo credit refund - " + description)
+                .build();
+
+        // Create system credit transaction (credit to promo wallet)
+        Transaction promoCredit = Transaction.builder()
+                .type(TransactionType.REFUND)
+                .groupId(groupId)
+                .direction(TransactionDirection.IN)
+                .actorKind(ActorKind.SYSTEM)
+                .systemWallet(SystemWallet.PROMO)
+                .amount(refundAmount)
+                .currency("VND")
+                .status(TransactionStatus.SUCCESS)
+                .note("Promo wallet refund credit - " + description)
+                .build();
+
+        transactions.add(transactionRepository.save(userDebit));
+        transactions.add(transactionRepository.save(promoCredit));
+
+        // Debit user's available balance
+        userWallet.setShadowBalance(userWallet.getShadowBalance().subtract(refundAmount));
+        walletRepository.save(userWallet);
+
+        log.info("Processed promo credit refund for user {} with amount {} and promo code {}", userId, refundAmount, promoCode);
+        return transactions;
+    }
+
+    @Override
+    @Transactional
+    public List<Transaction> processRefund(Integer refundId, String pspRef, String description) {
+//        if (refundId == null) {
+//            throw new ValidationException("Refund ID cannot be null");
+//        }
+//        if (pspRef == null || pspRef.trim().isEmpty()) {
+//            throw new ValidationException("PSP reference cannot be null or empty");
+//        }
+//
+//        // Find the original transaction to refund
+//        Transaction originalTransaction = transactionRepository.findById(refundId)
+//                .orElseThrow(() -> new NotFoundException("Transaction not found with ID: " + refundId));
+//
+//        if (originalTransaction.getStatus() != TransactionStatus.SUCCESS) {
+//            throw new ValidationException("Can only refund successful transactions");
+//        }
+//
+//        // Determine refund type based on original transaction type
+//        switch (originalTransaction.getType()) {
+//            case TOPUP:
+//                return refundTopup(originalTransaction.getActorUser().getUserId(),
+//                                 originalTransaction.getAmount(), pspRef, description);
+//            case PAYOUT:
+//                return refundPayout(originalTransaction.getSharedRide().getDriver().getDriverId(),
+//                                   originalTransaction.getAmount(), pspRef, description);
+//            case CAPTURE_FARE:
+//                // For ride refunds, we need the original group ID
+//                return refundRide(originalTransaction.getGroupId(),
+//                                 originalTransaction.getSharedRide().get,
+//                                 originalTransaction.getSharedRide().getDriver().getDriverId(),
+//                                 originalTransaction.getAmount(), description);
+//            default:
+//                throw new ValidationException("Cannot refund transaction type: " + originalTransaction.getType());
+//        }
+        throw new UnsupportedOperationException("Method not implemented yet");
+    }
+
+    @Override
+    @Transactional
+    public void handleRefundSuccess(String pspRef) {
+        if (pspRef == null || pspRef.trim().isEmpty()) {
+            throw new ValidationException("PSP reference cannot be null or empty");
+        }
+
+        List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
+        if (transactions.isEmpty()) {
+            throw new NotFoundException("No pending refund transactions found for pspRef: " + pspRef);
+        }
+
+        for (Transaction txn : transactions) {
+            txn.setStatus(TransactionStatus.SUCCESS);
+            transactionRepository.save(txn);
+
+            // For topup refunds, move money from pending back to available
+            if (txn.getType() == TransactionType.REFUND && txn.getDirection() == TransactionDirection.OUT && 
+                txn.getActorUser() != null) {
+                walletService.decreasePendingBalance(txn.getActorUser().getUserId(), txn.getAmount());
+            }
+        }
+
+        log.info("Refund success for pspRef: {}", pspRef);
+    }
+
+    @Override
+    @Transactional
+    public void handleRefundFailed(String pspRef, String reason) {
+        if (pspRef == null || pspRef.trim().isEmpty()) {
+            throw new ValidationException("PSP reference cannot be null or empty");
+        }
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new ValidationException("Failure reason cannot be null or empty");
+        }
+
+        List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
+        if (transactions.isEmpty()) {
+            throw new NotFoundException("No pending refund transactions found for pspRef: " + pspRef);
+        }
+
+        for (Transaction txn : transactions) {
+            txn.setStatus(TransactionStatus.FAILED);
+            txn.setNote(txn.getNote() + " - Failed: " + reason);
+            transactionRepository.save(txn);
+
+            // For topup refunds, restore the balance
+            if (txn.getType() == TransactionType.REFUND && txn.getDirection() == TransactionDirection.OUT && 
+                txn.getActorUser() != null) {
+                walletService.increaseShadowBalance(txn.getActorUser().getUserId(), txn.getAmount());
+                walletService.decreasePendingBalance(txn.getActorUser().getUserId(), txn.getAmount());
+            }
+        }
+
+        log.info("Refund failed for pspRef: {} - Reason: {}", pspRef, reason);
+    }
+
+    @Override
     public List<Transaction> getTransactionsByGroupId(UUID groupId) {
         if (groupId == null) {
             throw new ValidationException("Group ID cannot be null");
@@ -809,6 +1132,57 @@ public class TransactionServiceImpl implements TransactionService {
         }
         if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException("Refund amount must be greater than zero");
+        }
+    }
+
+    private void validateRefundTopupInput(Integer userId, BigDecimal refundAmount, String pspRef) {
+        if (userId == null) {
+            throw new ValidationException("User ID cannot be null");
+        }
+        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Refund amount must be greater than zero");
+        }
+        if (pspRef == null || pspRef.trim().isEmpty()) {
+            throw new ValidationException("PSP reference cannot be null or empty");
+        }
+    }
+
+    private void validateRefundPayoutInput(Integer driverId, BigDecimal refundAmount, String pspRef) {
+        if (driverId == null) {
+            throw new ValidationException("Driver ID cannot be null");
+        }
+        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Refund amount must be greater than zero");
+        }
+        if (pspRef == null || pspRef.trim().isEmpty()) {
+            throw new ValidationException("PSP reference cannot be null or empty");
+        }
+    }
+
+    private void validateRefundAdjustmentInput(Integer userId, BigDecimal refundAmount, Integer adminUserId, String reason) {
+        if (userId == null) {
+            throw new ValidationException("User ID cannot be null");
+        }
+        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Refund amount must be greater than zero");
+        }
+        if (adminUserId == null) {
+            throw new ValidationException("Admin user ID cannot be null");
+        }
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new ValidationException("Refund reason cannot be null or empty");
+        }
+    }
+
+    private void validateRefundPromoInput(Integer userId, BigDecimal refundAmount, String promoCode) {
+        if (userId == null) {
+            throw new ValidationException("User ID cannot be null");
+        }
+        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Refund amount must be greater than zero");
+        }
+        if (promoCode == null || promoCode.trim().isEmpty()) {
+            throw new ValidationException("Promo code cannot be null or empty");
         }
     }
 
