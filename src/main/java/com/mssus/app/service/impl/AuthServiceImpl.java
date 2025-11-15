@@ -43,6 +43,17 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
+        // Validate email format
+        if (!ValidationUtil.isValidEmail(request.getEmail())) {
+            throw BaseDomainException.of("user.validation.invalid-email");
+        }
+        
+        // Validate and sanitize full name to prevent XSS attacks
+        if (!ValidationUtil.isValidFullName(request.getFullName())) {
+            throw BaseDomainException.formatted("user.validation.invalid-fullname", 
+                "Full name contains invalid characters or format. Please use only letters, spaces, and hyphens.");
+        }
+        
         if (userRepository.existsByEmailAndStatusNot(request.getEmail(), UserStatus.EMAIL_VERIFYING)) {
             throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s already registered", request.getEmail());
         }
@@ -53,7 +64,11 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByPhone(normalizedPhone)) {
             throw BaseDomainException.formatted("user.conflict.phone-exists", "Phone %s already registered", normalizedPhone);
         }
-        User user = User.builder().email(request.getEmail()).phone(normalizedPhone).passwordHash(passwordEncoder.encode(request.getPassword())).fullName(request.getFullName()).userType(UserType.USER).status(UserStatus.EMAIL_VERIFYING).emailVerified(false).phoneVerified(false).build();
+        
+        // Sanitize full name as an extra layer of protection against XSS
+        String sanitizedFullName = ValidationUtil.sanitizeText(request.getFullName().trim());
+        
+        User user = User.builder().email(request.getEmail()).phone(normalizedPhone).passwordHash(passwordEncoder.encode(request.getPassword())).fullName(sanitizedFullName).userType(UserType.USER).status(UserStatus.EMAIL_VERIFYING).emailVerified(false).phoneVerified(false).build();
         user = userRepository.save(user);
         Map<String, Object> claims = buildTokenClaims(user, null);
         String token = jwtService.generateToken(user.getEmail(), claims);

@@ -8,3 +8,7 @@ ALTER TABLE transactions ADD CONSTRAINT txn_status_allowed CHECK (
 );
 
 
+
+
+
+
