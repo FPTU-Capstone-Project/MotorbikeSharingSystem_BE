@@ -45,11 +45,11 @@ public class MessageServiceImpl implements MessageService {
 
         // Look up sender by email (from JWT token)
         User sender = userRepository.findByEmail(senderEmail)
-                .orElseThrow(() -> new RuntimeException("Sender not found with email: " + senderEmail));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người gửi với email: " + senderEmail));
         
         // Look up receiver by ID
         User receiver = userRepository.findById(request.getReceiverId())
-                .orElseThrow(() -> new RuntimeException("Receiver not found with ID: " + request.getReceiverId()));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người nhận với ID: " + request.getReceiverId()));
 
         SharedRideRequest rideRequest = null;
         UserReport report = null;
@@ -59,12 +59,12 @@ public class MessageServiceImpl implements MessageService {
         if (request.getReportId() != null) {
             // REPORT conversation
             report = userReportRepository.findById(request.getReportId())
-                    .orElseThrow(() -> new RuntimeException("Report not found"));
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy báo cáo"));
             
             // Check if report is closed (RESOLVED or DISMISSED)
             if (report.getStatus() == ReportStatus.RESOLVED || 
                 report.getStatus() == ReportStatus.DISMISSED) {
-                throw new ForbiddenException("Cannot send messages to a closed report. Report status: " + report.getStatus());
+                throw new ForbiddenException("Không thể gửi tin nhắn đến báo cáo đã đóng. Trạng thái báo cáo: " + report.getStatus());
             }
             
             // Validate report chat permissions
@@ -79,10 +79,10 @@ public class MessageServiceImpl implements MessageService {
         } else {
             // RIDE_REQUEST conversation
             if (request.getRideRequestId() == null) {
-                throw new RuntimeException("Ride request ID is required for ride conversation");
+                throw new RuntimeException("ID yêu cầu đi xe là bắt buộc cho cuộc trò chuyện về chuyến xe");
             }
             rideRequest = sharedRideRequestRepository.findById(request.getRideRequestId())
-                    .orElseThrow(() -> new RuntimeException("Ride request not found"));
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy yêu cầu đi xe"));
             conversationType = ConversationType.RIDE_REQUEST;
             conversationId = generateConversationId(
                     request.getRideRequestId(),
@@ -137,7 +137,7 @@ public class MessageServiceImpl implements MessageService {
 
         // Look up user by email to verify they exist
         User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + userEmail));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với email: " + userEmail));
         
         log.debug("Found user ID: {} for email: {}", user.getUserId(), userEmail);
 
@@ -155,7 +155,7 @@ public class MessageServiceImpl implements MessageService {
 
         // Look up user by email to verify they exist and get userId
         User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + userEmail));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với email: " + userEmail));
         
         log.debug("Found user ID: {} for email: {}", user.getUserId(), userEmail);
 
@@ -167,7 +167,7 @@ public class MessageServiceImpl implements MessageService {
                 .anyMatch(m -> m.getSenderId().equals(user.getUserId()) || m.getReceiverId().equals(user.getUserId()));
         
         if (!isParticipant && !messages.isEmpty()) {
-            throw new RuntimeException("User is not a participant in this conversation");
+            throw new RuntimeException("Người dùng không phải là thành viên trong cuộc trò chuyện này");
         }
 
         return messages.stream()
@@ -182,7 +182,7 @@ public class MessageServiceImpl implements MessageService {
 
         // Look up user by email to get userId
         User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + userEmail));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với email: " + userEmail));
         
         Integer userId = user.getUserId();
         log.debug("Found user ID: {} for email: {}", userId, userEmail);
@@ -257,7 +257,7 @@ public class MessageServiceImpl implements MessageService {
 
         // Look up user by email to get userId
         User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + userEmail));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với email: " + userEmail));
         
         Integer userId = user.getUserId();
         log.debug("Found user ID: {} for email: {}", userId, userEmail);
@@ -283,7 +283,7 @@ public class MessageServiceImpl implements MessageService {
 
         // Look up user by email to get userId
         User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + userEmail));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với email: " + userEmail));
         
         Integer userId = user.getUserId();
         log.debug("Found user ID: {} for email: {}", userId, userEmail);
@@ -315,7 +315,7 @@ public class MessageServiceImpl implements MessageService {
             
         } catch (Exception e) {
             log.error("Error uploading chat image", e);
-            throw new RuntimeException("Failed to upload chat image", e);
+            throw new RuntimeException("Không thể tải lên hình ảnh trò chuyện", e);
         }
     }
 

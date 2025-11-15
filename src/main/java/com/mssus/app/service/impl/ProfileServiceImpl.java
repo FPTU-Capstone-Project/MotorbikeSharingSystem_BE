@@ -104,7 +104,7 @@ public class ProfileServiceImpl implements ProfileService {
     @Retryable(value = {OptimisticLockingFailureException.class}, maxAttempts = 3)
     public UserProfileResponse updateProfile(String username, UpdateProfileRequest request) {
         // This method is reserved for admin updates
-        throw new UnsupportedOperationException("Use updateMyProfile for user self-updates");
+        throw new UnsupportedOperationException("Sử dụng updateMyProfile cho người dùng tự cập nhật");
     }
 
     @Override
@@ -201,14 +201,14 @@ public class ProfileServiceImpl implements ProfileService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        return MessageResponse.of("Password updated successfully");
+        return MessageResponse.of("Cập nhật mật khẩu thành công");
     }
 
     @Override
     @Transactional
     public SwitchProfileResponse switchProfile(String username, SwitchProfileRequest request) {
         User user = userRepository.findByEmailWithProfiles(username)
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not found: " + username));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "Không tìm thấy người dùng với email: " + username));
 
         String targetProfile = request.getTargetProfile();
 
@@ -226,7 +226,7 @@ public class ProfileServiceImpl implements ProfileService {
                     throw BaseDomainException.of("user.validation.profile-not-exists");
                 }
             }
-            default -> throw ValidationException.of("Invalid target role: " + targetProfile);
+            default -> throw ValidationException.of("Vai trò không hợp lệ: " + targetProfile);
         }
 
         authService.validateUserBeforeGrantingToken(user);
@@ -273,20 +273,20 @@ public class ProfileServiceImpl implements ProfileService {
 
         // Enforce email and phone verification before allowing student_id submission
         if (Boolean.FALSE.equals(user.getEmailVerified())) {
-            throw ValidationException.of("Email must be verified before submitting student ID");
+            throw ValidationException.of("Email phải được xác thực trước khi nộp mã sinh viên");
         }
         if (Boolean.FALSE.equals(user.getPhoneVerified())) {
-            throw ValidationException.of("Phone must be verified before submitting student ID");
+            throw ValidationException.of("Số điện thoại phải được xác thực trước khi nộp mã sinh viên");
         }
         if(documents == null || documents.isEmpty()){
-            throw new ValidationException("At least one documents to upload");
+            throw new ValidationException("Cần ít nhất một tài liệu để tải lên");
         }
         if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.STUDENT_ID,VerificationStatus.PENDING).isPresent()){
-            throw new IllegalStateException("Student verification already exists");
+            throw new IllegalStateException("Yêu cầu xác thực sinh viên đã tồn tại");
         }
         try {
             if (verificationRepository.isUserVerifiedForType(user.getUserId(), VerificationType.STUDENT_ID)) {
-                throw ConflictException.of("Student verification already approved");
+                throw ConflictException.of("Xác thực sinh viên đã được phê duyệt");
             }
 
             List<CompletableFuture<String>> futuresList = documents.parallelStream()
@@ -320,22 +320,22 @@ public class ProfileServiceImpl implements ProfileService {
 
             return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to upload document: " + e.getMessage());
+            throw new RuntimeException("Không thể tải lên tài liệu: " + e.getMessage());
         }
     }
 
     @Override
     public MessageResponse updateAvatar(String username, MultipartFile avatarFile) {
-        User user = userRepository.findByEmail(username).orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findByEmail(username).orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
         try {
             String profilePhotoUrl = fileUploadService.uploadFile(avatarFile).get();
             user.setProfilePhotoUrl(profilePhotoUrl);
             userRepository.save(user);
             return MessageResponse.builder()
-                    .message("Avatar uploaded successfully")
+                    .message("Tải lên ảnh đại diện thành công")
                     .build();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to upload avatar: " + e.getMessage());
+            throw new RuntimeException("Không thể tải lên ảnh đại diện: " + e.getMessage());
         }
     }
 
@@ -346,14 +346,14 @@ public class ProfileServiceImpl implements ProfileService {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
         if (documents == null || documents.isEmpty()) {
-            throw ValidationException.of("At least one document to upload");
+            throw ValidationException.of("Cần ít nhất một tài liệu để tải lên");
         }
         if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_LICENSE,VerificationStatus.PENDING).isPresent()){
-            throw new IllegalStateException("Driver verification already exists");
+            throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
         boolean isValid = fptaiService.verifyDriverLicense(user, documents.get(0));
         if (!isValid) {
-            throw ValidationException.of("Driver license does not match user info");
+            throw ValidationException.of("Giấy phép lái xe không khớp với thông tin người dùng");
         }
 
         try {
@@ -387,7 +387,7 @@ public class ProfileServiceImpl implements ProfileService {
             verification = verificationRepository.save(verification);
             return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to upload driver license: " + e.getMessage());
+            throw new RuntimeException("Không thể tải lên giấy phép lái xe: " + e.getMessage());
         }
     }
 
@@ -397,10 +397,10 @@ public class ProfileServiceImpl implements ProfileService {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
         if (documents == null || documents.isEmpty()) {
-            throw ValidationException.of("At least one document to upload");
+            throw ValidationException.of("Cần ít nhất một tài liệu để tải lên");
         }
         if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_DOCUMENTS,VerificationStatus.PENDING).isPresent()){
-            throw new IllegalStateException("Driver verification already exists");
+            throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
         try {
             List<CompletableFuture<String>> futuresList = documents.parallelStream()
@@ -433,7 +433,7 @@ public class ProfileServiceImpl implements ProfileService {
             verification = verificationRepository.save(verification);
             return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to upload driver documents: " + e.getMessage());
+            throw new RuntimeException("Không thể tải lên tài liệu tài xế: " + e.getMessage());
         }
     }
 
@@ -443,10 +443,10 @@ public class ProfileServiceImpl implements ProfileService {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
         if (documents == null || documents.isEmpty()) {
-            throw ValidationException.of("At least one document to upload");
+            throw ValidationException.of("Cần ít nhất một tài liệu để tải lên");
         }
         if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.VEHICLE_REGISTRATION,VerificationStatus.PENDING).isPresent()){
-            throw new IllegalStateException("Driver verification already exists: ");
+            throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
         try {
             List<CompletableFuture<String>> futuresList = documents.parallelStream()
@@ -479,7 +479,7 @@ public class ProfileServiceImpl implements ProfileService {
             verification = verificationRepository.save(verification);
             return verificationMapper.mapToVerificationResponse(verification);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to upload vehicle registration: " + e.getMessage());
+            throw new RuntimeException("Không thể tải lên đăng ký xe: " + e.getMessage());
         }
     }
 
@@ -507,10 +507,10 @@ public class ProfileServiceImpl implements ProfileService {
     @Transactional
     public void setDriverStatus(String username, boolean isActive) {
         User user = userRepository.findByEmailWithProfiles(username)
-            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not found: " + username));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "Không tìm thấy người dùng với email: " + username));
 
         if (user.getDriverProfile() == null) {
-            throw ValidationException.of("User does not have a driver profile");
+            throw ValidationException.of("Người dùng không có hồ sơ tài xế");
         }
 
         DriverProfile driverProfile = user.getDriverProfile();

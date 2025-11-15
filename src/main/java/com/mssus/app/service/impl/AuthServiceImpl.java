@@ -51,18 +51,18 @@ public class AuthServiceImpl implements AuthService {
         // Validate and sanitize full name to prevent XSS attacks
         if (!ValidationUtil.isValidFullName(request.getFullName())) {
             throw BaseDomainException.formatted("user.validation.invalid-fullname", 
-                "Full name contains invalid characters or format. Please use only letters, spaces, and hyphens.");
+                "Họ tên chứa ký tự không hợp lệ hoặc định dạng sai. Vui lòng chỉ sử dụng chữ cái, khoảng trắng và dấu gạch ngang.");
         }
         
         if (userRepository.existsByEmailAndStatusNot(request.getEmail(), UserStatus.EMAIL_VERIFYING)) {
-            throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s already registered", request.getEmail());
+            throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s đã được đăng ký", request.getEmail());
         }
         if (userRepository.existsByEmailAndStatus(request.getEmail(), UserStatus.EMAIL_VERIFYING)) {
-            throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s is pending verification", request.getEmail());
+            throw BaseDomainException.formatted("user.conflict.email-exists", "Email %s đang chờ xác thực", request.getEmail());
         }
         String normalizedPhone = ValidationUtil.normalizePhone(request.getPhone());
         if (userRepository.existsByPhone(normalizedPhone)) {
-            throw BaseDomainException.formatted("user.conflict.phone-exists", "Phone %s already registered", normalizedPhone);
+            throw BaseDomainException.formatted("user.conflict.phone-exists", "Số điện thoại %s đã được đăng ký", normalizedPhone);
         }
         
         // Sanitize full name as an extra layer of protection against XSS
@@ -169,7 +169,7 @@ public class AuthServiceImpl implements AuthService {
     public MessageResponse logout(String refreshToken) {
         log.info("User logged out");
         refreshTokenService.invalidateRefreshToken(refreshToken);
-        return MessageResponse.of("Logged out successfully");
+        return MessageResponse.of("Đăng xuất thành công");
     }
     @Override
     public TokenRefreshResponse refreshToken(TokenRefreshRequest request) {
@@ -183,7 +183,7 @@ public class AuthServiceImpl implements AuthService {
             throw BaseDomainException.of("auth.unauthorized.invalid-refresh-token");
         }
         User user = userRepository.findById(Integer.valueOf(userId))
-                .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-id", "User with ID %s not found", userId));
+                .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-id", "Không tìm thấy người dùng với ID %s", userId));
         validateUserBeforeGrantingToken(user);
 
         // TODO: implement context persistence for refresh token
@@ -231,7 +231,7 @@ public class AuthServiceImpl implements AuthService {
                 : userRepository.findByPhone(ValidationUtil.normalizePhone(identifier)).orElse(null);
 
         if (user == null) {
-            return MessageResponse.of("OTP sent to your registered contact");
+            return MessageResponse.of("Mã OTP đã được gửi đến thông tin liên lạc của bạn");
         }
 
         String otp = OtpUtil.generateOtp();
@@ -251,7 +251,7 @@ public class AuthServiceImpl implements AuthService {
                     return null;
                 });
 
-        return MessageResponse.of("OTP sent to your registered contact");
+        return MessageResponse.of("Mã OTP đã được gửi đến thông tin liên lạc của bạn");
     }
     @Override
     public Map<String, Object> getUserContext(Integer userId) {

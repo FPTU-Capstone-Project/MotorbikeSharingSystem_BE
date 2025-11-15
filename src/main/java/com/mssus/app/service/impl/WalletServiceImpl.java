@@ -55,7 +55,7 @@ public class WalletServiceImpl implements WalletService {
     @Override
     public void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount) {
         Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
 
         wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
         wallet.setTotalToppedUp(wallet.getTotalToppedUp().add(amount));
@@ -66,7 +66,7 @@ public class WalletServiceImpl implements WalletService {
     public void increasePendingBalance(Integer userId, BigDecimal amount) {
         int updatedRows = walletRepository.increasePendingBalance(userId, amount);
         if (updatedRows == 0) {
-            throw new NotFoundException("Wallet not found for user or update failed: " + userId);
+            throw new NotFoundException("Không tìm thấy ví cho người dùng hoặc cập nhật thất bại: " + userId);
         }
     }
 
@@ -74,7 +74,7 @@ public class WalletServiceImpl implements WalletService {
     public void decreasePendingBalance(Integer userId, BigDecimal amount) {
         int updatedRows = walletRepository.decreasePendingBalance(userId, amount);
         if (updatedRows == 0) {
-            throw new ValidationException("Failed to decrease pending balance for user: " + userId + ". Wallet not found or insufficient pending balance.");
+            throw new ValidationException("Không thể giảm số dư chờ xử lý cho người dùng: " + userId + ". Không tìm thấy ví hoặc số dư chờ xử lý không đủ.");
         }
     }
 
@@ -83,7 +83,7 @@ public class WalletServiceImpl implements WalletService {
     public void increaseShadowBalance(Integer userId, BigDecimal amount) {
         int updatedRows = walletRepository.increaseShadowBalance(userId, amount);
         if (updatedRows == 0) {
-            throw new NotFoundException("Wallet not found for user or update failed: " + userId);
+            throw new NotFoundException("Không tìm thấy ví cho người dùng hoặc cập nhật thất bại: " + userId);
         }
     }
 
@@ -93,14 +93,14 @@ public class WalletServiceImpl implements WalletService {
         int updatedRows = walletRepository.decreaseShadowBalance(userId, amount);
         if (updatedRows == 0) {
             // This can also mean insufficient shadow balance
-            throw new ValidationException("Failed to decrease shadow balance for user: " + userId + ". Wallet not found or insufficient shadow balance.");
+            throw new ValidationException("Không thể giảm số dư khả dụng cho người dùng: " + userId + ". Không tìm thấy ví hoặc số dư khả dụng không đủ.");
         }
     }
 
     @Override
     public void transferPendingToAvailable(Integer userId, BigDecimal amount) {
         Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
         BigDecimal shadowBalance = BigDecimal.ZERO;
         if (wallet.getShadowBalance() != null){
             shadowBalance = wallet.getShadowBalance();
@@ -115,15 +115,15 @@ public class WalletServiceImpl implements WalletService {
     @Transactional(readOnly = true)
     public WalletResponse getBalance(Authentication authentication) {
         if (authentication == null) {
-            throw new ValidationException("Authentication cannot be null");
+            throw new ValidationException("Xác thực không được để trống");
         }
 
         String email = authentication.getName();
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với email: " + email));
 
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
 
         return WalletResponse.builder()
                 .walletId(wallet.getWalletId())
@@ -143,23 +143,23 @@ public class WalletServiceImpl implements WalletService {
     @Transactional(readOnly = true)
     public Wallet getWalletByUserId(Integer userId) {
         if (userId == null) {
-            throw new ValidationException("User ID cannot be null");
+            throw new ValidationException("ID người dùng không được để trống");
         }
 
         return walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
     }
 
     @Override
     @Transactional
     public TopUpInitResponse initiateTopUp(TopUpInitRequest request, Authentication authentication) {
         if (authentication == null) {
-            throw new ValidationException("Authentication cannot be null");
+            throw new ValidationException("Xác thực không được để trống");
         }
 
         String email = authentication.getName();
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với email: " + email));
 
         // Ensure wallet exists
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
@@ -170,7 +170,7 @@ public class WalletServiceImpl implements WalletService {
 
         // Validate wallet is active
         if (!wallet.getIsActive()) {
-            throw new ValidationException("Wallet is frozen. Please contact support.");
+            throw new ValidationException("Ví đã bị đóng băng. Vui lòng liên hệ hỗ trợ.");
         }
 
         try {
@@ -198,7 +198,7 @@ public class WalletServiceImpl implements WalletService {
 
         } catch (Exception e) {
             log.error("Error initiating top-up for user {}: {}", user.getUserId(), e.getMessage(), e);
-            throw new RuntimeException("Failed to initiate top-up: " + e.getMessage(), e);
+            throw new RuntimeException("Không thể bắt đầu nạp tiền: " + e.getMessage(), e);
         }
     }
 
@@ -206,44 +206,44 @@ public class WalletServiceImpl implements WalletService {
     @Transactional
     public PayoutInitResponse initiatePayout(PayoutInitRequest request, Authentication authentication) {
         if (authentication == null) {
-            throw new ValidationException("Authentication cannot be null");
+            throw new ValidationException("Xác thực không được để trống");
         }
 
         String email = authentication.getName();
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với email: " + email));
 
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
 
         // Validate wallet is active
         if (!wallet.getIsActive()) {
-            throw new ValidationException("Wallet is frozen. Please contact support.");
+            throw new ValidationException("Ví đã bị đóng băng. Vui lòng liên hệ hỗ trợ.");
         }
 
         // Validate minimum payout amount (50,000 VND)
         BigDecimal minimumAmount = new BigDecimal("50000");
         if (request.getAmount().compareTo(minimumAmount) < 0) {
-            throw new ValidationException("Minimum payout amount is 50,000 VND. Requested: " + request.getAmount());
+            throw new ValidationException("Số tiền rút tối thiểu là 50.000 VNĐ. Yêu cầu: " + request.getAmount());
         }
 
         // Validate bank account number format (9-16 digits)
         String bankAccountNumber = request.getBankAccountNumber().trim();
         Pattern accountNumberPattern = Pattern.compile("^\\d{9,16}$");
         if (!accountNumberPattern.matcher(bankAccountNumber).matches()) {
-            throw new ValidationException("Bank account number must be 9-16 digits");
+            throw new ValidationException("Số tài khoản ngân hàng phải có 9-16 chữ số");
         }
 
         // Validate account holder name (at least 2 characters)
         String accountHolderName = request.getAccountHolderName().trim();
         if (accountHolderName.length() < 2) {
-            throw new ValidationException("Account holder name must be at least 2 characters");
+            throw new ValidationException("Tên chủ tài khoản phải có ít nhất 2 ký tự");
         }
 
         // Check sufficient balance
         if (wallet.getShadowBalance().compareTo(request.getAmount()) < 0) {
-            throw new ValidationException("Insufficient balance. Available: " +
-                    wallet.getShadowBalance() + ", Required: " + request.getAmount());
+            throw new ValidationException("Số dư không đủ. Khả dụng: " +
+                    wallet.getShadowBalance() + ", Yêu cầu: " + request.getAmount());
         }
 
         // Generate payout reference
@@ -335,15 +335,15 @@ public class WalletServiceImpl implements WalletService {
     @Transactional(readOnly = true)
     public DriverEarningsResponse getDriverEarnings(Authentication authentication) {
         if (authentication == null) {
-            throw new ValidationException("Authentication cannot be null");
+            throw new ValidationException("Xác thực không được để trống");
         }
 
         String email = authentication.getName();
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với email: " + email));
 
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Wallet not found for driver: " + user.getUserId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho tài xế: " + user.getUserId()));
 
         // Calculate earnings from transactions
         List<Transaction> allTransactions = transactionRepository
@@ -409,16 +409,16 @@ public class WalletServiceImpl implements WalletService {
     @Transactional
     public Wallet createWalletForUser(Integer userId) {
         if (userId == null) {
-            throw new ValidationException("User ID cannot be null");
+            throw new ValidationException("ID người dùng không được để trống");
         }
 
         // Check if wallet already exists
         if (walletRepository.existsByUserId(userId)) {
-            throw new ValidationException("Wallet already exists for user: " + userId);
+            throw new ValidationException("Ví đã tồn tại cho người dùng: " + userId);
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found: " + userId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng: " + userId));
 
         Wallet wallet = Wallet.builder()
                 .user(user)
@@ -441,14 +441,14 @@ public class WalletServiceImpl implements WalletService {
     @Transactional(readOnly = true)
     public boolean hasSufficientBalance(Integer userId, BigDecimal amount) {
         if (userId == null) {
-            throw new ValidationException("User ID cannot be null");
+            throw new ValidationException("ID người dùng không được để trống");
         }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ValidationException("Amount must be non-negative");
+            throw new ValidationException("Số tiền phải không âm");
         }
 
         Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
 
         boolean hasFunds = wallet.getShadowBalance().compareTo(amount) >= 0;
 
@@ -462,11 +462,11 @@ public class WalletServiceImpl implements WalletService {
     @Transactional
     public void reconcileWalletBalance(Integer userId) {
         if (userId == null) {
-            throw new ValidationException("User ID cannot be null");
+            throw new ValidationException("ID người dùng không được để trống");
         }
 
         Wallet wallet = walletRepository.findByUser_UserId(userId)
-            .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+            .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
 
         BigDecimal currentShadowBalance = wallet.getShadowBalance();
         BigDecimal currentPendingBalance = wallet.getPendingBalance();
@@ -630,7 +630,7 @@ public class WalletServiceImpl implements WalletService {
         Transaction userTransaction = transactions.stream()
                 .filter(txn -> txn.getActorKind() == ActorKind.USER && txn.getType() == TransactionType.PAYOUT)
                 .findFirst()
-                .orElseThrow(() -> new NotFoundException("User payout transaction not found for pspRef: " + payoutRef));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy giao dịch rút tiền của người dùng cho pspRef: " + payoutRef));
 
         // Update all transactions to PROCESSING status
         for (Transaction txn : transactions) {
@@ -671,15 +671,15 @@ public class WalletServiceImpl implements WalletService {
         Transaction userTransaction = transactions.stream()
                 .filter(txn -> txn.getActorKind() == ActorKind.USER && txn.getType() == TransactionType.PAYOUT)
                 .findFirst()
-                .orElseThrow(() -> new NotFoundException("User payout transaction not found for pspRef: " + payoutRef));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy giao dịch rút tiền của người dùng cho pspRef: " + payoutRef));
 
         User user = userTransaction.getActorUser();
         if (user == null) {
-            throw new NotFoundException("User not found for payout transaction");
+            throw new NotFoundException("Không tìm thấy người dùng cho giao dịch rút tiền");
         }
 
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
 
         // Upload evidence file
         String evidenceUrl;
@@ -687,7 +687,7 @@ public class WalletServiceImpl implements WalletService {
             evidenceUrl = fileUploadService.uploadFile(evidenceFile).get();
         } catch (Exception e) {
             log.error("Failed to upload evidence file for payout {}: {}", payoutRef, e.getMessage());
-            throw new ValidationException("Failed to upload evidence file: " + e.getMessage());
+            throw new ValidationException("Không thể tải lên file minh chứng: " + e.getMessage());
         }
 
         // Update all transactions to SUCCESS status and store evidence URL
@@ -729,7 +729,7 @@ public class WalletServiceImpl implements WalletService {
         }
 
         if (reason == null || reason.trim().isEmpty()) {
-            throw new ValidationException("Failure reason is required");
+            throw new ValidationException("Lý do thất bại là bắt buộc");
         }
 
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PENDING);
@@ -744,11 +744,11 @@ public class WalletServiceImpl implements WalletService {
         Transaction userTransaction = transactions.stream()
                 .filter(txn -> txn.getActorKind() == ActorKind.USER && txn.getType() == TransactionType.PAYOUT)
                 .findFirst()
-                .orElseThrow(() -> new NotFoundException("User payout transaction not found for pspRef: " + payoutRef));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy giao dịch rút tiền của người dùng cho pspRef: " + payoutRef));
 
         User user = userTransaction.getActorUser();
         if (user == null) {
-            throw new NotFoundException("User not found for payout transaction");
+            throw new NotFoundException("Không tìm thấy người dùng cho giao dịch rút tiền");
         }
 
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())

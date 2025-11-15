@@ -49,13 +49,13 @@ public class VerificationServiceImpl implements VerificationService {
         List<Verification> verifications = verificationRepository.findByUserIdAndType(userId, VerificationType.STUDENT_ID);
         
         if (verifications.isEmpty()) {
-            throw new NotFoundException("Student verification not found for user ID: " + userId);
+            throw new NotFoundException("Không tìm thấy xác thực sinh viên cho ID người dùng: " + userId);
         }
         
         // Lấy verification mới nhất (theo created_at)
         Verification latestVerification = verifications.stream()
             .max(Comparator.comparing(Verification::getCreatedAt))
-            .orElseThrow(() -> new NotFoundException("Student verification not found"));
+            .orElseThrow(() -> new NotFoundException("Không tìm thấy xác thực sinh viên"));
         
         return verificationMapper.mapToStudentVerificationResponse(latestVerification);
     }
@@ -64,7 +64,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional
     public BulkOperationResponse bulkApproveVerifications(String admin, BulkApprovalRequest request) {
         if (request.getVerificationIds() == null || request.getVerificationIds().isEmpty()){
-            throw new ValidationException("Verification IDs list cannot be empty");
+            throw new ValidationException("Danh sách ID xác thực không được để trống");
         }
 
         Set<Integer> uniqueIds = new LinkedHashSet<>(request.getVerificationIds());
@@ -110,7 +110,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional(readOnly = true)
     public DriverKycResponse getDriverKycById(Integer driverId) {
         DriverProfile driver = driverProfileRepository.findById(driverId)
-                .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + driverId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy tài xế với ID: " + driverId));
         return mapToDriverKycResponse(driver);
     }
 
@@ -119,16 +119,16 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional
     public MessageResponse rejectVerification(String admin, VerificationDecisionRequest request) {
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
-            throw new ValidationException("Rejection reason is required");
+            throw new ValidationException("Lý do từ chối là bắt buộc");
         }
         Integer userId = request.getUserId();
         VerificationType typeStr = VerificationType.valueOf(request.getVerificationType().toUpperCase());
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(userId, typeStr,VerificationStatus.PENDING).orElseThrow(
-                () -> new NotFoundException("Verification not found for user ID: " + userId)
+                () -> new NotFoundException("Không tìm thấy xác thực cho ID người dùng: " + userId)
         );
 
         User verifiedBy = userRepository.findByEmail(admin)
-                .orElseThrow(() -> new NotFoundException("Admin user not found"));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy quản trị viên"));
 
         if  (verification.getStatus().equals(VerificationStatus.PENDING)) {
             verification.setStatus(VerificationStatus.REJECTED);
@@ -160,7 +160,7 @@ public class VerificationServiceImpl implements VerificationService {
         log.warn("Verification {} rejected for user {}: {}",
                 typeStr, user.getUserId(), request.getRejectionReason());
         return MessageResponse.builder()
-                .message("User verification rejected")
+                .message("Xác thực người dùng đã bị từ chối")
                 .build();
     }
 
@@ -168,7 +168,7 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional
     public MessageResponse updateBackgroundCheck(String admin, Integer driverId, BackgroundCheckRequest request) {
         DriverProfile driver = driverProfileRepository.findById(driverId)
-                .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + driverId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy tài xế với ID: " + driverId));
 
         // Find or create background check verification
         Verification bgCheck = verificationRepository.findByUserIdAndTypeAndStatus(driverId, VerificationType.BACKGROUND_CHECK, VerificationStatus.PENDING)
@@ -179,7 +179,7 @@ public class VerificationServiceImpl implements VerificationService {
                         .build());
 
         User verifiedBy = userRepository.findByEmail(admin).orElseThrow(
-                () -> new NotFoundException("Admin user not found")
+                () -> new NotFoundException("Không tìm thấy quản trị viên")
         );
         if ("failed".equals(request.getResult())) {
             bgCheck.setStatus(VerificationStatus.REJECTED);
@@ -209,7 +209,7 @@ public class VerificationServiceImpl implements VerificationService {
         driverProfileRepository.save(driver);
 
         return MessageResponse.builder()
-                .message("Background check updated successfully")
+                .message("Kiểm tra lý lịch đã được cập nhật thành công")
                 .build();
     }
 
@@ -256,14 +256,14 @@ public class VerificationServiceImpl implements VerificationService {
     @Transactional
     public MessageResponse approveVerification(String admin, VerificationDecisionRequest request) {
         User user = userRepository.findById(request.getUserId()).orElseThrow(
-                () -> new NotFoundException("User not found")
+                () -> new NotFoundException("Không tìm thấy người dùng")
         );
         VerificationType typeStr = VerificationType.valueOf(request.getVerificationType().toUpperCase());
         Verification verification = verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(), typeStr, VerificationStatus.PENDING)
-                .orElseThrow(() -> new NotFoundException(typeStr + " verification not found for user ID: " + user.getUserId()));
+                .orElseThrow(() -> new NotFoundException(typeStr + " không tìm thấy xác thực cho ID người dùng: " + user.getUserId()));
 
         User verifiedBy = userRepository.findByEmail(admin).orElseThrow(
-                () -> new NotFoundException("Admin user not found")
+                () -> new NotFoundException("Không tìm thấy quản trị viên")
         );
         verification.setStatus(VerificationStatus.APPROVED);
         verification.setVerifiedBy(verifiedBy);
@@ -407,7 +407,7 @@ public class VerificationServiceImpl implements VerificationService {
             return objectMapper.readValue(metadata, VehicleInfo.class);
         } catch (Exception e) {
             log.error("Failed to parse vehicle info from metadata: {}", e.getMessage());
-            throw new ValidationException("Invalid vehicle information in verification metadata");
+            throw new ValidationException("Thông tin phương tiện không hợp lệ trong metadata xác thực");
         }
     }
 
