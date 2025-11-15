@@ -55,3 +55,5 @@ env
 !*.osm.pbf
 
 mssus-fcm-firebase-adminsdk-fbsvc-938443350c.json
+
+.Dockerfile.dev

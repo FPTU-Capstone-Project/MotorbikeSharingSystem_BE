@@ -21,6 +21,8 @@ DB_PORT="5433"  # Changed from 5432 to avoid PostgreSQL conflicts
 APP_PORT="8081" # Changed from 8080 to avoid common app conflicts
 REDIS_PORT="6380" # Changed from 6379 to avoid Redis conflicts
 REDIS_PASSWORD="123456"
+DOCKERHUB_IMAGE="khoatdse172986/motorbike-backend:latest"
+USE_DOCKERHUB="${USE_DOCKERHUB:-false}"  # Set to 'true' to use DockerHub image instead of building
 
 echo -e "${BLUE}Motorbike Sharing System - Local Development${NC}"
 echo "=============================================="
@@ -114,18 +116,27 @@ start_database() {
 start_application() {
     echo -e "${YELLOW}Building and starting application...${NC}"
     
-    # Check if we're in correct directory
-    if [ ! -f "pom.xml" ]; then
-        echo -e "${RED}pom.xml not found! Please run this script from MotorbikeSharingSystem_BE directory${NC}"
-        exit 1
-    fi
-    
     # Stop and remove existing app container
     docker stop motorbike-dev-app 2>/dev/null || true
     docker rm motorbike-dev-app 2>/dev/null || true
     
+    # Check if we should use DockerHub image or build locally
+    if [ "$USE_DOCKERHUB" = "true" ]; then
+        echo -e "${BLUE}Using pre-built image from DockerHub${NC}"
+        echo -e "${YELLOW}Pulling latest image from DockerHub...${NC}"
+        docker pull $DOCKERHUB_IMAGE
+        IMAGE_TO_USE=$DOCKERHUB_IMAGE
+    else
+        echo -e "${BLUE}Building image locally${NC}"
+        
+        # Check if we're in correct directory
+        if [ ! -f "pom.xml" ]; then
+            echo -e "${RED}pom.xml not found! Please run this script from MotorbikeSharingSystem_BE directory${NC}"
+            exit 1
+        fi
+        
         # Create temporary Dockerfile for development (doesn't affect existing files)
-    cat > .Dockerfile.dev << 'EOF'
+        cat > .Dockerfile.dev << 'EOF'
 FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 
@@ -148,13 +159,15 @@ EXPOSE 8080
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 EOF
-    
-    # Build Docker image
-    echo -e "${YELLOW}Building Docker image...${NC}"
-    docker build -t motorbike-dev-app -f .Dockerfile.dev .
-    
-    # Remove temporary Dockerfile
-    rm .Dockerfile.dev
+        
+        # Build Docker image
+        echo -e "${YELLOW}Building Docker image...${NC}"
+        docker build -t motorbike-dev-app -f .Dockerfile.dev .
+        
+        # Remove temporary Dockerfile
+        rm .Dockerfile.dev
+        IMAGE_TO_USE="motorbike-dev-app"
+    fi
 
     # Get container IP addresses for internal communication
     DB_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' motorbike-dev-db)
@@ -176,7 +189,7 @@ EOF
         -e SPRING_DATA_REDIS_PORT=6379 \
         -e SPRING_DATA_REDIS_PASSWORD="$REDIS_PASSWORD" \
         -e REDIS_PASSWORD="$REDIS_PASSWORD" \
-        motorbike-dev-app
+        $IMAGE_TO_USE
     
     echo -e "${YELLOW}Waiting for application to start...${NC}"
     sleep 15
@@ -268,14 +281,18 @@ show_help() {
     echo "Motorbike Sharing System - Development Script"
     echo ""
     echo "Usage:"
-    echo "  ./dev.sh          Start development environment"
-    echo "  ./dev.sh start    Start development environment"
-    echo "  ./dev.sh stop     Stop development environment"
-    echo "  ./dev.sh help     Show this help"
+    echo "  ./dev.sh                    Start development environment (build locally)"
+    echo "  ./dev.sh start              Start development environment (build locally)"
+    echo "  ./dev.sh stop               Stop development environment"
+    echo "  ./dev.sh help               Show this help"
+    echo "  USE_DOCKERHUB=true ./dev.sh Start using pre-built image from DockerHub"
     echo ""
     echo "Requirements:"
     echo "  - Docker Desktop installed and running"
     echo "  - Run from MotorbikeSharingSystem_BE directory"
+    echo ""
+    echo "Environment Variables:"
+    echo "  USE_DOCKERHUB=true    Use pre-built image from DockerHub instead of building"
     echo ""
     echo "This script:"
     echo "  - Starts PostgreSQL database on port $DB_PORT"
@@ -285,6 +302,10 @@ show_help() {
     echo "  - Creates separate containers for development"
     echo "  - Preserves data between restarts"
     echo "  - Works on any machine with Docker"
+    echo ""
+    echo "Examples:"
+    echo "  ./dev.sh                              # Build and run locally"
+    echo "  USE_DOCKERHUB=true ./dev.sh start     # Use DockerHub image"
 }
 
 # Main function
