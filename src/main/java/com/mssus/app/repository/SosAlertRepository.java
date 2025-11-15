@@ -3,6 +3,8 @@ package com.mssus.app.repository;
 import com.mssus.app.common.enums.SosAlertStatus;
 import com.mssus.app.entity.SosAlert;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -18,6 +20,8 @@ public interface SosAlertRepository extends JpaRepository<SosAlert, Integer> {
     List<SosAlert> findByTriggeredBy_UserIdAndStatusInOrderByCreatedAtDesc(Integer userId, Collection<SosAlertStatus> statuses);
 
     List<SosAlert> findByStatusInOrderByCreatedAtDesc(Collection<SosAlertStatus> statuses);
+
+    Page<SosAlert> findByStatusIn(List<SosAlertStatus> statuses, Pageable pageable);
 
     @Query("""
         select alert from SosAlert alert

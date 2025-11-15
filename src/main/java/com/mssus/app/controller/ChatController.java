@@ -63,10 +63,12 @@ public class ChatController {
     }
 
     /**
-     * REST: Get all messages in a conversation
+     * REST: Get all messages in a conversation by rideRequestId (for RIDE_REQUEST conversations only)
+     * @deprecated Use getMessagesByConversationId instead for better support of both RIDE_REQUEST and REPORT conversations
      */
     @GetMapping("/api/v1/chat/conversations/{rideRequestId}/messages")
     @ResponseBody
+    @Deprecated
     public ResponseEntity<List<MessageResponse>> getConversationMessages(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Integer rideRequestId
@@ -74,6 +76,24 @@ public class ChatController {
         log.info("REST: Getting messages for ride request {}", rideRequestId);
         String userId = userDetails.getUsername();
         List<MessageResponse> messages = messageService.getConversationMessages(userId, rideRequestId);
+        return ResponseEntity.ok(messages);
+    }
+
+    /**
+     * REST: Get all messages in a conversation by conversationId (supports both RIDE_REQUEST and REPORT)
+     * Use this endpoint for report chats. ConversationId format:
+     * - Ride chat: "ride_{rideRequestId}_users_{userId1}_{userId2}"
+     * - Report chat: "report_{reportId}_users_{userId1}_{userId2}"
+     */
+    @GetMapping("/api/v1/chat/conversations/by-id/{conversationId}/messages")
+    @ResponseBody
+    public ResponseEntity<List<MessageResponse>> getMessagesByConversationId(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String conversationId
+    ) {
+        log.info("REST: Getting messages for conversationId {}", conversationId);
+        String userId = userDetails.getUsername();
+        List<MessageResponse> messages = messageService.getMessagesByConversationId(userId, conversationId);
         return ResponseEntity.ok(messages);
     }
 

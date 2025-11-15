@@ -33,6 +33,16 @@ public interface SharedRideService {
 
     SharedRideResponse cancelRide(Integer rideId, String reason, Authentication authentication);
 
+    RideRequestCompletionResponse forceCompleteRideRequestOfRide(CompleteRideReqRequest request,
+                                                                 Authentication authentication);
+
+    /**
+     * Get completed rides for the authenticated driver
+     * @param pageable Pagination parameters
+     * @param authentication Current user authentication
+     * @return Page of completed rides
+     */
+    Page<SharedRideResponse> getMyCompletedRides(Pageable pageable, Authentication authentication);
     Page<SharedRideResponse> getOngoingRidesOfRider(Integer riderId, Pageable pageable);
 }
 

@@ -19,6 +19,9 @@ import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.dto.response.wallet.PendingPayoutResponse;
+import com.mssus.app.dto.response.wallet.PayoutProcessResponse;
+import com.mssus.app.service.FileUploadService;
 import com.mssus.app.service.PayOSService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import vn.payos.type.CheckoutResponseData;
 
 import java.math.BigDecimal;
@@ -36,6 +40,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +50,7 @@ public class WalletServiceImpl implements WalletService {
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final PayOSService payOSService;
+    private final FileUploadService fileUploadService;
 
     @Override
     public void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount) {
@@ -577,6 +583,242 @@ public class WalletServiceImpl implements WalletService {
 //            .build();
 //
 //        transactionRepository.save(adjustment);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PendingPayoutResponse> getPendingPayouts() {
+        List<Transaction> pendingPayouts = transactionRepository.findByTypeAndStatusAndActorKindUser(
+                TransactionType.PAYOUT, TransactionStatus.PENDING);
+
+        return pendingPayouts.stream()
+                .map(txn -> {
+                    User user = txn.getActorUser();
+                    String note = txn.getNote() != null ? txn.getNote() : "";
+                    // Extract bank account info from note (format: "Payout to {bank} - {masked} ({holder})")
+                    String bankName = extractBankNameFromNote(note);
+                    String maskedAccount = extractMaskedAccountFromNote(note);
+                    String accountHolder = extractAccountHolderFromNote(note);
+
+                    return PendingPayoutResponse.builder()
+                            .payoutRef(txn.getPspRef())
+                            .amount(txn.getAmount())
+                            .bankName(bankName)
+                            .maskedAccountNumber(maskedAccount)
+                            .accountHolderName(accountHolder)
+                            .userEmail(user != null ? user.getEmail() : "")
+                            .userId(user != null ? user.getUserId() : null)
+                            .status(txn.getStatus().name())
+                            .requestedAt(txn.getCreatedAt())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public PayoutProcessResponse processPayout(String payoutRef, Authentication authentication) {
+        if (authentication == null) {
+            throw new ValidationException("Authentication cannot be null");
+        }
+
+        List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PENDING);
+        if (transactions.isEmpty()) {
+            throw new NotFoundException("No pending payout transactions found for pspRef: " + payoutRef);
+        }
+
+        Transaction userTransaction = transactions.stream()
+                .filter(txn -> txn.getActorKind() == ActorKind.USER && txn.getType() == TransactionType.PAYOUT)
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("User payout transaction not found for pspRef: " + payoutRef));
+
+        // Update all transactions to PROCESSING status
+        for (Transaction txn : transactions) {
+            txn.setStatus(TransactionStatus.PROCESSING);
+            transactionRepository.save(txn);
+        }
+
+        log.info("Admin {} marked payout {} as PROCESSING", authentication.getName(), payoutRef);
+
+        return PayoutProcessResponse.builder()
+                .payoutRef(payoutRef)
+                .amount(userTransaction.getAmount())
+                .status("PROCESSING")
+                .processedAt(LocalDateTime.now())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public PayoutProcessResponse completePayout(String payoutRef, MultipartFile evidenceFile, String notes, Authentication authentication) {
+        if (authentication == null) {
+            throw new ValidationException("Authentication cannot be null");
+        }
+
+        if (evidenceFile == null || evidenceFile.isEmpty()) {
+            throw new ValidationException("Evidence file is required for payout completion");
+        }
+
+        List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PROCESSING);
+        if (transactions.isEmpty()) {
+            // Try PENDING status as fallback
+            transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PENDING);
+            if (transactions.isEmpty()) {
+                throw new NotFoundException("No processing or pending payout transactions found for pspRef: " + payoutRef);
+            }
+        }
+
+        Transaction userTransaction = transactions.stream()
+                .filter(txn -> txn.getActorKind() == ActorKind.USER && txn.getType() == TransactionType.PAYOUT)
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("User payout transaction not found for pspRef: " + payoutRef));
+
+        User user = userTransaction.getActorUser();
+        if (user == null) {
+            throw new NotFoundException("User not found for payout transaction");
+        }
+
+        Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
+                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
+
+        // Upload evidence file
+        String evidenceUrl;
+        try {
+            evidenceUrl = fileUploadService.uploadFile(evidenceFile).get();
+        } catch (Exception e) {
+            log.error("Failed to upload evidence file for payout {}: {}", payoutRef, e.getMessage());
+            throw new ValidationException("Failed to upload evidence file: " + e.getMessage());
+        }
+
+        // Update all transactions to SUCCESS status and store evidence URL
+        for (Transaction txn : transactions) {
+            txn.setStatus(TransactionStatus.SUCCESS);
+            if (txn.getActorKind() == ActorKind.USER) {
+                txn.setEvidenceUrl(evidenceUrl);
+                if (notes != null && !notes.trim().isEmpty()) {
+                    txn.setNote(txn.getNote() + " - " + notes);
+                }
+            }
+            transactionRepository.save(txn);
+        }
+
+        // Update wallet balance: decrease pending_balance (money transferred out)
+        BigDecimal payoutAmount = userTransaction.getAmount();
+        wallet.setPendingBalance(wallet.getPendingBalance().subtract(payoutAmount));
+        walletRepository.save(wallet);
+
+        log.info("Admin {} completed payout {} with evidence URL: {}. Balance: pending {} -> {}",
+                authentication.getName(), payoutRef, evidenceUrl,
+                wallet.getPendingBalance().add(payoutAmount), wallet.getPendingBalance());
+
+        return PayoutProcessResponse.builder()
+                .payoutRef(payoutRef)
+                .amount(payoutAmount)
+                .status("SUCCESS")
+                .evidenceUrl(evidenceUrl)
+                .notes(notes)
+                .processedAt(LocalDateTime.now())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public PayoutProcessResponse failPayout(String payoutRef, String reason, Authentication authentication) {
+        if (authentication == null) {
+            throw new ValidationException("Authentication cannot be null");
+        }
+
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new ValidationException("Failure reason is required");
+        }
+
+        List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PENDING);
+        if (transactions.isEmpty()) {
+            // Try PROCESSING status as fallback
+            transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PROCESSING);
+            if (transactions.isEmpty()) {
+                throw new NotFoundException("No pending or processing payout transactions found for pspRef: " + payoutRef);
+            }
+        }
+
+        Transaction userTransaction = transactions.stream()
+                .filter(txn -> txn.getActorKind() == ActorKind.USER && txn.getType() == TransactionType.PAYOUT)
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("User payout transaction not found for pspRef: " + payoutRef));
+
+        User user = userTransaction.getActorUser();
+        if (user == null) {
+            throw new NotFoundException("User not found for payout transaction");
+        }
+
+        Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
+                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
+
+        // Update all transactions to FAILED status
+        for (Transaction txn : transactions) {
+            txn.setStatus(TransactionStatus.FAILED);
+            txn.setNote(txn.getNote() + " - Failed: " + reason);
+            transactionRepository.save(txn);
+        }
+
+        // Refund balance: move from pending_balance back to shadow_balance
+        BigDecimal payoutAmount = userTransaction.getAmount();
+        wallet.setPendingBalance(wallet.getPendingBalance().subtract(payoutAmount));
+        wallet.setShadowBalance(wallet.getShadowBalance().add(payoutAmount));
+        walletRepository.save(wallet);
+
+        log.info("Admin {} failed payout {} with reason: {}. Balance refunded: pending {} -> {}, shadow {} -> {}",
+                authentication.getName(), payoutRef, reason,
+                wallet.getPendingBalance().add(payoutAmount), wallet.getPendingBalance(),
+                wallet.getShadowBalance().subtract(payoutAmount), wallet.getShadowBalance());
+
+        return PayoutProcessResponse.builder()
+                .payoutRef(payoutRef)
+                .amount(payoutAmount)
+                .status("FAILED")
+                .notes("Failed: " + reason)
+                .processedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private String extractBankNameFromNote(String note) {
+        if (note == null || note.isEmpty()) {
+            return "";
+        }
+        // Format: "Payout to {bank} - {masked} ({holder})"
+        if (note.startsWith("Payout to ")) {
+            int dashIndex = note.indexOf(" - ");
+            if (dashIndex > 0) {
+                return note.substring(10, dashIndex).trim();
+            }
+        }
+        return "";
+    }
+
+    private String extractMaskedAccountFromNote(String note) {
+        if (note == null || note.isEmpty()) {
+            return "";
+        }
+        // Format: "Payout to {bank} - {masked} ({holder})"
+        int dashIndex = note.indexOf(" - ");
+        int parenIndex = note.indexOf(" (");
+        if (dashIndex > 0 && parenIndex > dashIndex) {
+            return note.substring(dashIndex + 3, parenIndex).trim();
+        }
+        return "";
+    }
+
+    private String extractAccountHolderFromNote(String note) {
+        if (note == null || note.isEmpty()) {
+            return "";
+        }
+        // Format: "Payout to {bank} - {masked} ({holder})"
+        int parenIndex = note.indexOf(" (");
+        int closeParen = note.indexOf(")");
+        if (parenIndex > 0 && closeParen > parenIndex) {
+            return note.substring(parenIndex + 2, closeParen).trim();
+        }
+        return "";
     }
 
 }

@@ -4,15 +4,18 @@ import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
 import com.mssus.app.dto.request.ride.StartRideReqRequest;
+import com.mssus.app.dto.request.report.RideReportCreateRequest;
 import com.mssus.app.dto.response.ErrorResponse;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
 import com.mssus.app.dto.response.ride.TrackingResponse;
+import com.mssus.app.dto.response.report.UserReportResponse;
 import com.mssus.app.dto.domain.ride.LocationPoint;
 import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.SharedRideService;
+import com.mssus.app.service.UserReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -47,6 +50,7 @@ public class SharedRideController {
 
     private final SharedRideService sharedRideService;
     private final RideTrackingService rideTrackingService;
+    private final UserReportService userReportService;
 
     @PostMapping
     @PreAuthorize("hasRole('DRIVER')")
@@ -100,6 +104,41 @@ public class SharedRideController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
         
         var pageData = sharedRideService.getRidesByDriver(driverId, status, pageable, authentication);
+        PageResponse<SharedRideResponse> response = PageResponse.<SharedRideResponse>builder()
+                .data(pageData.getContent())
+                .pagination(PageResponse.PaginationInfo.builder()
+                        .page(pageData.getNumber() + 1)
+                        .pageSize(pageData.getSize())
+                        .totalPages(pageData.getTotalPages())
+                        .totalRecords(pageData.getTotalElements())
+                        .build())
+                .build();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/my-completed-rides")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(
+            summary = "Get my completed rides (Driver)",
+            description = "Retrieve all completed rides for the authenticated driver. Requires login."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Completed rides retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = PageResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized - Login required"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - Driver role required",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<PageResponse<SharedRideResponse>> getMyCompletedRides(
+            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "completedAt") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir,
+            Authentication authentication) {
+        log.info("Driver {} fetching their completed rides", authentication.getName());
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Page<SharedRideResponse> pageData = sharedRideService.getMyCompletedRides(pageable, authentication);
         PageResponse<SharedRideResponse> response = PageResponse.<SharedRideResponse>builder()
                 .data(pageData.getContent())
                 .pagination(PageResponse.PaginationInfo.builder()
@@ -244,6 +283,33 @@ public class SharedRideController {
         log.info("User {} cancelling ride {}", authentication.getName(), rideId);
         SharedRideResponse response = sharedRideService.cancelRide(rideId, reason, authentication);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{rideId}/report")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Submit a report for a completed ride",
+            description = "Submit a report about issues encountered during a completed ride. Reports can only be submitted for completed rides within 7 days of completion."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Report submitted successfully",
+                    content = @Content(schema = @Schema(implementation = UserReportResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request or validation failed",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Not authorized to report this ride",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Ride not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Report already exists for this ride",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<UserReportResponse> submitRideReport(
+            @Parameter(description = "Ride ID") @PathVariable Integer rideId,
+            @Valid @RequestBody RideReportCreateRequest request,
+            Authentication authentication) {
+        log.info("User {} submitting report for ride {}", authentication.getName(), rideId);
+        UserReportResponse response = userReportService.submitRideReport(rideId, authentication, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/available")

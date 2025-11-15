@@ -1,6 +1,7 @@
 package com.mssus.app.dto.response.chat;
 
 import com.mssus.app.common.enums.MessageType;
+import com.mssus.app.common.enums.ConversationType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,7 +23,9 @@ public class MessageResponse {
     private String receiverName;
     private String receiverPhotoUrl;
     private String conversationId;
+    private ConversationType conversationType;
     private Integer rideRequestId;
+    private Integer reportId;
     private MessageType messageType;
     private String content;
     private String metadata;

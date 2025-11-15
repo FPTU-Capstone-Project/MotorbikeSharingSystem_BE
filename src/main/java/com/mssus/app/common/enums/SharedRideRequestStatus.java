@@ -23,7 +23,7 @@ public enum SharedRideRequestStatus {
     PENDING,
 
     /**
-     * Request is being broadcasted to potential drivers (AI_BOOKING).
+     * Request is being broadcasted to potential drivers (AI_BOOKING).3
      * NEW in Ride Module MVP.
      */
     //TODO: Implement logic around this status

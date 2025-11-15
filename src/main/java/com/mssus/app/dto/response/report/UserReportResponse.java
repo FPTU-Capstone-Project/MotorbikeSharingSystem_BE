@@ -1,5 +1,6 @@
 package com.mssus.app.dto.response.report;
 
+import com.mssus.app.common.enums.ReportPriority;
 import com.mssus.app.common.enums.ReportStatus;
 import com.mssus.app.common.enums.ReportType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,6 +27,9 @@ public class UserReportResponse {
     @Schema(description = "Current status of the report", example = "RESOLVED")
     private ReportStatus status;
 
+    @Schema(description = "Priority level of the report", example = "MEDIUM")
+    private ReportPriority priority;
+
     @Schema(description = "Detailed description from the reporting user")
     private String description;
 
@@ -47,6 +51,36 @@ public class UserReportResponse {
     @Schema(description = "Resolution message provided by the admin")
     private String resolutionMessage;
 
+    @Schema(description = "Identifier of the shared ride (if this is a ride-specific report)", example = "123")
+    private Integer sharedRideId;
+
+    @Schema(description = "Identifier of the driver (if this is a ride-specific report)", example = "45")
+    private Integer driverId;
+
+    @Schema(description = "Full name of the driver (if this is a ride-specific report)", example = "Tran Van B")
+    private String driverName;
+
+    @Schema(description = "User ID of the reported person (driver or rider)", example = "20")
+    private Integer reportedUserId;
+
+    @Schema(description = "Full name of the reported person", example = "Tran Van B")
+    private String reportedUserName;
+
+    @Schema(description = "Admin notes explaining the status change or resolution")
+    private String adminNotes;
+
+    @Schema(description = "Driver's response to the report")
+    private String driverResponse;
+
+    @Schema(description = "Timestamp when driver responded")
+    private LocalDateTime driverRespondedAt;
+
+    @Schema(description = "Timestamp when report was escalated")
+    private LocalDateTime escalatedAt;
+
+    @Schema(description = "Reason for escalation")
+    private String escalationReason;
+
     @Schema(description = "Timestamp when the report was created")
     private LocalDateTime createdAt;
 
@@ -55,4 +89,22 @@ public class UserReportResponse {
 
     @Schema(description = "Timestamp when the report was resolved")
     private LocalDateTime resolvedAt;
+
+    @Schema(description = "Timestamp when admin first contacted the reporter")
+    private LocalDateTime reporterChatStartedAt;
+
+    @Schema(description = "Timestamp of the reporter's last reply")
+    private LocalDateTime reporterLastReplyAt;
+
+    @Schema(description = "Timestamp when admin first contacted the reported user")
+    private LocalDateTime reportedChatStartedAt;
+
+    @Schema(description = "Timestamp of the reported user's last reply")
+    private LocalDateTime reportedLastReplyAt;
+
+    @Schema(description = "Timestamp when the report was automatically closed, if applicable")
+    private LocalDateTime autoClosedAt;
+
+    @Schema(description = "Reason for automatic closure, if applicable")
+    private String autoClosedReason;
 }

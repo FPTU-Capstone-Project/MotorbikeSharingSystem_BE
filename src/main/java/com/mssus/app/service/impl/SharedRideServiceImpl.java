@@ -1047,4 +1047,11 @@ public class SharedRideServiceImpl implements SharedRideService {
                 .validUntil(route.getValidUntil())
                 .build();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SharedRideResponse> getMyCompletedRides(Pageable pageable, Authentication authentication) {
+        log.info("Fetching completed rides for authenticated driver: {}", authentication.getName());
+        return getRidesByDriver("COMPLETED", pageable, authentication);
+    }
 }

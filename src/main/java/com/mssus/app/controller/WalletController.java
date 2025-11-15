@@ -6,6 +6,9 @@ import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.wallet.*;
 import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -67,16 +70,15 @@ public class WalletController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "Initiate payout", description = "Initiate a wallet payout/withdrawal (Driver only)")
+    @Operation(summary = "Initiate payout", description = "Initiate a wallet payout/withdrawal (All authenticated users)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Payout initiated successfully",
                     content = @Content(schema = @Schema(implementation = PayoutInitResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid request or insufficient balance"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Only drivers can request payouts")
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
     })
     @PostMapping("/payout/init")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PayoutInitResponse> initiatePayout(
             @Valid @RequestBody PayoutInitRequest request,
             Authentication authentication) {
@@ -98,6 +100,83 @@ public class WalletController {
     public ResponseEntity<DriverEarningsResponse> getEarnings(Authentication authentication) {
         log.info("Get earnings request from driver: {}", authentication.getName());
         DriverEarningsResponse response = walletService.getDriverEarnings(authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    // Admin payout processing endpoints
+
+    @Operation(summary = "List pending payouts", description = "Retrieve list of all pending payout requests (Admin only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Pending payouts retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = PendingPayoutResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Only admins can view pending payouts")
+    })
+    @GetMapping("/payout/pending")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<PendingPayoutResponse>> getPendingPayouts() {
+        log.info("Get pending payouts request from admin");
+        List<PendingPayoutResponse> response = walletService.getPendingPayouts();
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Mark payout as processing", description = "Mark a payout request as processing (Admin only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Payout marked as processing successfully",
+                    content = @Content(schema = @Schema(implementation = PayoutProcessResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Only admins can process payouts"),
+            @ApiResponse(responseCode = "404", description = "Payout not found")
+    })
+    @PutMapping("/payout/{payoutRef}/process")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PayoutProcessResponse> processPayout(
+            @Parameter(description = "Payout reference ID") @PathVariable String payoutRef,
+            Authentication authentication) {
+        log.info("Admin {} marking payout {} as processing", authentication.getName(), payoutRef);
+        PayoutProcessResponse response = walletService.processPayout(payoutRef, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Complete payout with evidence", description = "Complete a payout request with transfer evidence (Admin only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Payout completed successfully",
+                    content = @Content(schema = @Schema(implementation = PayoutProcessResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request or missing evidence file"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Only admins can complete payouts"),
+            @ApiResponse(responseCode = "404", description = "Payout not found")
+    })
+    @PutMapping("/payout/{payoutRef}/complete")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PayoutProcessResponse> completePayout(
+            @Parameter(description = "Payout reference ID") @PathVariable String payoutRef,
+            @Parameter(description = "Evidence file (screenshot, receipt, transaction ID)") @RequestParam("evidenceFile") MultipartFile evidenceFile,
+            @Parameter(description = "Notes or additional information") @RequestParam(value = "notes", required = false) String notes,
+            Authentication authentication) {
+        log.info("Admin {} completing payout {} with evidence", authentication.getName(), payoutRef);
+        PayoutProcessResponse response = walletService.completePayout(payoutRef, evidenceFile, notes, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Fail payout with reason", description = "Fail a payout request with reason (Admin only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Payout failed successfully",
+                    content = @Content(schema = @Schema(implementation = PayoutProcessResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request or missing reason"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Only admins can fail payouts"),
+            @ApiResponse(responseCode = "404", description = "Payout not found")
+    })
+    @PutMapping("/payout/{payoutRef}/fail")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PayoutProcessResponse> failPayout(
+            @Parameter(description = "Payout reference ID") @PathVariable String payoutRef,
+            @Parameter(description = "Failure reason") @RequestParam("reason") String reason,
+            Authentication authentication) {
+        log.info("Admin {} failing payout {} with reason: {}", authentication.getName(), payoutRef, reason);
+        PayoutProcessResponse response = walletService.failPayout(payoutRef, reason, authentication);
         return ResponseEntity.ok(response);
     }
 }
