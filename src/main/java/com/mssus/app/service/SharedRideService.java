@@ -32,9 +32,7 @@ public interface SharedRideService {
 //                                                                 Authentication authentication);
 
     SharedRideResponse cancelRide(Integer rideId, String reason, Authentication authentication);
-
-    RideRequestCompletionResponse forceCompleteRideRequestOfRide(CompleteRideReqRequest request,
-                                                                 Authentication authentication);
+    
 
     /**
      * Get completed rides for the authenticated driver
