@@ -99,7 +99,13 @@ public class SecurityConfig {
                 // Profile management (admin view)
                 "/api/v1/me/all",
                 "/api/v1/vehicles/**",
-                "/api/v1/user-reports/**"
+                // User reports - Admin-only endpoints (specific paths, not wildcard)
+                // Note: POST /api/v1/user-reports, GET /my-reports, POST /{reportId}/driver-response 
+                // are in AUTHENTICATED_PATHS for regular users
+                "/api/v1/user-reports/analytics",
+                "/api/v1/user-reports/*/start-chat"
+                // GET /api/v1/user-reports, GET /{reportId}, POST /{reportId}/resolve, PATCH /{reportId}
+                // are protected by @PreAuthorize("hasRole('ADMIN')") in controller
         };
 
         // Endpoints requiring ADMIN or STAFF role
@@ -185,11 +191,17 @@ public class SecurityConfig {
                 "/api/v1/chat/unread-count",
                 "/api/v1/chat/upload-image",
                 "/api/v1/chat/messages",
-                // User reports (POST - submit, GET requires admin via @PreAuthorize)
+                // User reports - User-accessible endpoints
+                // POST /api/v1/user-reports - Submit report (any authenticated user)
                 "/api/v1/user-reports",
-                "/api/v1/user-reports/*",
-                "/api/v1/user-reports/*/resolve",
+                // GET /api/v1/user-reports/my-reports - Get own reports (any authenticated user)
+                "/api/v1/user-reports/my-reports",
+                // POST /api/v1/user-reports/{reportId}/driver-response - Driver response (authenticated driver)
+                "/api/v1/user-reports/*/driver-response",
+                // POST /api/v1/rides/{rideId}/report - Submit ride-specific report (any authenticated user)
                 "/api/v1/rides/*/report",
+                // Note: GET /api/v1/user-reports, GET /{reportId}, POST /{reportId}/resolve, 
+                // PATCH /{reportId} are protected by @PreAuthorize("hasRole('ADMIN')") in controller
                 // Ride requests (view details, cancel own requests - specific first)
                 "/api/v1/ride-requests/rider/*",
                 "/api/v1/ride-requests/*",
