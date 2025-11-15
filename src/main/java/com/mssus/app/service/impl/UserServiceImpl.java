@@ -43,18 +43,18 @@ public class UserServiceImpl implements UserService {
     public UserResponse createUser(CreateUserRequest request) {
         // Check if email already exists
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already exists: " + request.getEmail());
+            throw new IllegalArgumentException("Email đã tồn tại: " + request.getEmail());
         }
 
         // Check if phone already exists
         if (userRepository.existsByPhone(request.getPhone())) {
-            throw new IllegalArgumentException("Phone already exists: " + request.getPhone());
+            throw new IllegalArgumentException("Số điện thoại đã tồn tại: " + request.getPhone());
         }
 
         // Check if student ID already exists (if provided)
         if (request.getStudentId() != null && !request.getStudentId().trim().isEmpty()) {
             if (userRepository.existsByStudentId(request.getStudentId())) {
-                throw new IllegalArgumentException("Student ID already exists: " + request.getStudentId());
+                throw new IllegalArgumentException("Mã sinh viên đã tồn tại: " + request.getStudentId());
             }
         }
 
@@ -95,14 +95,14 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserResponse getUserById(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với ID: " + userId));
         return mapToUserResponse(user);
     }
 
     @Override
     public UserResponse getUserByEmail(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + email));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với email: " + email));
         return mapToUserResponse(user);
     }
 
@@ -110,7 +110,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse updateUser(Integer userId, UpdateUserRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với ID: " + userId));
 
         // Update fields if provided
         if (request.getFullName() != null) {
@@ -119,14 +119,14 @@ public class UserServiceImpl implements UserService {
 
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             if (userRepository.existsByEmail(request.getEmail())) {
-                throw new IllegalArgumentException("Email already exists: " + request.getEmail());
+                throw new IllegalArgumentException("Email đã tồn tại: " + request.getEmail());
             }
             user.setEmail(request.getEmail());
         }
 
         if (request.getPhone() != null && !request.getPhone().equals(user.getPhone())) {
             if (userRepository.existsByPhone(request.getPhone())) {
-                throw new IllegalArgumentException("Phone already exists: " + request.getPhone());
+                throw new IllegalArgumentException("Số điện thoại đã tồn tại: " + request.getPhone());
             }
             user.setPhone(request.getPhone());
         }
@@ -137,7 +137,7 @@ public class UserServiceImpl implements UserService {
 
         if (request.getStudentId() != null) {
             if (!request.getStudentId().trim().isEmpty() && userRepository.existsByStudentId(request.getStudentId())) {
-                throw new IllegalArgumentException("Student ID already exists: " + request.getStudentId());
+                throw new IllegalArgumentException("Mã sinh viên đã tồn tại: " + request.getStudentId());
             }
             user.setStudentId(request.getStudentId());
         }
@@ -175,7 +175,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteUser(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với ID: " + userId));
 
         // Soft delete by setting status to SUSPENDED
         user.setStatus(UserStatus.SUSPENDED);
@@ -233,7 +233,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse suspendUser(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với ID: " + userId));
 
         user.setStatus(UserStatus.SUSPENDED);
         user = userRepository.save(user);
@@ -246,7 +246,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse activateUser(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với ID: " + userId));
 
         user.setStatus(UserStatus.ACTIVE);
         user = userRepository.save(user);

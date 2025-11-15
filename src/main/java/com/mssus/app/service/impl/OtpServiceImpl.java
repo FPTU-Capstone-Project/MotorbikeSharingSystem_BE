@@ -43,9 +43,9 @@ public class OtpServiceImpl implements OtpService {
 
         User user = switch (otpFor) {
             case VERIFY_EMAIL -> userRepository.findByEmailAndStatus(email, UserStatus.EMAIL_VERIFYING)
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not in verifying state: " + email));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "Người dùng với email không ở trạng thái xác thực: " + email));
             case VERIFY_PHONE, FORGOT_PASSWORD -> userRepository.findByEmailAndStatusNot(email, UserStatus.EMAIL_VERIFYING)
-                .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-email", "User with email not found: %s", email));
+                .orElseThrow(() -> BaseDomainException.formatted("user.not-found.by-email", "Không tìm thấy người dùng với email: %s", email));
         };
 
         String otp = OtpUtil.generateOtp();
@@ -87,7 +87,7 @@ public class OtpServiceImpl implements OtpService {
         log.info("OTP generated for {}: {} (dev mode)", otpFor, otp);
 
         return OtpResponse.builder()
-            .message("OTP sent successfully")
+            .message("Đã gửi OTP thành công")
             .otpFor(otpFor.name())
             .build();
     }
@@ -100,11 +100,11 @@ public class OtpServiceImpl implements OtpService {
         String key = request.getEmail() + ":" + request.getOtpFor();
 
         if (!OtpUtil.validateOtp(key, request.getCode(), OtpFor.valueOf(request.getOtpFor()))) {
-            throw BaseDomainException.of("otp.validation.invalid-otp", "Invalid or expired OTP");
+            throw BaseDomainException.of("otp.validation.invalid-otp", "OTP không hợp lệ hoặc đã hết hạn");
         }
 
         User user = userRepository.findByEmail(request.getEmail())
-            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "User with email not found: " + request.getEmail()));
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "Không tìm thấy người dùng với email: " + request.getEmail()));
 
         switch (OtpFor.valueOf(request.getOtpFor())) {
             case VERIFY_EMAIL -> processEmailVerification(user);
@@ -115,17 +115,17 @@ public class OtpServiceImpl implements OtpService {
         // For email/phone verification
         return switch (OtpFor.valueOf(request.getOtpFor())) {
             case VERIFY_EMAIL -> OtpResponse.builder()
-                .message("Email verified successfully")
+                .message("Xác thực email thành công")
                 .otpFor(request.getOtpFor())
                 .verifiedField("email")
                 .build();
             case VERIFY_PHONE -> OtpResponse.builder()
-                .message("Phone verified successfully")
+                .message("Xác thực số điện thoại thành công")
                 .otpFor(request.getOtpFor())
                 .verifiedField("phone")
                 .build();
             case FORGOT_PASSWORD -> OtpResponse.builder()
-                .message("OTP verified successfully")
+                .message("Xác thực OTP thành công")
                 .otpFor(request.getOtpFor())
                 .build();
         };
