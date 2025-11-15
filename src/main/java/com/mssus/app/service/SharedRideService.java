@@ -1,12 +1,10 @@
 package com.mssus.app.service;
 
 import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
-import com.mssus.app.dto.request.ride.CompleteRideRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
 import com.mssus.app.dto.request.ride.StartRideReqRequest;
 import com.mssus.app.dto.response.ride.RideCompletionResponse;
-import com.mssus.app.dto.response.ride.RideRequestCompletionResponse;
 import com.mssus.app.dto.response.ride.SharedRideRequestResponse;
 import com.mssus.app.dto.response.ride.SharedRideResponse;
 import org.springframework.data.domain.Page;
@@ -28,9 +26,10 @@ public interface SharedRideService {
 
     SharedRideRequestResponse startRideRequestOfRide(StartRideReqRequest request, Authentication authentication);
 
-    RideRequestCompletionResponse completeRideRequestOfRide(CompleteRideReqRequest request, Authentication authentication);
+    RideCompletionResponse completeRide(CompleteRideReqRequest request, Authentication authentication);
 
-    RideCompletionResponse completeRide(CompleteRideRequest request, Authentication authentication);
+//    RideRequestCompletionResponse forceCompleteRideRequestOfRide(CompleteRideReqRequest request,
+//                                                                 Authentication authentication);
 
     SharedRideResponse cancelRide(Integer rideId, String reason, Authentication authentication);
 
@@ -44,5 +43,6 @@ public interface SharedRideService {
      * @return Page of completed rides
      */
     Page<SharedRideResponse> getMyCompletedRides(Pageable pageable, Authentication authentication);
+    Page<SharedRideResponse> getOngoingRidesOfRider(Integer riderId, Pageable pageable);
 }
 

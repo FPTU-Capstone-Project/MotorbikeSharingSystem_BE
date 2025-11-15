@@ -1,6 +1,7 @@
 package com.mssus.app.service.domain.matching.session;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import java.io.Serial;
 import java.io.Serializable;
@@ -28,6 +29,9 @@ public class MatchingSessionState implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private Integer requestId;
+    private RequestKind requestKind; // BOOKING or JOIN_RIDE
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant requestCreatedAt;
     private MatchingSessionPhase phase;
     private List<RideMatchProposalResponse> proposals;
     private int nextProposalIndex;
@@ -38,23 +42,34 @@ public class MatchingSessionState implements Serializable {
     private Instant requestDeadline;
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     private Instant broadcastDeadline;
-    
+
     private String lastProcessedMessageId;
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     private Instant lastProcessedAt;
 
     public static MatchingSessionState initialize(Integer requestId,
-                                                  Instant deadline,
-                                                  List<RideMatchProposalResponse> proposals) {
+            Instant deadline,
+            List<RideMatchProposalResponse> proposals,
+            Instant requestCreatedAt) {
         return MatchingSessionState.builder()
-            .requestId(requestId)
-            .phase(MatchingSessionPhase.MATCHING)
-            .proposals(new ArrayList<>(proposals))
-            .nextProposalIndex(0)
-            .activeOffer(null)
-            .requestDeadline(deadline)
-            .notifiedDrivers(new HashSet<>())
-            .build();
+                .requestId(requestId)
+                .requestKind(RequestKind.BOOKING) // Default to BOOKING for this factory method
+                .requestCreatedAt(requestCreatedAt)
+                .phase(MatchingSessionPhase.MATCHING)
+                .proposals(new ArrayList<>(proposals))
+                .nextProposalIndex(0)
+                .activeOffer(null)
+                .requestDeadline(deadline)
+                .notifiedDrivers(new HashSet<>())
+                .build();
+    }
+
+    public boolean isJoinRequest() {
+        return requestKind == RequestKind.JOIN_RIDE;
+    }
+
+    public boolean isBookingRequest() {
+        return requestKind == RequestKind.BOOKING;
     }
 
     public boolean hasMoreProposals() {
@@ -114,11 +129,11 @@ public class MatchingSessionState implements Serializable {
         if (messageId == null) {
             return true; // Allow processing if no message ID provided
         }
-        
+
         if (messageId.equals(lastProcessedMessageId)) {
             return false; // Duplicate message
         }
-        
+
         // Update last processed message
         lastProcessedMessageId = messageId;
         lastProcessedAt = Instant.now();
