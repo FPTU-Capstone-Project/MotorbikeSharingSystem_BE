@@ -422,6 +422,11 @@ public class GlobalExceptionHandler {
      * Log exception with appropriate level based on severity
      */
     private void logException(String traceId, BaseDomainException ex) {
+        // Suppress logging for route validation errors
+        if ("ride.validation.route-validation-failed".equals(ex.getErrorId())) {
+            return;
+        }
+        
         String severity = ex.getSeverity();
         String message = "{} [{}]: {} (errorId: {})";
         Object[] args = {ex.getClass().getSimpleName(), traceId, ex.getMessage(), ex.getErrorId()};
