@@ -162,7 +162,8 @@ public class SharedRideServiceImpl implements SharedRideService {
             return buildRideResponse(savedRide/* , startLoc, endLoc */);
 
         } catch (Exception e) {
-            // Route validation error suppressed - no logging
+            log.error("Route validation failed for start: {}, end: {}", request.startLocationId(),
+                    request.endLocationId(), e);
             throw BaseDomainException.of("ride.validation.route-validation-failed",
                     "Could not validate route: " + e.getMessage());
         }

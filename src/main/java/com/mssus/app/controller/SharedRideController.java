@@ -59,7 +59,7 @@ public class SharedRideController {
             description = "Driver creates a new shared ride. Route will be validated via OSRM."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Ride created successfully",
+            @ApiResponse(responseCode = "201", description = "Ride created successfully",
                     content = @Content(schema = @Schema(implementation = SharedRideResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid input or route validation failed",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -72,13 +72,8 @@ public class SharedRideController {
             @Valid @RequestBody CreateRideRequest request,
             Authentication authentication) {
         log.info("Driver {} creating new ride", authentication.getName());
-        try {
-            SharedRideResponse response = sharedRideService.createRide(request, authentication);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.debug("Successfully in createRide (200 OK): {}", e.getMessage());
-            return ResponseEntity.ok().body(null);
-        }
+        SharedRideResponse response = sharedRideService.createRide(request, authentication);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/driver/{driverId}")
