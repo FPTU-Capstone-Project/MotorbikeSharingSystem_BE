@@ -18,6 +18,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Create Firebase credentials file
+        run: |
+          mkdir -p src/main/resources
+          echo '${{ secrets.FIREBASE_CREDENTIALS }}' > src/main/resources/mssus-fcm-firebase-adminsdk-fbsvc-938443350c.json
+          echo "✓ Firebase credentials file created"
+          ls -lh src/main/resources/*.json || echo "Warning: JSON file not found"
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       

@@ -73,13 +73,14 @@ if [[ "$RUN_DB" == "y" || "$RUN_DB" == "Y" ]]; then
     docker stop postgres-db 2>/dev/null || true
     docker rm postgres-db 2>/dev/null || true
     
+    # Note: không map port 5432 ra host vì backend connect qua network nội bộ
+    # Nếu muốn connect từ host (psql, DBeaver), thêm: -p 5432:5432
     docker run -d \
         --name postgres-db \
         --network $NETWORK_NAME \
         -e POSTGRES_DB=$DB_NAME \
         -e POSTGRES_USER=$DB_USERNAME \
         -e POSTGRES_PASSWORD=$DB_PASSWORD \
-        -p 5432:5432 \
         -v postgres_data:/var/lib/postgresql/data \
         --restart unless-stopped \
         postgres:13-alpine
@@ -112,6 +113,22 @@ echo -e "${YELLOW}Stopping existing backend container if any...${NC}"
 docker stop $CONTAINER_NAME 2>/dev/null || true
 docker rm $CONTAINER_NAME 2>/dev/null || true
 
+# Check for Firebase credentials
+FIREBASE_CREDS_FILE="mssus-fcm-firebase-adminsdk-fbsvc-938443350c.json"
+FIREBASE_MOUNT=""
+
+if [ -f "$FIREBASE_CREDS_FILE" ]; then
+    echo -e "${GREEN}✓ Found Firebase credentials file: $FIREBASE_CREDS_FILE${NC}"
+    FIREBASE_MOUNT="-v $(pwd)/$FIREBASE_CREDS_FILE:/etc/secrets/$FIREBASE_CREDS_FILE:ro"
+elif [ -f "src/main/resources/$FIREBASE_CREDS_FILE" ]; then
+    echo -e "${GREEN}✓ Found Firebase credentials in resources${NC}"
+    FIREBASE_MOUNT="-v $(pwd)/src/main/resources/$FIREBASE_CREDS_FILE:/etc/secrets/$FIREBASE_CREDS_FILE:ro"
+else
+    echo -e "${YELLOW}⚠ Firebase credentials not found. FCM notifications will not work.${NC}"
+    echo -e "${YELLOW}  To enable FCM, place '$FIREBASE_CREDS_FILE' in backend folder${NC}"
+fi
+echo ""
+
 # Run the backend container
 echo -e "${YELLOW}Starting backend container...${NC}"
 docker run -d \
@@ -119,6 +136,7 @@ docker run -d \
     --name $CONTAINER_NAME \
     --network $NETWORK_NAME \
     -p $BACKEND_PORT:8080 \
+    $FIREBASE_MOUNT \
     -e SPRING_PROFILES_ACTIVE=$SPRING_PROFILE \
     -e SERVER_PORT=8080 \
     -e DB_URL="jdbc:postgresql://$DB_HOST:$DB_PORT/$DB_NAME" \
