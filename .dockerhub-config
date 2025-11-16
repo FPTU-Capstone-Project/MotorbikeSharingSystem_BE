@@ -1,0 +1,6 @@
+# DockerHub Configuration
+
+
+DEFAULT_DOCKERHUB_USERNAME="khoatdse172986"
+
+# export DOCKERHUB_USERNAME="your-username"

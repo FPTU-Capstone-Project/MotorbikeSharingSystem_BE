@@ -3,6 +3,11 @@
 # Script to push images to DockerHub
 set -e
 
+# Load config if exists
+if [ -f "$(dirname "$0")/.dockerhub-config" ]; then
+    source "$(dirname "$0")/.dockerhub-config"
+fi
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -12,13 +17,15 @@ NC='\033[0m'
 echo -e "${YELLOW}=== Push Motorbike Images to DockerHub ===${NC}"
 echo ""
 
-# Request DockerHub username
-read -p "Enter your DockerHub username: " DOCKERHUB_USERNAME
+# Default DockerHub username
+DEFAULT_DOCKERHUB_USERNAME="khoatdse172986"
 
-if [ -z "$DOCKERHUB_USERNAME" ]; then
-    echo -e "${RED}Username cannot be empty!${NC}"
-    exit 1
-fi
+# Request DockerHub username with default value
+read -p "Enter your DockerHub username [default: $DEFAULT_DOCKERHUB_USERNAME]: " DOCKERHUB_USERNAME
+DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-$DEFAULT_DOCKERHUB_USERNAME}"
+
+echo -e "${GREEN}Using DockerHub username: $DOCKERHUB_USERNAME${NC}"
+echo ""
 
 # Login to DockerHub
 echo -e "${YELLOW}Logging in to DockerHub...${NC}"
