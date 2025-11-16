@@ -29,8 +29,8 @@ public class RiderProfile {
     @JoinColumn(name = "rider_id", referencedColumnName = "user_id")
     private User user;
 
-//    @Column(name = "emergency_contact")
-//    private String emergencyContact;
+    @Column(name = "emergency_contact")
+    private String emergencyContact;
 
     @Column(name = "total_rides")
     @Builder.Default

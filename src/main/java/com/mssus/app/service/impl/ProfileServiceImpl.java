@@ -448,6 +448,13 @@ public class ProfileServiceImpl implements ProfileService {
         if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.VEHICLE_REGISTRATION,VerificationStatus.PENDING).isPresent()){
             throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
+        
+        // 验证车辆登记证的真实性
+        boolean isValid = fptaiService.verifyVehicleRegistration(documents.get(0));
+        if (!isValid) {
+            throw ValidationException.of("Đăng ký xe không hợp lệ hoặc không phải ảnh chứng từ thật. Vui lòng tải lên ảnh đăng ký xe thật với độ phân giải tối thiểu 800x600 và kích thước tối thiểu 50KB");
+        }
+        
         try {
             List<CompletableFuture<String>> futuresList = documents.parallelStream()
                     .map(file -> {

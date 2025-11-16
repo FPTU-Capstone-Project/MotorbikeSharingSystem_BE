@@ -10,19 +10,19 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.File;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.io.InputStream;
 
 import org.springframework.http.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -80,6 +80,12 @@ public class FPTAIServiceImpl implements FPTAIService {
 
         log.info("👤 Bắt đầu xác thực GPLX cho người dùng: {}", user.getEmail());
 
+        // === IMAGE QUALITY VALIDATION ===
+        if (!validateImageQuality(document)) {
+            log.warn("❌ Hình ảnh không đạt chất lượng yêu cầu (độ phân giải quá thấp hoặc kích thước không hợp lệ)");
+            return false;
+        }
+
         String ocrJson = analyzeDocument(document, VerificationType.DRIVER_LICENSE);
         JSONObject json = new JSONObject(ocrJson);
         log.debug("📄 FPT.AI OCR raw JSON:\n{}", json.toString(2));
@@ -130,6 +136,21 @@ public class FPTAIServiceImpl implements FPTAIService {
         }
         if (doe.isEmpty()) {
             doe = extractValue(text, "(?i)(Có giá trị đến|Ngày hết hạn)[:\\s]*(\\d{2}/\\d{2}/\\d{4}|KHÔNG THỜI HẠN)");
+        }
+
+        // === STRUCTURED DATA COMPLETENESS VALIDATION ===
+        // Đếm số lượng trường có giá trị từ structured data
+        int filledFields = 0;
+        if (!name.isEmpty()) filledFields++;
+        if (!id.isEmpty()) filledFields++;
+        if (!dob.isEmpty()) filledFields++;
+        if (!doe.isEmpty()) filledFields++;
+        if (!type.isEmpty()) filledFields++;
+
+        // Nếu structured data quá ít (chỉ có tên hoặc không có gì), có thể là ảnh không phải GPLX thật
+        if (filledFields < 3) {
+            log.warn("❌ Dữ liệu cấu trúc từ OCR quá ít (chỉ có {} trường). Có thể không phải GPLX thật", filledFields);
+            return false;
         }
 
         // === VALIDATION ===
@@ -208,6 +229,145 @@ public class FPTAIServiceImpl implements FPTAIService {
     private String extractValue(String text, String regex) {
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(1).trim() : "";
+        if (matcher.find()) {
+            int groupCount = matcher.groupCount();
+            return groupCount > 0 ? matcher.group(groupCount).trim() : matcher.group(0).trim();
+        }
+        return "";
+    }
+
+
+    private boolean validateImageQuality(MultipartFile file) {
+        try {
+
+            long fileSize = file.getSize();
+            if (fileSize < 50 * 1024) { // 小于 50KB
+                log.warn("⚠️ 文件大小 quá nhỏ: {} bytes (tối thiểu 50KB)", fileSize);
+                return false;
+            }
+
+
+            try (InputStream inputStream = file.getInputStream()) {
+                BufferedImage image = ImageIO.read(inputStream);
+                if (image == null) {
+                    log.warn("⚠️ Không thể đọc hình ảnh");
+                    return false;
+                }
+
+                int width = image.getWidth();
+                int height = image.getHeight();
+
+                if (width < 800 || height < 600) {
+                    log.warn("⚠️ Độ phân giải quá thấp: {}x{} (tối thiểu 800x600)", width, height);
+                    return false;
+                }
+
+                double aspectRatio = (double) width / height;
+                if (aspectRatio < 0.5 || aspectRatio > 2.5) {
+                    log.warn("⚠️ Tỷ lệ khung hình không hợp lý: {} (có thể không phải ảnh chứng từ)", aspectRatio);
+                    return false;
+                }
+
+                log.info("✅ Hình ảnh đạt chất lượng: {}x{}, {} KB", width, height, fileSize / 1024);
+                return true;
+            }
+        } catch (IOException e) {
+            log.error("❌ Lỗi khi kiểm tra chất lượng hình ảnh: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean verifyVehicleRegistration(MultipartFile document) {
+        if (document == null || document.isEmpty()) {
+            throw ValidationException.of("Vehicle registration image is required for verification");
+        }
+
+        log.info("🚗 Bắt đầu xác thực đăng ký xe");
+
+        // === IMAGE QUALITY VALIDATION ===
+        if (!validateImageQuality(document)) {
+            log.warn("❌ Hình ảnh không đạt chất lượng yêu cầu (độ phân giải quá thấp hoặc kích thước không hợp lệ)");
+            return false;
+        }
+
+        String ocrJson = analyzeDocument(document, VerificationType.VEHICLE_REGISTRATION);
+        JSONObject json = new JSONObject(ocrJson);
+        log.debug("📄 FPT.AI OCR raw JSON (Vehicle Registration):\n{}", json.toString(2));
+
+        // Extract structured fields từ JSON
+        String ownerName = "";
+        String licensePlate = "";
+        String vehicleType = "";
+        String registrationNumber = "";
+        String issueDate = "";
+
+        if (json.has("data") && json.get("data") instanceof JSONArray) {
+            JSONArray arr = json.getJSONArray("data");
+            if (arr.length() > 0) {
+                JSONObject data = arr.getJSONObject(0);
+
+                ownerName = data.optString("owner_name", "");
+                licensePlate = data.optString("license_plate", "");
+                vehicleType = data.optString("vehicle_type", "");
+                registrationNumber = data.optString("registration_number", "");
+                issueDate = data.optString("issue_date", "");
+
+                log.info("""
+                === FPT.AI Vehicle Registration OCR ===
+                👤 Owner Name: {}
+                🚗 License Plate: {}
+                🏷️ Vehicle Type: {}
+                🔢 Registration Number: {}
+                📅 Issue Date: {}
+                """,
+                        ownerName, licensePlate, vehicleType, registrationNumber, issueDate
+                );
+            }
+        }
+
+        // Nếu structured data thiếu, fallback OCR text
+        String text = extractOcrText(json).trim();
+        log.info("📜 OCR Raw Text (Vehicle Registration):\n{}", text);
+
+        // Extract từ text nếu structured data không có
+        if (ownerName.isEmpty()) {
+            ownerName = extractValue(text, "(?i)(Chủ xe|Chủ phương tiện|Owner)[:\\s]+([A-ZÀ-Ỹ\\s]+)");
+        }
+        if (licensePlate.isEmpty()) {
+            licensePlate = extractValue(text, "(?i)(Biển số|License plate)[:\\s]+([A-Z0-9\\-]+)");
+        }
+        if (registrationNumber.isEmpty()) {
+            registrationNumber = extractValue(text, "(?i)(Số đăng ký|Registration number)[:\\s]+([A-Z0-9]+)");
+        }
+
+        // === STRUCTURED DATA COMPLETENESS VALIDATION ===
+        // Đếm số lượng trường có giá trị từ structured data
+        int filledFields = 0;
+        if (!ownerName.isEmpty()) filledFields++;
+        if (!licensePlate.isEmpty()) filledFields++;
+        if (!vehicleType.isEmpty()) filledFields++;
+        if (!registrationNumber.isEmpty()) filledFields++;
+        if (!issueDate.isEmpty()) filledFields++;
+
+        if (filledFields < 2) {
+            log.warn("❌ Dữ liệu cấu trúc từ OCR quá ít (chỉ có {} trường). Có thể không phải đăng ký xe thật", filledFields);
+            return false;
+        }
+
+        if (licensePlate.isEmpty() && registrationNumber.isEmpty()) {
+            log.warn("❌ Không tìm thấy biển số hoặc số đăng ký trên đăng ký xe");
+            return false;
+        }
+
+        if (!licensePlate.isEmpty()) {
+            if (!licensePlate.matches(".*[A-Z0-9].*")) {
+                log.warn("❌ Định dạng biển số không hợp lệ: {}", licensePlate);
+                return false;
+            }
+        }
+
+        log.info("✅ Đăng ký xe hợp lệ");
+        return true;
     }
 }

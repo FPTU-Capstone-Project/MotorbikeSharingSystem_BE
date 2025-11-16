@@ -29,4 +29,4 @@ ALTER TABLE rider_profiles
 
 ALTER TABLE rider_profiles
     ADD CONSTRAINT chk_rider_status
-        CHECK (status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED'));
+        CHECK (status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED','PENDING'));
