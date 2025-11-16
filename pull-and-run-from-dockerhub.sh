@@ -89,9 +89,21 @@ if [[ "$RUN_DB" == "y" || "$RUN_DB" == "Y" ]]; then
     sleep 10
 fi
 
+# Detect platform
+PLATFORM=$(uname -m)
+if [ "$PLATFORM" = "arm64" ] || [ "$PLATFORM" = "aarch64" ]; then
+    echo -e "${YELLOW}Detected ARM64 architecture (Apple Silicon)${NC}"
+    echo -e "${YELLOW}Will use --platform linux/amd64 for compatibility${NC}"
+    PLATFORM_FLAG="--platform linux/amd64"
+else
+    echo -e "${YELLOW}Detected AMD64 architecture${NC}"
+    PLATFORM_FLAG=""
+fi
+echo ""
+
 # Pull the latest image
 echo -e "${YELLOW}Pulling image from DockerHub...${NC}"
-docker pull $IMAGE_NAME
+docker pull $PLATFORM_FLAG $IMAGE_NAME
 echo -e "${GREEN}Image pulled successfully!${NC}"
 echo ""
 
@@ -103,6 +115,7 @@ docker rm $CONTAINER_NAME 2>/dev/null || true
 # Run the backend container
 echo -e "${YELLOW}Starting backend container...${NC}"
 docker run -d \
+    $PLATFORM_FLAG \
     --name $CONTAINER_NAME \
     --network $NETWORK_NAME \
     -p $BACKEND_PORT:8080 \

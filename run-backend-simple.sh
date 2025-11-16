@@ -45,9 +45,21 @@ echo "Port: $BACKEND_PORT"
 echo "Database: $DB_URL"
 echo ""
 
+# Detect platform
+PLATFORM=$(uname -m)
+if [ "$PLATFORM" = "arm64" ] || [ "$PLATFORM" = "aarch64" ]; then
+    echo -e "${YELLOW}Detected ARM64 architecture (Apple Silicon)${NC}"
+    echo -e "${YELLOW}Will use --platform linux/amd64 for compatibility${NC}"
+    PLATFORM_FLAG="--platform linux/amd64"
+else
+    echo -e "${YELLOW}Detected AMD64 architecture${NC}"
+    PLATFORM_FLAG=""
+fi
+echo ""
+
 # Pull latest image
 echo -e "${YELLOW}Pulling latest image...${NC}"
-docker pull $IMAGE_NAME
+docker pull $PLATFORM_FLAG $IMAGE_NAME
 
 # Stop existing container
 echo -e "${YELLOW}Stopping existing container...${NC}"
@@ -57,6 +69,7 @@ docker rm $CONTAINER_NAME 2>/dev/null || true
 # Run container
 echo -e "${YELLOW}Starting backend container...${NC}"
 docker run -d \
+    $PLATFORM_FLAG \
     --name $CONTAINER_NAME \
     -p $BACKEND_PORT:8080 \
     --network host \
