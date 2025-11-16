@@ -24,12 +24,12 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         // Production server
         Server productionServer = new Server();
-        productionServer.setUrl("http://13.215.143.121/api/v1");
+        productionServer.setUrl("http://13.215.143.121");
         productionServer.setDescription("Production Server (AWS EC2)");
         
         // Local development server
         Server localServer = new Server();
-        localServer.setUrl("http://localhost:8080/api/v1");
+        localServer.setUrl("http://localhost:8080");
         localServer.setDescription("Local Development Server");
         
         return new OpenAPI()
