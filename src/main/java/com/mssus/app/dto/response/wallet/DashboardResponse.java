@@ -38,4 +38,13 @@ public class DashboardResponse {
 
     @Schema(description = "Total commission collected", example = "5000000")
     private BigDecimal totalCommissionCollected;
+
+    @Schema(description = "System master wallet balance (net)", example = "45000000")
+    private BigDecimal systemMasterBalance;
+
+    @Schema(description = "System commission wallet balance (net)", example = "6000000")
+    private BigDecimal systemCommissionBalance;
+
+    @Schema(description = "Master balance minus user liabilities", example = "-5000000")
+    private BigDecimal liabilityCoverageGap;
 }

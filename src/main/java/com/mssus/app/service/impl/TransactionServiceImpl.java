@@ -18,10 +18,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -1026,8 +1031,41 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<TransactionResponse> getAllTransactions(Pageable pageable) {
-        Page<Transaction> transactionsPage = transactionRepository.findAll(pageable);
+    public PageResponse<TransactionResponse> getAllTransactions(Pageable pageable,
+                                                                String type,
+                                                                String status,
+                                                                String direction,
+                                                                String actorKind,
+                                                                String dateFrom,
+                                                                String dateTo) {
+        TransactionType typeEnum = parseTransactionType(type);
+        TransactionStatus statusEnum = parseTransactionStatus(status);
+        TransactionDirection directionEnum = parseTransactionDirection(direction);
+        ActorKind actorKindEnum = parseActorKind(actorKind);
+        LocalDateTime startDateTime = parseBoundaryDate(dateFrom, true);
+        LocalDateTime endDateTime = parseBoundaryDate(dateTo, false);
+
+        Specification<Transaction> spec = Specification.where(null);
+        if (typeEnum != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("type"), typeEnum));
+        }
+        if (statusEnum != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), statusEnum));
+        }
+        if (directionEnum != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("direction"), directionEnum));
+        }
+        if (actorKindEnum != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("actorKind"), actorKindEnum));
+        }
+        if (startDateTime != null) {
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), startDateTime));
+        }
+        if (endDateTime != null) {
+            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), endDateTime));
+        }
+
+        Page<Transaction> transactionsPage = transactionRepository.findAll(spec, pageable);
         List<TransactionResponse> transactions = transactionsPage.getContent().stream()
                 .map(transactionMapper::mapToTransactionResponse)
                 .collect(Collectors.toList());
@@ -1042,23 +1080,8 @@ public class TransactionServiceImpl implements TransactionService {
                                                                         String status) {
         Integer userId = extractUserId(authentication);
 
-        TransactionType typeEnum = null;
-        if (type != null && !type.isBlank()) {
-            try {
-                typeEnum = TransactionType.valueOf(type.trim().toUpperCase());
-            } catch (IllegalArgumentException ex) {
-                throw new ValidationException("Invalid transaction type: " + type);
-            }
-        }
-
-        TransactionStatus statusEnum = null;
-        if (status != null && !status.isBlank()) {
-            try {
-                statusEnum = TransactionStatus.valueOf(status.trim().toUpperCase());
-            } catch (IllegalArgumentException ex) {
-                throw new ValidationException("Invalid transaction status: " + status);
-            }
-        }
+        TransactionType typeEnum = parseTransactionType(type);
+        TransactionStatus statusEnum = parseTransactionStatus(status);
 
         Page<Transaction> page = transactionRepository.findUserHistory(userId, typeEnum, statusEnum, pageable);
         List<TransactionResponse> items = page.getContent().stream()
@@ -1078,6 +1101,62 @@ public class TransactionServiceImpl implements TransactionService {
         }
         if (pspRef == null || pspRef.trim().isEmpty()) {
             throw new ValidationException("PSP reference cannot be null or empty");
+        }
+    }
+
+    private TransactionType parseTransactionType(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        try {
+            return TransactionType.valueOf(type.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ValidationException("Invalid transaction type: " + type);
+        }
+    }
+
+    private TransactionStatus parseTransactionStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return TransactionStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ValidationException("Invalid transaction status: " + status);
+        }
+    }
+
+    private TransactionDirection parseTransactionDirection(String direction) {
+        if (direction == null || direction.isBlank()) {
+            return null;
+        }
+        try {
+            return TransactionDirection.valueOf(direction.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ValidationException("Invalid transaction direction: " + direction);
+        }
+    }
+
+    private ActorKind parseActorKind(String actorKind) {
+        if (actorKind == null || actorKind.isBlank()) {
+            return null;
+        }
+        try {
+            return ActorKind.valueOf(actorKind.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ValidationException("Invalid actor kind: " + actorKind);
+        }
+    }
+
+    private LocalDateTime parseBoundaryDate(String date, boolean startOfDay) {
+        if (date == null || date.isBlank()) {
+            return null;
+        }
+        try {
+            LocalDate localDate = LocalDate.parse(date.trim());
+            return startOfDay ? localDate.atStartOfDay() : localDate.atTime(LocalTime.MAX);
+        } catch (DateTimeParseException ex) {
+            throw new ValidationException("Invalid date format (expected yyyy-MM-dd): " + date);
         }
     }
 

@@ -8,8 +8,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -44,4 +42,11 @@ public interface WalletRepository extends JpaRepository<Wallet, Integer> {
     @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance + :delta, w.updatedAt = CURRENT_TIMESTAMP WHERE w.user.userId = :userId")
     int addToPending(@Param("userId") Integer userId, @Param("delta") BigDecimal delta);
 
+    long countByIsActiveTrue();
+
+    @Query("SELECT COALESCE(SUM(w.shadowBalance), 0) FROM Wallet w")
+    BigDecimal sumShadowBalance();
+
+    @Query("SELECT COALESCE(SUM(w.pendingBalance), 0) FROM Wallet w")
+    BigDecimal sumPendingBalance();
 }

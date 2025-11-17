@@ -59,7 +59,13 @@ public interface TransactionService {
 
     BigDecimal calculateCommission(BigDecimal amount, BigDecimal commissionRate);
 
-    PageResponse<TransactionResponse> getAllTransactions(Pageable pageable);
+    PageResponse<TransactionResponse> getAllTransactions(Pageable pageable,
+                                                         String type,
+                                                         String status,
+                                                         String direction,
+                                                         String actorKind,
+                                                         String dateFrom,
+                                                         String dateTo);
 
     PageResponse<TransactionResponse> getUserHistoryTransactions(Authentication authentication,
                                                                  Pageable pageable,

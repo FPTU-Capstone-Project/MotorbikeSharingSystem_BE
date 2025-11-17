@@ -3,6 +3,7 @@ package com.mssus.app.controller;
 import com.mssus.app.dto.response.wallet.CommissionReportResponse;
 import com.mssus.app.dto.response.wallet.DashboardResponse;
 import com.mssus.app.dto.response.wallet.TopUpTrendResponse;
+import com.mssus.app.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,8 +29,7 @@ import java.time.LocalDate;
 @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
 public class ReportController {
 
-    // Note: Service layer methods need to be implemented
-    // private final ReportService reportService;
+    private final ReportService reportService;
 
     @Operation(
             summary = "Wallet dashboard statistics",
@@ -45,16 +45,8 @@ public class ReportController {
     public ResponseEntity<DashboardResponse> getDashboard() {
         log.info("Get wallet dashboard statistics");
 
-        // TODO: Implement service call
-        // 1. Calculate total active wallets
-        // 2. Sum total wallet balances
-        // 3. Get today's top-ups and payouts
-        // 4. Count pending transactions
-        // 5. Calculate averages and totals
-        // DashboardResponse response = reportService.getDashboardStats();
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        DashboardResponse response = reportService.getDashboardStats();
+        return ResponseEntity.ok(response);
     }
 
     @Operation(
@@ -81,17 +73,9 @@ public class ReportController {
         log.info("Get top-up trends - startDate: {}, endDate: {}, interval: {}, paymentMethod: {}",
                 startDate, endDate, interval, paymentMethod);
 
-        // TODO: Implement service call
-        // 1. Query transactions in date range
-        // 2. Group by interval (daily/weekly/monthly)
-        // 3. Calculate totals and counts
-        // 4. Identify most popular payment method
-        // 5. Calculate growth rate
-        // TopUpTrendResponse response = reportService.getTopUpTrends(
-        //     startDate, endDate, interval, paymentMethod);
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        TopUpTrendResponse response = reportService.getTopUpTrends(
+                startDate, endDate, interval, paymentMethod);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(
@@ -116,16 +100,8 @@ public class ReportController {
         log.info("Get commission report - startDate: {}, endDate: {}, driverId: {}",
                 startDate, endDate, driverId);
 
-        // TODO: Implement service call
-        // 1. Query all booking transactions in period
-        // 2. Calculate total commission collected
-        // 3. Group by driver
-        // 4. Calculate averages and totals per driver
-        // 5. Sort by commission amount
-        // CommissionReportResponse response = reportService.getCommissionReport(
-        //     startDate, endDate, driverId);
-        // return ResponseEntity.ok(response);
-
-        throw new UnsupportedOperationException("Service implementation required");
+        CommissionReportResponse response = reportService.getCommissionReport(
+                startDate, endDate, driverId);
+        return ResponseEntity.ok(response);
     }
 }
