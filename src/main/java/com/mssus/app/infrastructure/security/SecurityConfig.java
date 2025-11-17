@@ -69,7 +69,12 @@ public class SecurityConfig {
                 "/error",
                 // Debug endpoints (remove in production)
                 "/debug/throw-test",
-                "/debug/catalog-test"
+                "/debug/catalog-test",
+                // WebSocket/STOMP handshake endpoints
+                "/ws",
+                "/ws/**",
+                "/ws-native",
+                "/ws-native/**"
         };
 
         // Endpoints requiring ADMIN role
