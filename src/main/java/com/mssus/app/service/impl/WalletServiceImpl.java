@@ -219,9 +219,29 @@ public class WalletServiceImpl implements WalletService {
         BigDecimal afterAvail = beforeAvail.subtract(request.getAmount());
         BigDecimal afterPending = beforePending.add(request.getAmount());
 
+        // Generate idempotency key
+        String idempotencyKey = "PAYOUT_" + payoutRef + "_" + request.getAmount();
+
+        // Check duplicate (idempotency)
+        Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            log.info("Duplicate payout request with idempotency_key: {}", idempotencyKey);
+            // Return existing response
+            Transaction existingTxn = existing.get();
+            String maskedAccount = maskAccountNumber(bankAccountNumber);
+            return PayoutInitResponse.builder()
+                    .payoutRef(existingTxn.getPspRef())
+                    .amount(existingTxn.getAmount())
+                    .status(existingTxn.getStatus().name())
+                    .estimatedCompletionTime(LocalDateTime.now().plusHours(24).toString())
+                    .maskedAccountNumber(maskedAccount)
+                    .build();
+        }
+
         // Create USER transaction (OUT direction, PENDING status)
         Transaction userTransaction = Transaction.builder()
                 .type(TransactionType.PAYOUT)
+                .wallet(wallet)  // ✅ FIX P0-1: Thêm wallet relationship
                 .groupId(groupId)
                 .direction(TransactionDirection.OUT)
                 .actorKind(ActorKind.USER)
@@ -230,6 +250,7 @@ public class WalletServiceImpl implements WalletService {
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
                 .pspRef(payoutRef)
+                .idempotencyKey(idempotencyKey)  // ✅ FIX P1-4: Thêm idempotency key
                 .beforeAvail(beforeAvail)
                 .afterAvail(afterAvail)
                 .beforePending(beforePending)
@@ -349,7 +370,7 @@ public class WalletServiceImpl implements WalletService {
         // ✅ SSOT: Tính balance từ ledger
         BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
         BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
-        
+
         return DriverEarningsResponse.builder()
                 .availableBalance(availableBalance)
                 .pendingEarnings(pendingBalance)
@@ -642,7 +663,7 @@ public class WalletServiceImpl implements WalletService {
         if (wallet == null) {
             // Fallback: Get wallet from user
             wallet = walletRepository.findByUser_UserId(user.getUserId())
-                    .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
         }
 
         // Upload evidence file
@@ -676,7 +697,7 @@ public class WalletServiceImpl implements WalletService {
 
         // ✅ SSOT: Tính balance từ ledger để log
         BigDecimal newPendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
-        
+
         log.info("Admin {} completed payout {} with evidence URL: {}. New pending balance: {}",
                 authentication.getName(), payoutRef, evidenceUrl, newPendingBalance);
 
@@ -757,7 +778,7 @@ public class WalletServiceImpl implements WalletService {
         // ✅ SSOT: Tính balance từ ledger để log
         BigDecimal newAvailableBalance = balanceCalculationService.calculateAvailableBalance(refundWallet.getWalletId());
         BigDecimal newPendingBalance = balanceCalculationService.calculatePendingBalance(refundWallet.getWalletId());
-        
+
         log.info("Admin {} failed payout {} with reason: {}. Refund transaction created. New balance: available={}, pending={}",
                 authentication.getName(), payoutRef, reason, newAvailableBalance, newPendingBalance);
 
@@ -917,16 +938,24 @@ public class WalletServiceImpl implements WalletService {
     @Override
     @Transactional
     public Transaction holdAmount(Integer walletId, BigDecimal amount, UUID groupId, String reason) {
-        // 1. Get wallet với optimistic lock
-        Wallet wallet = walletRepository.findById(walletId)
+        // ✅ FIX P0-CONCURRENCY: Get wallet với pessimistic lock để tránh race condition
+        Wallet wallet = walletRepository.findByIdWithLock(walletId)
             .orElseThrow(() -> new NotFoundException("Wallet not found: " + walletId));
         
-        // 2. Check balance từ ledger (SSOT)
+        // ✅ FIX P0-CONCURRENCY: Check balance sau khi lock để đảm bảo consistency
         BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(walletId);
         if (availableBalance.compareTo(amount) < 0) {
             throw new ValidationException(
                 String.format("Insufficient balance. Available: %s, Required: %s",
                     availableBalance, amount));
+        }
+        
+        // ✅ FIX P1-5: Generate idempotency key và check duplicate
+        String idempotencyKey = "HOLD_" + groupId.toString();
+        Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            log.info("Duplicate hold request with idempotency_key: {}", idempotencyKey);
+            return existing.get(); // Idempotent
         }
         
         // 3. Create hold transaction
@@ -940,10 +969,14 @@ public class WalletServiceImpl implements WalletService {
             .amount(amount)
             .currency("VND")
             .status(TransactionStatus.SUCCESS)
+            .idempotencyKey(idempotencyKey)  // ✅ FIX P1-5: Thêm idempotency key
             .note("Hold: " + reason)
             .build();
         
         transactionRepository.save(holdTransaction);
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi tạo hold
+        balanceCalculationService.invalidateBalanceCache(walletId);
         
         log.info("Hold transaction created: txnId={}, amount={}, walletId={}",
             holdTransaction.getTxnId(), amount, walletId);
@@ -959,6 +992,14 @@ public class WalletServiceImpl implements WalletService {
             .findByGroupIdAndType(groupId, TransactionType.HOLD_CREATE)
             .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
         
+        // ✅ FIX P1-7: Check if already released (idempotency)
+        Optional<Transaction> existingRelease = transactionRepository
+            .findByGroupIdAndType(groupId, TransactionType.HOLD_RELEASE);
+        if (existingRelease.isPresent()) {
+            log.warn("Hold already released for groupId: {}", groupId);
+            return existingRelease.get(); // Idempotent
+        }
+        
         // Create release transaction
         Transaction releaseTxn = Transaction.builder()
             .groupId(groupId)
@@ -973,10 +1014,15 @@ public class WalletServiceImpl implements WalletService {
             .note("Release hold: " + reason)
             .build();
         
-        transactionRepository.save(releaseTxn);
-        
-        log.info("Hold released: groupId={}, amount={}", groupId, holdTxn.getAmount());
-        
-        return releaseTxn;
+    transactionRepository.save(releaseTxn);
+    
+    // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi release hold
+    if (holdTxn.getWallet() != null) {
+        balanceCalculationService.invalidateBalanceCache(holdTxn.getWallet().getWalletId());
+    }
+    
+    log.info("Hold released: groupId={}, amount={}", groupId, holdTxn.getAmount());
+    
+    return releaseTxn;
     }
 }

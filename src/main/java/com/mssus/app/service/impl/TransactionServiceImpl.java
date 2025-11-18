@@ -72,17 +72,19 @@ public class TransactionServiceImpl implements TransactionService {
         UUID groupId = generateGroupId();
 
         // ✅ SSOT: Create system transaction (no wallet, system wallet only)
-        Transaction systemInflow = Transaction.builder()
+        // ✅ FIX P0-DOUBLE_ENTRY: System.MASTER OUT (Debit) để balance với User IN (Credit)
+        // Logic: External source (PSP) → System.MASTER OUT (system gives to user) → User IN
+        Transaction systemOutflow = Transaction.builder()
                 .type(TransactionType.TOPUP)
                 .groupId(groupId)
-                .direction(TransactionDirection.IN)
+                .direction(TransactionDirection.OUT)  // ✅ FIX: OUT thay vì IN để balance
                 .actorKind(ActorKind.SYSTEM)
                 .systemWallet(SystemWallet.MASTER)
                 .amount(amount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
                 .pspRef(pspRef)
-                .note("PSP Inflow - " + description)
+                .note("PSP Inflow - System transfers to user - " + description)
                 .build();
 
         // ✅ SSOT: Create user transaction với wallet relationship
@@ -102,12 +104,17 @@ public class TransactionServiceImpl implements TransactionService {
                 .build();
 
         List<Transaction> transactions = Arrays.asList(
-                transactionRepository.save(systemInflow),
+                transactionRepository.save(systemOutflow),
                 transactionRepository.save(userCredit)
         );
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Balance sẽ được tính từ transactions table
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi tạo transaction
+        if (userCredit.getWallet() != null) {
+            balanceCalculationService.invalidateBalanceCache(userCredit.getWallet().getWalletId());
+        }
 
         log.info("Initiated top-up for user {} with amount {} and pspRef {}", userId, amount, pspRef);
         return transactions;
@@ -118,6 +125,13 @@ public class TransactionServiceImpl implements TransactionService {
     public void handleTopupSuccess(String pspRef) {
         if (pspRef == null || pspRef.trim().isEmpty()) {
             throw new ValidationException("PSP reference cannot be null or empty");
+        }
+
+        // ✅ FIX P1-6: Check if already processed (idempotency)
+        List<Transaction> existingSuccess = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.SUCCESS);
+        if (!existingSuccess.isEmpty()) {
+            log.warn("Top-up already processed for pspRef: {}", pspRef);
+            return; // Idempotent - already processed
         }
 
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
@@ -131,6 +145,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         // ✅ SSOT: Update all transactions to SUCCESS
         Transaction userTransaction = null;
+        Integer walletId = null;
         for (Transaction txn : transactions) {
             txn.setStatus(TransactionStatus.SUCCESS);
 
@@ -140,12 +155,23 @@ public class TransactionServiceImpl implements TransactionService {
                 userTxnId = txn.getTxnId();
                 userTransaction = txn;
             }
+            
+            // Get walletId for cache invalidation
+            if (txn.getWallet() != null && walletId == null) {
+                walletId = txn.getWallet().getWalletId();
+            }
 
             transactionRepository.save(txn);
         }
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Balance sẽ được tính từ transactions table (status = SUCCESS)
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi update transaction status
+        if (walletId != null) {
+            balanceCalculationService.invalidateBalanceCache(walletId);
+        }
+        
         if (userId != null && amount != null) {
             sendTopupSuccessEmail(userId, amount, userTxnId);
         }
@@ -163,6 +189,13 @@ public class TransactionServiceImpl implements TransactionService {
             throw new ValidationException("Failure reason cannot be null or empty");
         }
 
+        // ✅ FIX P1-6: Check if already processed (idempotency)
+        List<Transaction> existingFailed = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.FAILED);
+        if (!existingFailed.isEmpty()) {
+            log.warn("Top-up already failed for pspRef: {}", pspRef);
+            return; // Idempotent - already processed
+        }
+
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
         if (transactions.isEmpty()) {
             throw new NotFoundException("No pending transactions found for pspRef: " + pspRef);
@@ -173,6 +206,7 @@ public class TransactionServiceImpl implements TransactionService {
         Integer userTxnId = null;
 
         // ✅ SSOT: Update all transactions to FAILED
+        Integer walletId = null;
         for (Transaction txn : transactions) {
             txn.setStatus(TransactionStatus.FAILED);
             txn.setNote(txn.getNote() + " - Failed: " + reason);
@@ -182,12 +216,23 @@ public class TransactionServiceImpl implements TransactionService {
                 amount = txn.getAmount();
                 userTxnId = txn.getTxnId();
             }
+            
+            // Get walletId for cache invalidation
+            if (txn.getWallet() != null && walletId == null) {
+                walletId = txn.getWallet().getWalletId();
+            }
 
             transactionRepository.save(txn);
         }
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Transaction status = FAILED nên sẽ không được tính vào balance
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi update transaction status
+        if (walletId != null) {
+            balanceCalculationService.invalidateBalanceCache(walletId);
+        }
+        
         if (userId != null && amount != null) {
             sendTopupFailedEmail(userId, amount, userTxnId, reason);
         }
@@ -511,14 +556,20 @@ public class TransactionServiceImpl implements TransactionService {
     public List<Transaction> initPayout(Integer driverId, BigDecimal amount, String pspRef, String description) {
         validatePayoutInput(driverId, amount, pspRef);
 
+        // ✅ FIX P0-CONCURRENCY: Get wallet với pessimistic lock để tránh race condition
         Wallet driverWallet = walletRepository.findByUser_UserId(driverId)
                 .orElseThrow(() -> new NotFoundException("Driver wallet not found"));
+        
+        // ✅ FIX P0-CONCURRENCY: Lock wallet row trước khi check balance
+        Wallet lockedWallet = walletRepository.findByIdWithLock(driverWallet.getWalletId())
+                .orElseThrow(() -> new NotFoundException("Driver wallet not found"));
+        
         User driver = userRepository.findById(driverId)
                 .orElseThrow(() -> new NotFoundException("Driver not found"));
 
-        // ✅ SSOT: Check balance từ ledger
-        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(driverWallet.getWalletId());
-        BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(driverWallet.getWalletId());
+        // ✅ SSOT: Check balance từ ledger (sau khi lock)
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(lockedWallet.getWalletId());
+        BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(lockedWallet.getWalletId());
         
         if (availableBalance.compareTo(amount) < 0) {
             throw new ValidationException("Insufficient balance for payout. Available: " + availableBalance);
@@ -526,11 +577,11 @@ public class TransactionServiceImpl implements TransactionService {
 
         UUID groupId = generateGroupId();
 
-        // ✅ SSOT: Create payout transaction (pending until PSP confirms)
+        // ✅ SSOT: Create user payout transaction (pending until PSP confirms)
         // Balance snapshots are for audit trail only, not used for calculation
-        Transaction payoutTransaction = Transaction.builder()
+        Transaction userPayoutTransaction = Transaction.builder()
                 .groupId(groupId)
-                .wallet(driverWallet)  // ✅ Set wallet relationship
+                .wallet(lockedWallet)  // ✅ Set wallet relationship (use locked wallet)
                 .type(TransactionType.PAYOUT)
                 .direction(TransactionDirection.OUT)
                 .actorKind(ActorKind.USER)
@@ -546,13 +597,38 @@ public class TransactionServiceImpl implements TransactionService {
                 .note(description)
                 .build();
 
-        Transaction savedTransaction = transactionRepository.save(payoutTransaction);
+        // ✅ FIX P0-DOUBLE_ENTRY: Create system payout transaction để balance
+        // User OUT + System.MASTER OUT = Balanced (cả 2 đều OUT, money leaves system)
+        Transaction systemPayoutTransaction = Transaction.builder()
+                .groupId(groupId)
+                .type(TransactionType.PAYOUT)
+                .direction(TransactionDirection.OUT)  // ✅ System also OUT (money leaves system)
+                .actorKind(ActorKind.SYSTEM)
+                .systemWallet(SystemWallet.MASTER)
+                .amount(amount)
+                .currency("VND")
+                .status(TransactionStatus.PENDING)
+                .pspRef(pspRef)
+                .note("System payout to external - " + description)
+                .build();
+
+        List<Transaction> transactions = Arrays.asList(
+                transactionRepository.save(userPayoutTransaction),
+                transactionRepository.save(systemPayoutTransaction)
+        );
+        
+        Transaction savedTransaction = userPayoutTransaction;
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Balance sẽ được tính từ transactions table khi query
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi tạo transaction
+        if (savedTransaction.getWallet() != null) {
+            balanceCalculationService.invalidateBalanceCache(savedTransaction.getWallet().getWalletId());
+        }
 
         log.info("Initiated payout for driver {} with amount {} and pspRef {}", driverId, amount, pspRef);
-        return Arrays.asList(savedTransaction);
+        return transactions;
     }
 
     @Override
@@ -562,23 +638,37 @@ public class TransactionServiceImpl implements TransactionService {
             throw new ValidationException("PSP reference cannot be null or empty");
         }
 
+        // ✅ FIX P1-6: Check if already processed (idempotency)
+        List<Transaction> existingSuccess = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.SUCCESS);
+        if (!existingSuccess.isEmpty()) {
+            log.warn("Payout already processed for pspRef: {}", pspRef);
+            return; // Idempotent - already processed
+        }
+
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
         if (transactions.isEmpty()) {
             throw new NotFoundException("No pending payout transactions found for pspRef: " + pspRef);
         }
 
-        Integer driverId = null;
-        BigDecimal amount = null;
-
+        Integer walletId = null;
         for (Transaction txn : transactions) {
             txn.setStatus(TransactionStatus.SUCCESS);
-
             transactionRepository.save(txn);
+            
+            // Get walletId for cache invalidation
+            if (txn.getWallet() != null && walletId == null) {
+                walletId = txn.getWallet().getWalletId();
+            }
         }
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Transaction status = SUCCESS nên sẽ được tính vào balance
         // Pending balance sẽ tự động giảm khi tính từ ledger
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi update transaction status
+        if (walletId != null) {
+            balanceCalculationService.invalidateBalanceCache(walletId);
+        }
 
         log.info("Payout success for pspRef: {}", pspRef);
     }
@@ -593,48 +683,102 @@ public class TransactionServiceImpl implements TransactionService {
             throw new ValidationException("Failure reason cannot be null or empty");
         }
 
+        // ✅ FIX P1-6: Check if already processed (idempotency)
+        // Check both FAILED and REVERSED (vì bây giờ mark là REVERSED)
+        List<Transaction> existingFailed = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.FAILED);
+        List<Transaction> existingReversed = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.REVERSED);
+        if (!existingFailed.isEmpty() || !existingReversed.isEmpty()) {
+            log.warn("Payout already failed/reversed for pspRef: {}", pspRef);
+            return; // Idempotent - already processed
+        }
+
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
         if (transactions.isEmpty()) {
             throw new NotFoundException("No pending payout transactions found for pspRef: " + pspRef);
         }
 
-        Integer driverId = null;
-        BigDecimal amount = null;
+        // Find driver transaction và original groupId
+        Transaction driverTxn = transactions.stream()
+            .filter(t -> t.getActorKind() == ActorKind.USER && t.getActorUser() != null)
+            .findFirst()
+            .orElse(null);
+        
+        UUID originalGroupId = driverTxn != null ? driverTxn.getGroupId() : null;
+        Integer driverId = driverTxn != null && driverTxn.getActorUser() != null ? driverTxn.getActorUser().getUserId() : null;
+        BigDecimal amount = driverTxn != null ? driverTxn.getAmount() : null;
 
+        // ✅ FIX P0-REFUND: Mark original transactions as REVERSED (reversal entries)
         for (Transaction txn : transactions) {
-            txn.setStatus(TransactionStatus.FAILED);
-            txn.setNote(txn.getNote() + " - Failed: " + reason);
-
+            txn.setStatus(TransactionStatus.REVERSED);  // ✅ Mark as REVERSED instead of FAILED
+            txn.setNote(txn.getNote() + " - Failed: " + reason + " | Reversed");
             transactionRepository.save(txn);
         }
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
-        // Transaction status = FAILED nên sẽ không được tính vào balance
-        // Nếu cần refund, tạo REFUND transaction thay vì update balance trực tiếp
-        if (driverId != null && amount != null) {
-            // Find driver transaction để get wallet
-            Transaction driverTxn = transactions.stream()
-                .filter(t -> t.getActorKind() == ActorKind.USER && t.getActorUser() != null)
-                .findFirst()
-                .orElse(null);
+        // Transaction status = REVERSED nên sẽ không được tính vào balance
+        // Tạo REFUND transaction để return money (reversal of original payout)
+        if (driverTxn != null && driverTxn.getWallet() != null && amount != null && originalGroupId != null) {
+            // ✅ FIX P0-REFUND: Generate idempotency key
+            String idempotencyKey = "REFUND_PAYOUT_" + pspRef + "_" + amount;
             
-            if (driverTxn != null && driverTxn.getWallet() != null) {
-                // Create REFUND transaction để return money
-                UUID refundGroupId = generateGroupId();
-                Transaction refundTxn = Transaction.builder()
-                    .groupId(refundGroupId)
-                    .wallet(driverTxn.getWallet())
-                    .type(TransactionType.REFUND)
-                    .direction(TransactionDirection.IN)
-                    .actorKind(ActorKind.SYSTEM)
-                    .actorUser(driverTxn.getActorUser())
-                    .amount(amount)
-                    .currency("VND")
-                    .status(TransactionStatus.SUCCESS)
-                    .note("Refund for failed payout: " + pspRef)
-                    .build();
-                transactionRepository.save(refundTxn);
+            // ✅ FIX P0-REFUND: Check idempotency (prevent duplicate refund)
+            Optional<Transaction> existingRefund = transactionRepository.findByIdempotencyKey(idempotencyKey);
+            if (existingRefund.isPresent()) {
+                log.warn("Refund already processed for failed payout pspRef: {}, idempotencyKey: {}", pspRef, idempotencyKey);
+                return; // Idempotent - already refunded
             }
+            
+            // ✅ FIX P0-REFUND: Get balances for snapshots
+            BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(driverTxn.getWallet().getWalletId());
+            BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(driverTxn.getWallet().getWalletId());
+            
+            UUID refundGroupId = generateGroupId();
+            
+            // ✅ FIX P0-REFUND: Create user refund transaction (reversal of original OUT)
+            // Original: User OUT → Refund: User IN (reversal)
+            Transaction userRefundTxn = Transaction.builder()
+                .groupId(refundGroupId)
+                .wallet(driverTxn.getWallet())
+                .type(TransactionType.REFUND)
+                .direction(TransactionDirection.IN)  // ✅ Reversal: Original was OUT, refund is IN
+                .actorKind(ActorKind.USER)
+                .actorUser(driverTxn.getActorUser())
+                .amount(amount)
+                .currency("VND")
+                .status(TransactionStatus.SUCCESS)
+                .idempotencyKey(idempotencyKey)  // ✅ FIX P0-REFUND: Idempotency
+                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .beforeAvail(availableBalance)
+                .afterAvail(availableBalance.add(amount))
+                .beforePending(pendingBalance)
+                .afterPending(pendingBalance)
+                .note("Refund for failed payout (reversal of groupId: " + originalGroupId + "): " + pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .build();
+            
+            // ✅ FIX P0-REFUND: Create system refund transaction (reversal of original system OUT)
+            // Original PAYOUT: System.MASTER OUT → Refund: System.MASTER IN (reversal)
+            // Logic: System phải nhận lại tiền từ user (reversal của original OUT)
+            Transaction systemRefundTxn = Transaction.builder()
+                .groupId(refundGroupId)
+                .type(TransactionType.REFUND)
+                .direction(TransactionDirection.IN)  // ✅ Reversal: Original was OUT, refund is IN
+                .actorKind(ActorKind.SYSTEM)
+                .systemWallet(SystemWallet.MASTER)
+                .amount(amount)
+                .currency("VND")
+                .status(TransactionStatus.SUCCESS)
+                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .note("System refund for failed payout (reversal of groupId: " + originalGroupId + "): " + pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .build();
+            
+            transactionRepository.save(userRefundTxn);
+            transactionRepository.save(systemRefundTxn);
+            
+            // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi tạo refund
+            balanceCalculationService.invalidateBalanceCache(driverTxn.getWallet().getWalletId());
+            
+            log.info("Created refund transactions for failed payout: pspRef={}, originalGroupId={}, refundGroupId={}, amount={}", 
+                pspRef, originalGroupId, refundGroupId, amount);
         }
 
         log.info("Payout failed for pspRef: {} with reason: {}", pspRef, reason);
@@ -645,6 +789,21 @@ public class TransactionServiceImpl implements TransactionService {
     public List<Transaction> refundRide(UUID originalGroupId, Integer riderId, Integer driverId,
                                        BigDecimal refundAmount, String description) {
         validateRefundInput(originalGroupId, riderId, driverId, refundAmount);
+
+        // ✅ FIX P0-REFUND: Find original transactions và validate
+        List<Transaction> originalTransactions = transactionRepository.findByGroupId(originalGroupId);
+        if (originalTransactions.isEmpty()) {
+            throw new NotFoundException("Original transactions not found for groupId: " + originalGroupId);
+        }
+        
+        // ✅ FIX P0-REFUND: Check if already refunded (idempotency)
+        String idempotencyKey = "REFUND_RIDE_" + originalGroupId.toString() + "_" + refundAmount;
+        Optional<Transaction> existingRefund = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingRefund.isPresent()) {
+            log.info("Refund already processed for originalGroupId: {}, idempotencyKey: {}", originalGroupId, idempotencyKey);
+            // Return existing refund transactions
+            return transactionRepository.findByGroupId(existingRefund.get().getGroupId());
+        }
 
         Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
                 .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
@@ -665,33 +824,43 @@ public class TransactionServiceImpl implements TransactionService {
         BigDecimal riderPendingBalance = balanceCalculationService.calculatePendingBalance(riderWallet.getWalletId());
         BigDecimal driverPendingBalance = balanceCalculationService.calculatePendingBalance(driverWallet.getWalletId());
 
-        UUID groupId = generateGroupId();
+        UUID refundGroupId = generateGroupId();
         List<Transaction> transactions = new ArrayList<>();
 
-        // ✅ SSOT: Create rider credit transaction
+        // ✅ FIX P0-REFUND: Mark original transactions as REVERSED (reversal entries)
+        for (Transaction originalTxn : originalTransactions) {
+            if (originalTxn.getStatus() == TransactionStatus.SUCCESS) {
+                originalTxn.setStatus(TransactionStatus.REVERSED);
+                originalTxn.setNote(originalTxn.getNote() + " | Reversed by refund groupId: " + refundGroupId);
+                transactionRepository.save(originalTxn);
+            }
+        }
+
+        // ✅ SSOT: Create rider credit transaction (reversal of original OUT)
         Transaction riderCredit = Transaction.builder()
-                .groupId(groupId)
+                .groupId(refundGroupId)
                 .wallet(riderWallet)  // ✅ Set wallet relationship
                 .type(TransactionType.REFUND)
-                .direction(TransactionDirection.IN)
+                .direction(TransactionDirection.IN)  // ✅ Reversal: Original was OUT, refund is IN
                 .actorKind(ActorKind.USER)
                 .actorUser(rider)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.SUCCESS)
+                .idempotencyKey(idempotencyKey)  // ✅ FIX P0-REFUND: Idempotency
                 .beforeAvail(riderAvailableBalance)  // Snapshot for audit
                 .afterAvail(riderAvailableBalance.add(refundAmount))  // Snapshot for audit
                 .beforePending(riderPendingBalance)  // Snapshot for audit
                 .afterPending(riderPendingBalance)  // Snapshot for audit
-                .note("Refund credit - " + description)
+                .note("Refund credit (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
-        // ✅ SSOT: Create driver debit transaction
+        // ✅ SSOT: Create driver debit transaction (reversal of original IN)
         Transaction driverDebit = Transaction.builder()
-                .groupId(groupId)
+                .groupId(refundGroupId)
                 .wallet(driverWallet)  // ✅ Set wallet relationship
                 .type(TransactionType.REFUND)
-                .direction(TransactionDirection.OUT)
+                .direction(TransactionDirection.OUT)  // ✅ Reversal: Original was IN, refund is OUT
                 .actorKind(ActorKind.USER)
                 .actorUser(driver)
                 .amount(refundAmount)
@@ -701,7 +870,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .afterAvail(driverAvailableBalance.subtract(refundAmount))  // Snapshot for audit
                 .beforePending(driverPendingBalance)  // Snapshot for audit
                 .afterPending(driverPendingBalance)  // Snapshot for audit
-                .note("Refund debit - " + description)
+                .note("Refund debit (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
         transactions.add(transactionRepository.save(riderCredit));
@@ -709,8 +878,13 @@ public class TransactionServiceImpl implements TransactionService {
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Balance sẽ được tính từ transactions table khi query
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi tạo refund
+        balanceCalculationService.invalidateBalanceCache(riderWallet.getWalletId());
+        balanceCalculationService.invalidateBalanceCache(driverWallet.getWalletId());
 
-        log.info("Processed refund for original groupId {} - Amount: {}", originalGroupId, refundAmount);
+        log.info("Processed refund for original groupId {} - Amount: {}, refundGroupId: {}", 
+            originalGroupId, refundAmount, refundGroupId);
         return transactions;
     }
 
@@ -718,6 +892,26 @@ public class TransactionServiceImpl implements TransactionService {
     @Transactional
     public List<Transaction> refundTopup(Integer userId, BigDecimal refundAmount, String pspRef, String description) {
         validateRefundTopupInput(userId, refundAmount, pspRef);
+
+        // ✅ FIX P0-REFUND: Find original TOPUP transactions by pspRef
+        List<Transaction> originalTransactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.SUCCESS);
+        if (originalTransactions.isEmpty()) {
+            throw new NotFoundException("Original TOPUP transactions not found for pspRef: " + pspRef);
+        }
+        
+        UUID originalGroupId = originalTransactions.stream()
+            .findFirst()
+            .map(Transaction::getGroupId)
+            .orElse(null);
+        
+        // ✅ FIX P0-REFUND: Check idempotency
+        String idempotencyKey = "REFUND_TOPUP_" + pspRef + "_" + refundAmount;
+        Optional<Transaction> existingRefund = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingRefund.isPresent()) {
+            log.info("Refund already processed for topup pspRef: {}, idempotencyKey: {}", pspRef, idempotencyKey);
+            // Return existing refund transactions
+            return transactionRepository.findByGroupId(existingRefund.get().getGroupId());
+        }
 
         Wallet userWallet = walletRepository.findByUser_UserId(userId)
                 .orElseThrow(() -> new NotFoundException("User wallet not found"));
@@ -732,40 +926,53 @@ public class TransactionServiceImpl implements TransactionService {
             throw new ValidationException("User has insufficient balance for refund. Available: " + availableBalance);
         }
 
-        UUID groupId = generateGroupId();
+        // ✅ FIX P0-REFUND: Mark original transactions as REVERSED (reversal entries)
+        for (Transaction originalTxn : originalTransactions) {
+            if (originalTxn.getStatus() == TransactionStatus.SUCCESS) {
+                originalTxn.setStatus(TransactionStatus.REVERSED);
+                originalTxn.setNote(originalTxn.getNote() + " | Reversed by refund");
+                transactionRepository.save(originalTxn);
+            }
+        }
+
+        UUID refundGroupId = generateGroupId();
         List<Transaction> transactions = new ArrayList<>();
 
-        // ✅ SSOT: Create refund transaction (debit from user)
+        // ✅ SSOT: Create refund transaction (reversal of original user IN)
+        // Original: User IN → Refund: User OUT (reversal)
         Transaction userDebit = Transaction.builder()
-                .groupId(groupId)
+                .groupId(refundGroupId)
                 .wallet(userWallet)  // ✅ Set wallet relationship
                 .type(TransactionType.REFUND)
-                .direction(TransactionDirection.OUT)
+                .direction(TransactionDirection.OUT)  // ✅ Reversal: Original was IN, refund is OUT
                 .actorKind(ActorKind.USER)
                 .actorUser(user)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)
+                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .idempotencyKey(idempotencyKey)  // ✅ FIX P0-REFUND: Idempotency
                 .beforeAvail(availableBalance)  // Snapshot for audit
                 .afterAvail(availableBalance.subtract(refundAmount))  // Snapshot for audit
                 .beforePending(pendingBalance)  // Snapshot for audit
                 .afterPending(pendingBalance.add(refundAmount))  // Snapshot for audit
-                .note("Topup refund - " + description)
+                .note("Topup refund (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
-        // Create system credit transaction (credit to system master wallet)
+        // ✅ FIX P0-REFUND: Create system refund transaction (reversal of original system OUT)
+        // Original TOPUP: System.MASTER OUT → Refund: System.MASTER IN (reversal)
+        // Logic: System phải nhận lại tiền từ user (reversal của original OUT)
         Transaction systemCredit = Transaction.builder()
                 .type(TransactionType.REFUND)
-                .groupId(groupId)
-                .direction(TransactionDirection.IN)
+                .groupId(refundGroupId)
+                .direction(TransactionDirection.IN)  // ✅ FIX: Reversal của System.MASTER OUT → System.MASTER IN
                 .actorKind(ActorKind.SYSTEM)
                 .systemWallet(SystemWallet.MASTER)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)
-                .note("System refund credit - " + description)
+                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .note("System refund credit (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
         transactions.add(transactionRepository.save(userDebit));
@@ -773,8 +980,12 @@ public class TransactionServiceImpl implements TransactionService {
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Balance sẽ được tính từ transactions table khi query
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi tạo refund
+        balanceCalculationService.invalidateBalanceCache(userWallet.getWalletId());
 
-        log.info("Initiated topup refund for user {} with amount {} and pspRef {}", userId, refundAmount, pspRef);
+        log.info("Initiated topup refund for user {} with amount {} and pspRef {}, originalGroupId: {}, refundGroupId: {}", 
+            userId, refundAmount, pspRef, originalGroupId, refundGroupId);
         return transactions;
     }
 
@@ -783,58 +994,94 @@ public class TransactionServiceImpl implements TransactionService {
     public List<Transaction> refundPayout(Integer driverId, BigDecimal refundAmount, String pspRef, String description) {
         validateRefundPayoutInput(driverId, refundAmount, pspRef);
 
+        // ✅ FIX P0-REFUND: Find original PAYOUT transactions by pspRef
+        List<Transaction> originalTransactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.SUCCESS);
+        if (originalTransactions.isEmpty()) {
+            throw new NotFoundException("Original PAYOUT transactions not found for pspRef: " + pspRef);
+        }
+        
+        UUID originalGroupId = originalTransactions.stream()
+            .findFirst()
+            .map(Transaction::getGroupId)
+            .orElse(null);
+        
+        // ✅ FIX P0-REFUND: Check idempotency
+        String idempotencyKey = "REFUND_PAYOUT_" + pspRef + "_" + refundAmount;
+        Optional<Transaction> existingRefund = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingRefund.isPresent()) {
+            log.info("Refund already processed for payout pspRef: {}, idempotencyKey: {}", pspRef, idempotencyKey);
+            // Return existing refund transactions
+            return transactionRepository.findByGroupId(existingRefund.get().getGroupId());
+        }
+
         Wallet driverWallet = walletRepository.findByUser_UserId(driverId)
                 .orElseThrow(() -> new NotFoundException("Driver wallet not found"));
         User driver = userRepository.findById(driverId)
                 .orElseThrow(() -> new NotFoundException("Driver not found"));
 
-        UUID groupId = generateGroupId();
-        List<Transaction> transactions = new ArrayList<>();
-
         // ✅ SSOT: Get balances từ ledger for snapshots
         BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(driverWallet.getWalletId());
         BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(driverWallet.getWalletId());
 
-        // ✅ SSOT: Create refund transaction (credit to driver)
+        // ✅ FIX P0-REFUND: Mark original transactions as REVERSED (reversal entries)
+        for (Transaction originalTxn : originalTransactions) {
+            if (originalTxn.getStatus() == TransactionStatus.SUCCESS) {
+                originalTxn.setStatus(TransactionStatus.REVERSED);
+                originalTxn.setNote(originalTxn.getNote() + " | Reversed by refund");
+                transactionRepository.save(originalTxn);
+            }
+        }
+
+        UUID refundGroupId = generateGroupId();
+        List<Transaction> transactions = new ArrayList<>();
+
+        // ✅ SSOT: Create refund transaction (reversal of original driver OUT)
+        // Original: Driver OUT → Refund: Driver IN (reversal)
         Transaction driverCredit = Transaction.builder()
-                .groupId(groupId)
+                .groupId(refundGroupId)
                 .wallet(driverWallet)  // ✅ Set wallet relationship
                 .type(TransactionType.REFUND)
-                .direction(TransactionDirection.IN)
+                .direction(TransactionDirection.IN)  // ✅ Reversal: Original was OUT, refund is IN
                 .actorKind(ActorKind.USER)
                 .actorUser(driver)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)
+                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .idempotencyKey(idempotencyKey)  // ✅ FIX P0-REFUND: Idempotency
                 .beforeAvail(availableBalance)  // Snapshot for audit
                 .afterAvail(availableBalance.add(refundAmount))  // Snapshot for audit
                 .beforePending(pendingBalance)  // Snapshot for audit
                 .afterPending(pendingBalance)  // Snapshot for audit
-                .note("Payout refund - " + description)
+                .note("Payout refund (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
-        // Create system debit transaction (debit from system master wallet)
-        Transaction systemDebit = Transaction.builder()
+        // ✅ FIX P0-REFUND: Create system refund transaction (reversal of original system OUT)
+        // Original: System.MASTER OUT → Refund: System.MASTER IN (reversal)
+        Transaction systemCredit = Transaction.builder()
                 .type(TransactionType.REFUND)
-                .groupId(groupId)
-                .direction(TransactionDirection.OUT)
+                .groupId(refundGroupId)
+                .direction(TransactionDirection.IN)  // ✅ Reversal: Original was OUT, refund is IN
                 .actorKind(ActorKind.SYSTEM)
                 .systemWallet(SystemWallet.MASTER)
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)
-                .note("System refund debit - " + description)
+                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .note("System refund credit (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
         transactions.add(transactionRepository.save(driverCredit));
-        transactions.add(transactionRepository.save(systemDebit));
+        transactions.add(transactionRepository.save(systemCredit));
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Balance sẽ được tính từ transactions table khi query
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi tạo refund
+        balanceCalculationService.invalidateBalanceCache(driverWallet.getWalletId());
 
-        log.info("Initiated payout refund for driver {} with amount {} and pspRef {}", driverId, refundAmount, pspRef);
+        log.info("Initiated payout refund for driver {} with amount {} and pspRef {}, originalGroupId: {}, refundGroupId: {}", 
+            driverId, refundAmount, pspRef, originalGroupId, refundGroupId);
         return transactions;
     }
 

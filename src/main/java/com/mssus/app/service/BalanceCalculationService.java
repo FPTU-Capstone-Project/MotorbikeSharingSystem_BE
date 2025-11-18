@@ -23,5 +23,15 @@ public interface BalanceCalculationService {
      * Tính tổng số dư (available + pending)
      */
     BigDecimal calculateTotalBalance(Integer walletId);
+    
+    /**
+     * ✅ FIX P0-BALANCE_CACHE: Invalidate cache khi có transaction mới
+     */
+    void invalidateBalanceCache(Integer walletId);
+    
+    /**
+     * ✅ FIX P0-BALANCE_CACHE: Invalidate cache cho tất cả wallets
+     */
+    void invalidateAllBalanceCache();
 }
 

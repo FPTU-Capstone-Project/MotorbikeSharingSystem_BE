@@ -1,7 +1,9 @@
 package com.mssus.app.repository;
 
 import com.mssus.app.entity.Wallet;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +20,13 @@ public interface WalletRepository extends JpaRepository<Wallet, Integer> {
     @Query("SELECT COUNT(w) > 0 FROM Wallet w WHERE w.user.userId = :userId")
     boolean existsByUserId(@Param("userId") Integer userId);
     Optional<Wallet> findByUser_UserId(Integer userId);
+
+    /**
+     * ✅ FIX P2-8: Find wallet with pessimistic lock for concurrency safety
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM Wallet w WHERE w.walletId = :walletId")
+    Optional<Wallet> findByIdWithLock(@Param("walletId") Integer walletId);
 
 //    /**
 //     * @deprecated ❌ SSOT: Không nên update balance trực tiếp. Sử dụng Transaction ledger thay thế.

@@ -30,7 +30,7 @@ public class Transaction {
     @Column(name = "txn_id")
     private Integer txnId;
 
-    @Column(name = "group_id")
+    @Column(name = "group_id",nullable = false)
     private UUID groupId;
 
     @Column(name = "type", nullable = false)
@@ -50,7 +50,7 @@ public class Transaction {
     private User actorUser;
 
     @ManyToOne
-    @JoinColumn(name = "wallet_id")
+    @JoinColumn(name = "wallet_id", nullable = false)
     private Wallet wallet;
 
     @Column(name = "system_wallet")
@@ -72,7 +72,7 @@ public class Transaction {
     @JoinColumn(name = "shared_ride_request_id")
     private SharedRideRequest sharedRideRequest;
 
-    @Column(name = "psp_ref")
+    @Column(name = "psp_ref", unique = true)
     private String pspRef;
 
     @Column(name = "status")
@@ -101,6 +101,6 @@ public class Transaction {
     @Column(name = "evidence_url", length = 500)
     private String evidenceUrl;
 
-    @Column(name="idempotency_key", unique = true)
+    @Column(name="idempotency_key", unique = true, nullable = false)
     private String idempotencyKey;
 }

@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -108,15 +110,37 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         SettlementResult settlementResult = pricingService.settle(fareBreakdown);
         Wallet riderWallet = walletService.getWalletByUserId(request.getRiderId());
         Wallet driverWallet = walletService.getWalletByUserId(request.getDriverId());
+        
+        // ✅ FIX P0-CONCURRENCY: Lock wallets để tránh race condition
+        Wallet lockedRiderWallet = walletRepository.findByIdWithLock(riderWallet.getWalletId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.wallet"));
+        Wallet lockedDriverWallet = walletRepository.findByIdWithLock(driverWallet.getWalletId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.wallet"));
 
-        log.info("Settling ride funds for rider {}, driver {}, amount {}", request.getRiderId(),
-            request.getDriverId(), settlementResult.riderPay().amount());
+        // ✅ FIX P0-CAPTURE_FARE: Validate triple-entry balancing
+        // rider payment MUST equal driver payout + commission
+        BigDecimal riderPayAmount = settlementResult.riderPay().amount();
+        BigDecimal driverPayoutAmount = settlementResult.driverPayout().amount();
+        BigDecimal commissionAmount = settlementResult.commission().amount();
+        BigDecimal totalOut = driverPayoutAmount.add(commissionAmount);
+        
+        if (riderPayAmount.compareTo(totalOut) != 0) {
+            String errorMsg = String.format(
+                "CAPTURE_FARE triple-entry balancing violation: riderPay (%s) != driverPayout (%s) + commission (%s) = %s",
+                riderPayAmount, driverPayoutAmount, commissionAmount, totalOut);
+            log.error(errorMsg);
+            throw new ValidationException(errorMsg);
+        }
 
-        // ✅ SSOT: Get balances từ ledger for snapshots
-        BigDecimal riderAvailableBefore = balanceCalculationService.calculateAvailableBalance(riderWallet.getWalletId());
-        BigDecimal riderPendingBefore = balanceCalculationService.calculatePendingBalance(riderWallet.getWalletId());
-        BigDecimal driverAvailableBefore = balanceCalculationService.calculateAvailableBalance(driverWallet.getWalletId());
-        BigDecimal driverPendingBefore = balanceCalculationService.calculatePendingBalance(driverWallet.getWalletId());
+        log.info("Settling ride funds for rider {}, driver {}, riderPay: {}, driverPayout: {}, commission: {}",
+            request.getRiderId(), request.getDriverId(), 
+            riderPayAmount, driverPayoutAmount, commissionAmount);
+
+        // ✅ SSOT: Get balances từ ledger for snapshots (sau khi lock)
+        BigDecimal riderAvailableBefore = balanceCalculationService.calculateAvailableBalance(lockedRiderWallet.getWalletId());
+        BigDecimal riderPendingBefore = balanceCalculationService.calculatePendingBalance(lockedRiderWallet.getWalletId());
+        BigDecimal driverAvailableBefore = balanceCalculationService.calculateAvailableBalance(lockedDriverWallet.getWalletId());
+        BigDecimal driverPendingBefore = balanceCalculationService.calculatePendingBalance(lockedDriverWallet.getWalletId());
 
         // Calculate snapshots for audit trail
         BigDecimal riderAfterAvail = riderAvailableBefore;
@@ -129,10 +153,23 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         User driver = userRepository.findById(request.getDriverId())
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-id"));
 
+        // ✅ FIX P0-CAPTURE_IDEMPOTENCY: Check idempotency để tránh duplicate capture
+        String idempotencyKey = "CAPTURE_FARE_" + request.getRideRequestId() + "_" + groupId.toString();
+        Optional<Transaction> existingCapture = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingCapture.isPresent()) {
+            log.warn("Ride already captured for requestId: {}, groupId: {}", request.getRideRequestId(), groupId);
+            // Return existing transactions
+            List<Transaction> existingTransactions = transactionRepository.findByGroupId(existingCapture.get().getGroupId());
+            // Return existing settlement response
+            // TODO: Build response from existing transactions
+            throw new ValidationException("Ride already captured");
+        }
+        
         // ✅ SSOT: Create rider payment transaction (OUT)
         Transaction riderPayTxn = Transaction.builder()
             .groupId(groupId)
-            .wallet(riderWallet)  // ✅ Set wallet relationship
+            .wallet(lockedRiderWallet)  // ✅ Set wallet relationship (use locked wallet)
+            .idempotencyKey(idempotencyKey)  // ✅ FIX P0-CAPTURE_IDEMPOTENCY
             .type(TransactionType.CAPTURE_FARE)
             .direction(TransactionDirection.OUT)
             .actorKind(ActorKind.USER)
@@ -151,7 +188,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         // ✅ SSOT: Create driver payout transaction (IN)
         Transaction driverPayoutTxn = Transaction.builder()
             .groupId(groupId)
-            .wallet(driverWallet)  // ✅ Set wallet relationship
+            .wallet(lockedDriverWallet)  // ✅ Set wallet relationship (use locked wallet)
             .type(TransactionType.CAPTURE_FARE)
             .direction(TransactionDirection.IN)
             .actorKind(ActorKind.USER)
@@ -187,6 +224,10 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
 
         // ✅ SSOT: KHÔNG update wallet balance trực tiếp
         // Balance sẽ được tính từ transactions table khi query
+        
+        // ✅ FIX P0-BALANCE_CACHE: Invalidate cache sau khi capture fare
+        balanceCalculationService.invalidateBalanceCache(lockedRiderWallet.getWalletId());
+        balanceCalculationService.invalidateBalanceCache(lockedDriverWallet.getWalletId());
 
         String riderPayloadJson = String.format(
             "{\"oldWalletBalance\": %s, \"newWalletBalance\": %s, \"capturedAmount\": %s, \"bookingId\": %d}",
