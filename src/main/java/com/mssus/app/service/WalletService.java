@@ -1,15 +1,15 @@
 package com.mssus.app.service;
 
+import com.mssus.app.common.enums.TransactionStatus;
 import com.mssus.app.dto.request.wallet.PayoutInitRequest;
-import com.mssus.app.dto.request.wallet.TopUpInitRequest;
-import com.mssus.app.dto.response.wallet.DriverEarningsResponse;
-import com.mssus.app.dto.response.wallet.PayoutInitResponse;
-import com.mssus.app.dto.response.wallet.TopUpInitResponse;
-import com.mssus.app.dto.response.wallet.WalletResponse;
+import com.mssus.app.dto.response.wallet.*;
+import com.mssus.app.entity.Transaction;
 import com.mssus.app.entity.Wallet;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public interface WalletService {
 //    void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount);
@@ -35,10 +35,10 @@ public interface WalletService {
     DriverEarningsResponse getDriverEarnings(Authentication authentication);
 
     // Admin payout processing methods
-    java.util.List<com.mssus.app.dto.response.wallet.PendingPayoutResponse> getPendingPayouts();
-    com.mssus.app.dto.response.wallet.PayoutProcessResponse processPayout(String payoutRef, Authentication authentication);
-    com.mssus.app.dto.response.wallet.PayoutProcessResponse completePayout(String payoutRef, org.springframework.web.multipart.MultipartFile evidenceFile, String notes, Authentication authentication);
-    com.mssus.app.dto.response.wallet.PayoutProcessResponse failPayout(String payoutRef, String reason, Authentication authentication);
+    java.util.List<PendingPayoutResponse> getPendingPayouts();
+    PayoutProcessResponse processPayout(String payoutRef, Authentication authentication);
+    PayoutProcessResponse completePayout(String payoutRef, MultipartFile evidenceFile, String notes, Authentication authentication);
+    PayoutProcessResponse failPayout(String payoutRef, String reason, Authentication authentication);
 
     Wallet createWalletForUser(Integer userId);
 
@@ -62,7 +62,7 @@ public interface WalletService {
         BigDecimal amount, 
         String pspRef, 
         String idempotencyKey, 
-        com.mssus.app.common.enums.TransactionStatus status
+        TransactionStatus status
     );
     
     /**
@@ -78,20 +78,20 @@ public interface WalletService {
     /**
      * Find transaction by idempotency key
      */
-    java.util.Optional<com.mssus.app.entity.Transaction> findTransactionByIdempotencyKey(String idempotencyKey);
+    java.util.Optional<Transaction> findTransactionByIdempotencyKey(String idempotencyKey);
     
     /**
      * Hold amount: Create HOLD_CREATE transaction
      */
-    com.mssus.app.entity.Transaction holdAmount(
+    Transaction holdAmount(
         Integer walletId, 
         BigDecimal amount, 
-        java.util.UUID groupId, 
+        UUID groupId,
         String reason
     );
     
     /**
      * Release hold: Create HOLD_RELEASE transaction
      */
-    com.mssus.app.entity.Transaction releaseHold(java.util.UUID groupId, String reason);
+    Transaction releaseHold(UUID groupId, String reason);
 }
