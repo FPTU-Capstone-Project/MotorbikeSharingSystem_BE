@@ -69,11 +69,12 @@ class WalletServiceSSOTTest {
             .isActive(true)
             .build();
 
-        when(walletRepository.findByUser_UserId(USER_ID))
+        // Use lenient() to avoid UnnecessaryStubbingException for stubbings not used in all tests
+        lenient().when(walletRepository.findByUser_UserId(USER_ID))
             .thenReturn(Optional.of(testWallet));
-        when(userRepository.findById(USER_ID))
+        lenient().when(userRepository.findById(USER_ID))
             .thenReturn(Optional.of(testUser));
-        when(transactionRepository.save(any(Transaction.class)))
+        lenient().when(transactionRepository.save(any(Transaction.class)))
             .thenAnswer(invocation -> {
                 Transaction txn = invocation.getArgument(0);
                 if (txn.getTxnId() == null) {

@@ -238,7 +238,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.getBalance(null))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Authentication cannot be null");
+            .hasMessageContaining("Xác thực không được để trống");
 
         verifyNoInteractions(userRepository, walletRepository);
     }
@@ -252,7 +252,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.getBalance(authentication))
             .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("User not found with email: test@example.com");
+            .hasMessageContaining("Không tìm thấy người dùng với email: test@example.com");
 
         verify(authentication).getName();
         verify(userRepository).findByEmail("test@example.com");
@@ -269,7 +269,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.getBalance(authentication))
             .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user: " + testUser.getUserId());
+            .hasMessageContaining("Không tìm thấy ví cho người dùng: " + testUser.getUserId());
 
         verify(authentication).getName();
         verify(userRepository).findByEmail("test@example.com");
@@ -303,7 +303,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.getWalletByUserId(null))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("User ID cannot be null");
+            .hasMessageContaining("ID người dùng không được để trống");
 
         verifyNoInteractions(walletRepository);
     }
@@ -318,7 +318,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.getWalletByUserId(userId))
             .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user: " + userId);
+            .hasMessageContaining("Không tìm thấy ví cho người dùng: " + userId);
 
         verify(walletRepository).findByUser_UserId(userId);
         verifyNoMoreInteractions(walletRepository);
@@ -436,7 +436,7 @@ class WalletServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result.getPayoutRef()).startsWith("PAYOUT-");
         assertThat(result.getAmount()).isEqualTo(testPayoutRequest.getAmount());
-        assertThat(result.getStatus()).isEqualTo("PROCESSING");
+        assertThat(result.getStatus()).isEqualTo("PENDING");
         assertThat(result.getEstimatedCompletionTime()).isNotNull();
         assertThat(result.getMaskedAccountNumber()).isEqualTo("****7890");
 
@@ -459,7 +459,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.initiatePayout(testPayoutRequest, authentication))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Insufficient balance. Available: " + insufficientBalance + ", Required: " + testPayoutRequest.getAmount());
+            .hasMessageContaining("Số dư không đủ. Khả dụng: " + insufficientBalance + ", Yêu cầu: " + testPayoutRequest.getAmount());
 
         verify(authentication).getName();
         verify(userRepository).findByEmail("test@example.com");
@@ -475,7 +475,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.initiatePayout(testPayoutRequest, authentication))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Wallet is frozen. Please contact support.");
+            .hasMessageContaining("Ví đã bị đóng băng. Vui lòng liên hệ hỗ trợ.");
 
         verify(authentication).getName();
         verify(userRepository).findByEmail("test@example.com");
@@ -596,7 +596,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.createWalletForUser(null))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("User ID cannot be null");
+            .hasMessageContaining("ID người dùng không được để trống");
 
         verifyNoInteractions(walletRepository, userRepository);
     }
@@ -610,7 +610,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.createWalletForUser(userId))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Wallet already exists for user: " + userId);
+            .hasMessageContaining("Ví đã tồn tại cho người dùng: " + userId);
 
         verify(walletRepository).existsByUserId(userId);
         verify(userRepository, never()).findById(anyInt());
@@ -629,7 +629,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.createWalletForUser(userId))
             .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("User not found: " + userId);
+            .hasMessageContaining("Không tìm thấy người dùng: " + userId);
 
         verify(walletRepository).existsByUserId(userId);
         verify(userRepository).findById(userId);
@@ -653,6 +653,8 @@ class WalletServiceImplTest {
         assertThat(result).isTrue();
 
         verify(walletRepository).findByUser_UserId(userId);
+        // ✅ SSOT: Verify balance is calculated from ledger
+        verify(balanceCalculationService).calculateAvailableBalance(testWallet.getWalletId());
         verifyNoMoreInteractions(walletRepository);
     }
 
@@ -670,6 +672,8 @@ class WalletServiceImplTest {
         assertThat(result).isFalse();
 
         verify(walletRepository).findByUser_UserId(userId);
+        // ✅ SSOT: Verify balance is calculated from ledger
+        verify(balanceCalculationService).calculateAvailableBalance(testWallet.getWalletId());
         verifyNoMoreInteractions(walletRepository);
     }
 
@@ -679,7 +683,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.hasSufficientBalance(null, new BigDecimal("1000")))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("User ID cannot be null");
+            .hasMessageContaining("ID người dùng không được để trống");
 
         verifyNoInteractions(walletRepository);
     }
@@ -690,7 +694,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.hasSufficientBalance(1, null))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Amount must be non-negative");
+            .hasMessageContaining("Số tiền phải không âm");
 
         verifyNoInteractions(walletRepository);
     }
@@ -701,7 +705,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.hasSufficientBalance(1, new BigDecimal("-1000")))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Amount must be non-negative");
+            .hasMessageContaining("Số tiền phải không âm");
 
         verifyNoInteractions(walletRepository);
     }
@@ -717,7 +721,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.hasSufficientBalance(userId, amount))
             .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user: " + userId);
+            .hasMessageContaining("Không tìm thấy ví cho người dùng: " + userId);
 
         verify(walletRepository).findByUser_UserId(userId);
         verifyNoMoreInteractions(walletRepository);
@@ -730,6 +734,12 @@ class WalletServiceImplTest {
     void should_reconcileWalletBalance_when_validUserId() {
         // Arrange
         Integer userId = 1;
+        
+        // ✅ SSOT: Mock balance calculation from ledger
+        when(balanceCalculationService.calculateAvailableBalance(testWallet.getWalletId()))
+            .thenReturn(new BigDecimal("100000"));
+        when(balanceCalculationService.calculatePendingBalance(testWallet.getWalletId()))
+            .thenReturn(new BigDecimal("20000"));
 
         // Act
         walletService.reconcileWalletBalance(userId);
@@ -737,8 +747,10 @@ class WalletServiceImplTest {
         // Assert
         verify(walletRepository).findByUser_UserId(userId);
         verify(transactionRepository).findByUserIdAndStatus(userId, TransactionStatus.SUCCESS);
+        verify(balanceCalculationService).calculateAvailableBalance(testWallet.getWalletId());
+        verify(balanceCalculationService).calculatePendingBalance(testWallet.getWalletId());
         verify(walletRepository).save(testWallet);
-        verifyNoMoreInteractions(walletRepository, transactionRepository);
+        verifyNoMoreInteractions(walletRepository, transactionRepository, balanceCalculationService);
     }
 
     @Test
@@ -747,7 +759,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.reconcileWalletBalance(null))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("User ID cannot be null");
+            .hasMessageContaining("ID người dùng không được để trống");
 
         verifyNoInteractions(walletRepository, transactionRepository);
     }
@@ -762,7 +774,7 @@ class WalletServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> walletService.reconcileWalletBalance(userId))
             .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user: " + userId);
+            .hasMessageContaining("Không tìm thấy ví cho người dùng: " + userId);
 
         verify(walletRepository).findByUser_UserId(userId);
         verify(transactionRepository, never()).findByUserIdAndStatus(anyInt(), any(TransactionStatus.class));

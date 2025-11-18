@@ -72,9 +72,10 @@ class WalletSSOTIntegrationTest {
             .isActive(true)
             .build();
 
-        when(walletRepository.findByUser_UserId(USER_ID))
+        // Use lenient() to avoid UnnecessaryStubbingException for stubbings not used in all tests
+        lenient().when(walletRepository.findByUser_UserId(USER_ID))
             .thenReturn(Optional.of(testWallet));
-        when(transactionRepository.save(any(Transaction.class)))
+        lenient().when(transactionRepository.save(any(Transaction.class)))
             .thenAnswer(invocation -> {
                 Transaction txn = invocation.getArgument(0);
                 if (txn.getTxnId() == null) {
@@ -156,7 +157,8 @@ class WalletSSOTIntegrationTest {
         // Step 3: Verify balance is still zero (FAILED transactions don't count)
         when(balanceCalculationService.calculateAvailableBalance(WALLET_ID))
             .thenReturn(BigDecimal.ZERO);
-        when(balanceCalculationService.calculatePendingBalance(WALLET_ID))
+        // Use lenient() since calculatePendingBalance may not be called in this test
+        lenient().when(balanceCalculationService.calculatePendingBalance(WALLET_ID))
             .thenReturn(BigDecimal.ZERO);
 
         BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(WALLET_ID);
