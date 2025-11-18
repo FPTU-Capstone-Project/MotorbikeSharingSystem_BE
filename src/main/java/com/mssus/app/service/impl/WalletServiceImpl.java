@@ -21,8 +21,8 @@ import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
 import com.mssus.app.dto.response.wallet.PendingPayoutResponse;
 import com.mssus.app.dto.response.wallet.PayoutProcessResponse;
+import com.mssus.app.service.BalanceCalculationService;
 import com.mssus.app.service.FileUploadService;
-import com.mssus.app.service.PayOSService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +38,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -49,67 +50,69 @@ public class WalletServiceImpl implements WalletService {
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
-    private final PayOSService payOSService;
     private final FileUploadService fileUploadService;
+    private final BalanceCalculationService balanceCalculationService;
+    
+    // ✅ SSOT: Balance luôn được tính từ ledger, không update trực tiếp
 
-    @Override
-    public void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount) {
-        Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
-
-        wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
-        wallet.setTotalToppedUp(wallet.getTotalToppedUp().add(amount));
-        walletRepository.save(wallet);
-    }
-
-    @Override
-    public void increasePendingBalance(Integer userId, BigDecimal amount) {
-        int updatedRows = walletRepository.increasePendingBalance(userId, amount);
-        if (updatedRows == 0) {
-            throw new NotFoundException("Không tìm thấy ví cho người dùng hoặc cập nhật thất bại: " + userId);
-        }
-    }
-
-    @Override
-    public void decreasePendingBalance(Integer userId, BigDecimal amount) {
-        int updatedRows = walletRepository.decreasePendingBalance(userId, amount);
-        if (updatedRows == 0) {
-            throw new ValidationException("Không thể giảm số dư chờ xử lý cho người dùng: " + userId + ". Không tìm thấy ví hoặc số dư chờ xử lý không đủ.");
-        }
-    }
-
-    @Override
-    @Transactional
-    public void increaseShadowBalance(Integer userId, BigDecimal amount) {
-        int updatedRows = walletRepository.increaseShadowBalance(userId, amount);
-        if (updatedRows == 0) {
-            throw new NotFoundException("Không tìm thấy ví cho người dùng hoặc cập nhật thất bại: " + userId);
-        }
-    }
-
-    @Override
-    @Transactional
-    public void decreaseShadowBalance(Integer userId, BigDecimal amount) {
-        int updatedRows = walletRepository.decreaseShadowBalance(userId, amount);
-        if (updatedRows == 0) {
-            // This can also mean insufficient shadow balance
-            throw new ValidationException("Không thể giảm số dư khả dụng cho người dùng: " + userId + ". Không tìm thấy ví hoặc số dư khả dụng không đủ.");
-        }
-    }
-
-    @Override
-    public void transferPendingToAvailable(Integer userId, BigDecimal amount) {
-        Wallet wallet = walletRepository.findByUser_UserId(userId)
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
-        BigDecimal shadowBalance = BigDecimal.ZERO;
-        if (wallet.getShadowBalance() != null){
-            shadowBalance = wallet.getShadowBalance();
-        }
-        wallet.setPendingBalance(wallet.getPendingBalance().subtract(amount));
-        wallet.setShadowBalance(shadowBalance.add(amount));
-        wallet.setTotalToppedUp(wallet.getTotalToppedUp().add(amount));
-        walletRepository.save(wallet);
-    }
+//    @Override
+//    public void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount) {
+//        Wallet wallet = walletRepository.findByUser_UserId(userId)
+//                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
+//
+//        wallet.setShadowBalance(wallet.getShadowBalance().add(amount));
+//        wallet.setTotalToppedUp(wallet.getTotalToppedUp().add(amount));
+//        walletRepository.save(wallet);
+//    }
+//
+//    @Override
+//    public void increasePendingBalance(Integer userId, BigDecimal amount) {
+//        int updatedRows = walletRepository.increasePendingBalance(userId, amount);
+//        if (updatedRows == 0) {
+//            throw new NotFoundException("Không tìm thấy ví cho người dùng hoặc cập nhật thất bại: " + userId);
+//        }
+//    }
+//
+//    @Override
+//    public void decreasePendingBalance(Integer userId, BigDecimal amount) {
+//        int updatedRows = walletRepository.decreasePendingBalance(userId, amount);
+//        if (updatedRows == 0) {
+//            throw new ValidationException("Không thể giảm số dư chờ xử lý cho người dùng: " + userId + ". Không tìm thấy ví hoặc số dư chờ xử lý không đủ.");
+//        }
+//    }
+//
+//    @Override
+//    @Transactional
+//    public void increaseShadowBalance(Integer userId, BigDecimal amount) {
+//        int updatedRows = walletRepository.increaseShadowBalance(userId, amount);
+//        if (updatedRows == 0) {
+//            throw new NotFoundException("Không tìm thấy ví cho người dùng hoặc cập nhật thất bại: " + userId);
+//        }
+//    }
+//
+//    @Override
+//    @Transactional
+//    public void decreaseShadowBalance(Integer userId, BigDecimal amount) {
+//        int updatedRows = walletRepository.decreaseShadowBalance(userId, amount);
+//        if (updatedRows == 0) {
+//            // This can also mean insufficient shadow balance
+//            throw new ValidationException("Không thể giảm số dư khả dụng cho người dùng: " + userId + ". Không tìm thấy ví hoặc số dư khả dụng không đủ.");
+//        }
+//    }
+//
+//    @Override
+//    public void transferPendingToAvailable(Integer userId, BigDecimal amount) {
+//        Wallet wallet = walletRepository.findByUser_UserId(userId)
+//                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
+//        BigDecimal shadowBalance = BigDecimal.ZERO;
+//        if (wallet.getShadowBalance() != null){
+//            shadowBalance = wallet.getShadowBalance();
+//        }
+//        wallet.setPendingBalance(wallet.getPendingBalance().subtract(amount));
+//        wallet.setShadowBalance(shadowBalance.add(amount));
+//        wallet.setTotalToppedUp(wallet.getTotalToppedUp().add(amount));
+//        walletRepository.save(wallet);
+//    }
 
     @Override
     @Transactional(readOnly = true)
@@ -124,12 +127,13 @@ public class WalletServiceImpl implements WalletService {
 
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
-
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
+        BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
         return WalletResponse.builder()
                 .walletId(wallet.getWalletId())
                 .userId(user.getUserId())
-                .availableBalance(wallet.getShadowBalance())
-                .pendingBalance(wallet.getPendingBalance())
+                .availableBalance(availableBalance)
+                .pendingBalance(pendingBalance)
                 .totalToppedUp(wallet.getTotalToppedUp())
                 .totalSpent(wallet.getTotalSpent())
                 .isActive(wallet.getIsActive())
@@ -150,57 +154,7 @@ public class WalletServiceImpl implements WalletService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
     }
 
-    @Override
-    @Transactional
-    public TopUpInitResponse initiateTopUp(TopUpInitRequest request, Authentication authentication) {
-        if (authentication == null) {
-            throw new ValidationException("Xác thực không được để trống");
-        }
-
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với email: " + email));
-
-        // Ensure wallet exists
-        Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElse(null);
-        if (wallet == null) {
-            wallet = createWalletForUser(user.getUserId());
-        }
-
-        // Validate wallet is active
-        if (!wallet.getIsActive()) {
-            throw new ValidationException("Ví đã bị đóng băng. Vui lòng liên hệ hỗ trợ.");
-        }
-
-        try {
-            // Create payment link with PayOS
-            String description = "Wallet top up";
-            // transaction dc cap nhat qua payosservice
-            CheckoutResponseData paymentData = payOSService.createTopUpPaymentLink(
-                    user.getUserId(),
-                    request.getAmount(),
-                    description,
-                    request.getReturnUrl(),
-                    request.getCancelUrl()
-            );
-
-            log.info("Top-up initiated for user {} - amount: {}, orderCode: {}",
-                    user.getUserId(), request.getAmount(), paymentData.getOrderCode());
-
-            return TopUpInitResponse.builder()
-                    .transactionRef(String.valueOf(paymentData.getOrderCode()))
-                    .paymentUrl(paymentData.getCheckoutUrl())
-                    .qrCodeUrl(paymentData.getQrCode())
-                    .status("PENDING")
-                    .expirySeconds(900) // 15 minutes
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Error initiating top-up for user {}: {}", user.getUserId(), e.getMessage(), e);
-            throw new RuntimeException("Không thể bắt đầu nạp tiền: " + e.getMessage(), e);
-        }
-    }
+    // ✅ initiateTopUp đã được move sang TopUpService để tách PayOS integration
 
     @Override
     @Transactional
@@ -240,10 +194,11 @@ public class WalletServiceImpl implements WalletService {
             throw new ValidationException("Tên chủ tài khoản phải có ít nhất 2 ký tự");
         }
 
-        // Check sufficient balance
-        if (wallet.getShadowBalance().compareTo(request.getAmount()) < 0) {
+        // ✅ SSOT: Check balance từ ledger
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
+        if (availableBalance.compareTo(request.getAmount()) < 0) {
             throw new ValidationException("Số dư không đủ. Khả dụng: " +
-                    wallet.getShadowBalance() + ", Yêu cầu: " + request.getAmount());
+                    availableBalance + ", Yêu cầu: " + request.getAmount());
         }
 
         // Generate payout reference
@@ -256,11 +211,11 @@ public class WalletServiceImpl implements WalletService {
                 maskAccountNumber(bankAccountNumber),
                 accountHolderName);
 
-        // Get current wallet balances before transaction
-        BigDecimal beforeAvail = wallet.getShadowBalance();
-        BigDecimal beforePending = wallet.getPendingBalance();
+        // ✅ SSOT: Get balances từ ledger
+        BigDecimal beforeAvail = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
+        BigDecimal beforePending = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
 
-        // Calculate balances after transaction
+        // Calculate balances after transaction (for snapshot only)
         BigDecimal afterAvail = beforeAvail.subtract(request.getAmount());
         BigDecimal afterPending = beforePending.add(request.getAmount());
 
@@ -300,10 +255,8 @@ public class WalletServiceImpl implements WalletService {
         transactionRepository.save(userTransaction);
         transactionRepository.save(systemTransaction);
 
-        // Update wallet balance: move from shadow_balance to pending_balance
-        wallet.setShadowBalance(afterAvail);
-        wallet.setPendingBalance(afterPending);
-        walletRepository.save(wallet);
+        // ✅ SSOT: KHÔNG update wallet balance trực tiếp
+        // Balance sẽ được tính từ transactions table khi query
 
         // Mask account number (show only last 4 digits)
         String maskedAccount = maskAccountNumber(bankAccountNumber);
@@ -393,9 +346,13 @@ public class WalletServiceImpl implements WalletService {
         BigDecimal totalCommissionPaid = totalEarnings.multiply(estimatedCommissionRate)
                 .divide(BigDecimal.ONE.subtract(estimatedCommissionRate), 2, RoundingMode.HALF_UP);
 
+        // ✅ SSOT: Tính balance từ ledger
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
+        BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
+        
         return DriverEarningsResponse.builder()
-                .availableBalance(wallet.getShadowBalance())
-                .pendingEarnings(wallet.getPendingBalance())
+                .availableBalance(availableBalance)
+                .pendingEarnings(pendingBalance)
                 .totalEarnings(totalEarnings)
                 .totalTrips(totalTrips)
                 .monthEarnings(monthEarnings)
@@ -420,10 +377,9 @@ public class WalletServiceImpl implements WalletService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng: " + userId));
 
+        // ✅ SSOT: Wallet chỉ lưu metadata, không có balance fields
         Wallet wallet = Wallet.builder()
                 .user(user)
-                .shadowBalance(BigDecimal.ZERO)
-                .pendingBalance(BigDecimal.ZERO)
                 .totalToppedUp(BigDecimal.ZERO)
                 .totalSpent(BigDecimal.ZERO)
                 .isActive(true)
@@ -450,10 +406,12 @@ public class WalletServiceImpl implements WalletService {
         Wallet wallet = walletRepository.findByUser_UserId(userId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
 
-        boolean hasFunds = wallet.getShadowBalance().compareTo(amount) >= 0;
+        // ✅ SSOT: Tính balance từ ledger
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
+        boolean hasFunds = availableBalance.compareTo(amount) >= 0;
 
         log.debug("Balance check for user {} - required: {}, available: {}, sufficient: {}",
-                userId, amount, wallet.getShadowBalance(), hasFunds);
+                userId, amount, availableBalance, hasFunds);
 
         return hasFunds;
     }
@@ -468,8 +426,9 @@ public class WalletServiceImpl implements WalletService {
         Wallet wallet = walletRepository.findByUser_UserId(userId)
             .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + userId));
 
-        BigDecimal currentShadowBalance = wallet.getShadowBalance();
-        BigDecimal currentPendingBalance = wallet.getPendingBalance();
+        // ✅ SSOT: Tính balance từ ledger
+        BigDecimal currentShadowBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
+        BigDecimal currentPendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
 
         List<Transaction> transactions = transactionRepository
             .findByUserIdAndStatus(userId, TransactionStatus.SUCCESS);
@@ -534,15 +493,15 @@ public class WalletServiceImpl implements WalletService {
                     "Shadow difference: {}, Pending difference: {}",
                 userId, shadowDiff, pendingDiff);
 
-            if (shadowDiff.compareTo(BigDecimal.ZERO) != 0) {
-                createAdjustmentTransaction(userId, shadowDiff,
-                    "Reconciliation adjustment for shadow balance");
-            }
-
-            wallet.setShadowBalance(reconciledShadowBalance);
-            wallet.setPendingBalance(reconciledPendingBalance);
+            // ✅ SSOT: KHÔNG update wallet balance trực tiếp
+            // Nếu có discrepancy, cần tạo ADJUSTMENT transaction thay vì update trực tiếp
+            // createAdjustmentTransaction(userId, shadowDiff, "Reconciliation adjustment");
+            
             wallet.setLastSyncedAt(LocalDateTime.now());
             walletRepository.save(wallet);
+            
+            log.warn("Balance discrepancy detected. Please create ADJUSTMENT transaction manually. " +
+                "Shadow diff: {}, Pending diff: {}", shadowDiff, pendingDiff);
 
             log.info("Wallet reconciled for user {}: Shadow: {} -> {}, Pending: {} -> {}",
                 userId, currentShadowBalance, reconciledShadowBalance,
@@ -678,8 +637,13 @@ public class WalletServiceImpl implements WalletService {
             throw new NotFoundException("Không tìm thấy người dùng cho giao dịch rút tiền");
         }
 
-        Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
+        // ✅ SSOT: Get wallet từ userTransaction hoặc user
+        Wallet wallet = userTransaction.getWallet();
+        if (wallet == null) {
+            // Fallback: Get wallet from user
+            wallet = walletRepository.findByUser_UserId(user.getUserId())
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
+        }
 
         // Upload evidence file
         String evidenceUrl;
@@ -693,6 +657,10 @@ public class WalletServiceImpl implements WalletService {
         // Update all transactions to SUCCESS status and store evidence URL
         for (Transaction txn : transactions) {
             txn.setStatus(TransactionStatus.SUCCESS);
+            // ✅ SSOT: Set wallet relationship nếu chưa có
+            if (txn.getActorKind() == ActorKind.USER && txn.getWallet() == null) {
+                txn.setWallet(wallet);
+            }
             if (txn.getActorKind() == ActorKind.USER) {
                 txn.setEvidenceUrl(evidenceUrl);
                 if (notes != null && !notes.trim().isEmpty()) {
@@ -702,14 +670,15 @@ public class WalletServiceImpl implements WalletService {
             transactionRepository.save(txn);
         }
 
-        // Update wallet balance: decrease pending_balance (money transferred out)
+        // ✅ SSOT: KHÔNG update wallet balance trực tiếp
+        // Balance sẽ được tính từ transactions table (status = SUCCESS)
         BigDecimal payoutAmount = userTransaction.getAmount();
-        wallet.setPendingBalance(wallet.getPendingBalance().subtract(payoutAmount));
-        walletRepository.save(wallet);
 
-        log.info("Admin {} completed payout {} with evidence URL: {}. Balance: pending {} -> {}",
-                authentication.getName(), payoutRef, evidenceUrl,
-                wallet.getPendingBalance().add(payoutAmount), wallet.getPendingBalance());
+        // ✅ SSOT: Tính balance từ ledger để log
+        BigDecimal newPendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
+        
+        log.info("Admin {} completed payout {} with evidence URL: {}. New pending balance: {}",
+                authentication.getName(), payoutRef, evidenceUrl, newPendingBalance);
 
         return PayoutProcessResponse.builder()
                 .payoutRef(payoutRef)
@@ -761,16 +730,36 @@ public class WalletServiceImpl implements WalletService {
             transactionRepository.save(txn);
         }
 
-        // Refund balance: move from pending_balance back to shadow_balance
+        // ✅ SSOT: KHÔNG update wallet balance trực tiếp
+        // Transaction status = FAILED nên sẽ không được tính vào balance
+        // Nếu cần refund, tạo REFUND transaction thay vì update balance trực tiếp
         BigDecimal payoutAmount = userTransaction.getAmount();
-        wallet.setPendingBalance(wallet.getPendingBalance().subtract(payoutAmount));
-        wallet.setShadowBalance(wallet.getShadowBalance().add(payoutAmount));
-        walletRepository.save(wallet);
+        
+        // Get wallet for refund transaction
+        Wallet refundWallet = walletRepository.findByUser_UserId(user.getUserId())
+            .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
+        
+        UUID refundGroupId = UUID.randomUUID();
+        Transaction refundTxn = Transaction.builder()
+            .groupId(refundGroupId)
+            .wallet(refundWallet)
+            .type(TransactionType.REFUND)
+            .direction(TransactionDirection.IN)
+            .actorKind(ActorKind.SYSTEM)
+            .actorUser(user)
+            .amount(payoutAmount)
+            .currency("VND")
+            .status(TransactionStatus.SUCCESS)
+            .note("Refund for failed payout: " + payoutRef)
+            .build();
+        transactionRepository.save(refundTxn);
 
-        log.info("Admin {} failed payout {} with reason: {}. Balance refunded: pending {} -> {}, shadow {} -> {}",
-                authentication.getName(), payoutRef, reason,
-                wallet.getPendingBalance().add(payoutAmount), wallet.getPendingBalance(),
-                wallet.getShadowBalance().subtract(payoutAmount), wallet.getShadowBalance());
+        // ✅ SSOT: Tính balance từ ledger để log
+        BigDecimal newAvailableBalance = balanceCalculationService.calculateAvailableBalance(refundWallet.getWalletId());
+        BigDecimal newPendingBalance = balanceCalculationService.calculatePendingBalance(refundWallet.getWalletId());
+        
+        log.info("Admin {} failed payout {} with reason: {}. Refund transaction created. New balance: available={}, pending={}",
+                authentication.getName(), payoutRef, reason, newAvailableBalance, newPendingBalance);
 
         return PayoutProcessResponse.builder()
                 .payoutRef(payoutRef)
@@ -821,4 +810,173 @@ public class WalletServiceImpl implements WalletService {
         return "";
     }
 
+    // ========== SSOT Methods ==========
+    
+    @Override
+    @Transactional
+    public Transaction createTopUpTransaction(
+            Integer userId,
+            BigDecimal amount,
+            String pspRef,
+            String idempotencyKey,
+            TransactionStatus status) {
+        
+        // 1. Check idempotency
+        if (idempotencyKey != null) {
+            Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("Duplicate topup request with idempotency_key: {}", idempotencyKey);
+                return existing.get();
+            }
+        }
+        
+        // 2. Get wallet
+        Wallet wallet = walletRepository.findByUser_UserId(userId)
+            .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
+        
+        // 3. Create transaction (SSOT)
+        UUID groupId = UUID.randomUUID();
+        Transaction transaction = Transaction.builder()
+            .groupId(groupId)
+            .wallet(wallet)
+            .type(TransactionType.TOPUP)
+            .direction(TransactionDirection.IN)
+            .actorKind(ActorKind.USER)
+            .actorUser(wallet.getUser())
+            .amount(amount)
+            .currency("VND")
+            .status(status)
+            .idempotencyKey(idempotencyKey)
+            .pspRef(pspRef)
+            .note("Wallet top-up")
+            .build();
+        
+        transactionRepository.save(transaction);
+        
+        // ✅ KHÔNG update wallet.balance trực tiếp
+        // Balance được tính từ transactions table
+        
+        log.info("Top-up transaction created: txnId={}, amount={}, status={}, walletId={}",
+            transaction.getTxnId(), amount, status, wallet.getWalletId());
+        
+        return transaction;
+    }
+    
+    @Override
+    @Transactional
+    public void completeTopUpTransaction(Integer txnId) {
+        Transaction transaction = transactionRepository.findById(txnId)
+            .orElseThrow(() -> new NotFoundException("Transaction not found: " + txnId));
+        
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            throw new ValidationException(
+                "Transaction is not in PENDING status. Current status: " + transaction.getStatus());
+        }
+        
+        if (transaction.getType() != TransactionType.TOPUP) {
+            throw new ValidationException("Transaction is not a TOPUP type");
+        }
+        
+        // Update status to SUCCESS
+        transaction.setStatus(TransactionStatus.SUCCESS);
+        transactionRepository.save(transaction);
+        
+        log.info("Top-up transaction completed: txnId={}", txnId);
+        
+        // ✅ Balance tự động được tính lại từ ledger khi query
+    }
+    
+    @Override
+    @Transactional
+    public void failTopUpTransaction(Integer txnId, String reason) {
+        Transaction transaction = transactionRepository.findById(txnId)
+            .orElseThrow(() -> new NotFoundException("Transaction not found: " + txnId));
+        
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            throw new ValidationException(
+                "Transaction is not in PENDING status. Current status: " + transaction.getStatus());
+        }
+        
+        // Update status to FAILED
+        transaction.setStatus(TransactionStatus.FAILED);
+        transaction.setNote(transaction.getNote() + " - Failed: " + reason);
+        transactionRepository.save(transaction);
+        
+        log.info("Top-up transaction failed: txnId={}, reason={}", txnId, reason);
+        
+        // ✅ Balance không thay đổi vì transaction status = FAILED
+        // (chỉ tính SUCCESS transactions)
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Transaction> findTransactionByIdempotencyKey(String idempotencyKey) {
+        return transactionRepository.findByIdempotencyKey(idempotencyKey);
+    }
+    
+    @Override
+    @Transactional
+    public Transaction holdAmount(Integer walletId, BigDecimal amount, UUID groupId, String reason) {
+        // 1. Get wallet với optimistic lock
+        Wallet wallet = walletRepository.findById(walletId)
+            .orElseThrow(() -> new NotFoundException("Wallet not found: " + walletId));
+        
+        // 2. Check balance từ ledger (SSOT)
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(walletId);
+        if (availableBalance.compareTo(amount) < 0) {
+            throw new ValidationException(
+                String.format("Insufficient balance. Available: %s, Required: %s",
+                    availableBalance, amount));
+        }
+        
+        // 3. Create hold transaction
+        Transaction holdTransaction = Transaction.builder()
+            .groupId(groupId)
+            .wallet(wallet)
+            .type(TransactionType.HOLD_CREATE)
+            .direction(TransactionDirection.INTERNAL)
+            .actorKind(ActorKind.USER)
+            .actorUser(wallet.getUser())
+            .amount(amount)
+            .currency("VND")
+            .status(TransactionStatus.SUCCESS)
+            .note("Hold: " + reason)
+            .build();
+        
+        transactionRepository.save(holdTransaction);
+        
+        log.info("Hold transaction created: txnId={}, amount={}, walletId={}",
+            holdTransaction.getTxnId(), amount, walletId);
+        
+        return holdTransaction;
+    }
+    
+    @Override
+    @Transactional
+    public Transaction releaseHold(UUID groupId, String reason) {
+        // Find original hold transaction
+        Transaction holdTxn = transactionRepository
+            .findByGroupIdAndType(groupId, TransactionType.HOLD_CREATE)
+            .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
+        
+        // Create release transaction
+        Transaction releaseTxn = Transaction.builder()
+            .groupId(groupId)
+            .wallet(holdTxn.getWallet())
+            .type(TransactionType.HOLD_RELEASE)
+            .direction(TransactionDirection.INTERNAL)
+            .actorKind(ActorKind.USER)
+            .actorUser(holdTxn.getActorUser())
+            .amount(holdTxn.getAmount())
+            .currency("VND")
+            .status(TransactionStatus.SUCCESS)
+            .note("Release hold: " + reason)
+            .build();
+        
+        transactionRepository.save(releaseTxn);
+        
+        log.info("Hold released: groupId={}, amount={}", groupId, holdTxn.getAmount());
+        
+        return releaseTxn;
+    }
 }

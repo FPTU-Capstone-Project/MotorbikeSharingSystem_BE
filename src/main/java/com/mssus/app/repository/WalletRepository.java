@@ -17,31 +17,67 @@ public interface WalletRepository extends JpaRepository<Wallet, Integer> {
 
     @Query("SELECT COUNT(w) > 0 FROM Wallet w WHERE w.user.userId = :userId")
     boolean existsByUserId(@Param("userId") Integer userId);
-
-    @Modifying
-    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance + :amount WHERE w.user.userId = :userId")
-    int increasePendingBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
-
-    @Modifying
-    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance - :amount WHERE w.user.userId = :userId AND w.pendingBalance >= :amount")
-    int decreasePendingBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
-
-    @Modifying
-    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance + :amount WHERE w.user.userId = :userId")
-    int increaseShadowBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
-
-    @Modifying
-    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance - :amount WHERE w.user.userId = :userId AND w.shadowBalance >= :amount")
-    int decreaseShadowBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
-
     Optional<Wallet> findByUser_UserId(Integer userId);
 
-    @Modifying
-    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance + :delta, w.updatedAt = CURRENT_TIMESTAMP WHERE w.user.userId = :userId")
-    int addToAvailable(@Param("userId") Integer userId, @Param("delta") BigDecimal delta);
-
-    @Modifying
-    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance + :delta, w.updatedAt = CURRENT_TIMESTAMP WHERE w.user.userId = :userId")
-    int addToPending(@Param("userId") Integer userId, @Param("delta") BigDecimal delta);
+//    /**
+//     * @deprecated ❌ SSOT: Không nên update balance trực tiếp. Sử dụng Transaction ledger thay thế.
+//     * Balance phải được tính từ transactions table, không phải từ Wallet entity.
+//     * @see com.mssus.app.service.BalanceCalculationService
+//     */
+//    @Deprecated(since = "SSOT refactor", forRemoval = false)
+//    @Modifying
+//    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance + :amount WHERE w.user.userId = :userId")
+//    int increasePendingBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+//
+//    /**
+//     * @deprecated ❌ SSOT: Không nên update balance trực tiếp. Sử dụng Transaction ledger thay thế.
+//     * Balance phải được tính từ transactions table, không phải từ Wallet entity.
+//     * @see com.mssus.app.service.BalanceCalculationService
+//     */
+//    @Deprecated(since = "SSOT refactor", forRemoval = false)
+//    @Modifying
+//    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance - :amount WHERE w.user.userId = :userId AND w.pendingBalance >= :amount")
+//    int decreasePendingBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+//
+//    /**
+//     * @deprecated ❌ SSOT: Không nên update balance trực tiếp. Sử dụng Transaction ledger thay thế.
+//     * Balance phải được tính từ transactions table, không phải từ Wallet entity.
+//     * @see com.mssus.app.service.BalanceCalculationService
+//     */
+//    @Deprecated(since = "SSOT refactor", forRemoval = false)
+//    @Modifying
+//    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance + :amount WHERE w.user.userId = :userId")
+//    int increaseShadowBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+//
+//    /**
+//     * @deprecated ❌ SSOT: Không nên update balance trực tiếp. Sử dụng Transaction ledger thay thế.
+//     * Balance phải được tính từ transactions table, không phải từ Wallet entity.
+//     * @see com.mssus.app.service.BalanceCalculationService
+//     */
+//    @Deprecated(since = "SSOT refactor", forRemoval = false)
+//    @Modifying
+//    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance - :amount WHERE w.user.userId = :userId AND w.shadowBalance >= :amount")
+//    int decreaseShadowBalance(@Param("userId") Integer userId, @Param("amount") BigDecimal amount);
+//
+//
+//    /**
+//     * @deprecated ❌ SSOT: Không nên update balance trực tiếp. Sử dụng Transaction ledger thay thế.
+//     * Balance phải được tính từ transactions table, không phải từ Wallet entity.
+//     * @see com.mssus.app.service.BalanceCalculationService
+//     */
+//    @Deprecated(since = "SSOT refactor", forRemoval = false)
+//    @Modifying
+//    @Query("UPDATE Wallet w SET w.shadowBalance = w.shadowBalance + :delta, w.updatedAt = CURRENT_TIMESTAMP WHERE w.user.userId = :userId")
+//    int addToAvailable(@Param("userId") Integer userId, @Param("delta") BigDecimal delta);
+//
+//    /**
+//     * @deprecated ❌ SSOT: Không nên update balance trực tiếp. Sử dụng Transaction ledger thay thế.
+//     * Balance phải được tính từ transactions table, không phải từ Wallet entity.
+//     * @see com.mssus.app.service.BalanceCalculationService
+//     */
+//    @Deprecated(since = "SSOT refactor", forRemoval = false)
+//    @Modifying
+//    @Query("UPDATE Wallet w SET w.pendingBalance = w.pendingBalance + :delta, w.updatedAt = CURRENT_TIMESTAMP WHERE w.user.userId = :userId")
+//    int addToPending(@Param("userId") Integer userId, @Param("delta") BigDecimal delta);
 
 }

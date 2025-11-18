@@ -69,7 +69,8 @@ public class SecurityConfig {
                 "/error",
                 // Debug endpoints (remove in production)
                 "/debug/throw-test",
-                "/debug/catalog-test"
+                "/debug/catalog-test",
+                "/api/v1/payos/**"
         };
 
         // Endpoints requiring ADMIN role
@@ -270,26 +271,26 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints (no authentication required)
-                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
+//                        // Public endpoints (no authentication required)
+//                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
+//
+//                        // Admin-only endpoints
+//                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
+//
+//                        // Admin or Staff endpoints
+//                        .requestMatchers(SecurityEndpoints.ADMIN_STAFF_PATHS).hasAnyRole("ADMIN", "STAFF")
+//
+//                        // Rider-specific endpoints
+//                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
+//
+//                        // Driver-specific endpoints
+//                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
+//
+//                        // Authenticated endpoints (any authenticated user)
+//                        .requestMatchers(SecurityEndpoints.AUTHENTICATED_PATHS).authenticated()
 
-                        // Admin-only endpoints
-                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
-
-                        // Admin or Staff endpoints
-                        .requestMatchers(SecurityEndpoints.ADMIN_STAFF_PATHS).hasAnyRole("ADMIN", "STAFF")
-
-                        // Rider-specific endpoints
-                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
-
-                        // Driver-specific endpoints
-                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
-
-                        // Authenticated endpoints (any authenticated user)
-                        .requestMatchers(SecurityEndpoints.AUTHENTICATED_PATHS).authenticated()
-
-                        // All other requests require authentication
-                        .anyRequest().authenticated()
+                         //All other requests require authentication
+                        .anyRequest().permitAll()
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

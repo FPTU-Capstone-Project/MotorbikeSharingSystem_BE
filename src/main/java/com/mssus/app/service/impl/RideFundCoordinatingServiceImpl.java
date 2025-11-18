@@ -3,7 +3,6 @@ package com.mssus.app.service.impl;
 import com.amazonaws.services.sns.model.NotFoundException;
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.dto.request.CreateTransactionRequest;
 import com.mssus.app.dto.request.wallet.RideCompleteSettlementRequest;
 import com.mssus.app.dto.request.wallet.RideConfirmHoldRequest;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
@@ -14,9 +13,9 @@ import com.mssus.app.entity.Wallet;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.service.BalanceCalculationService;
 import com.mssus.app.service.NotificationService;
 import com.mssus.app.service.RideFundCoordinatingService;
-import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
 import com.mssus.app.service.domain.pricing.PricingService;
 import com.mssus.app.service.domain.pricing.model.FareBreakdown;
@@ -28,7 +27,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -36,12 +34,12 @@ import java.util.UUID;
 @Slf4j
 public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingService {
     private final WalletService walletService;
-    private final TransactionService transactionService;
     private final UserRepository userRepository;
     private final PricingService pricingService;
     private final NotificationService notificationService;
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
+    private final BalanceCalculationService balanceCalculationService;  // ✅ SSOT: Calculate balance from ledger
 
     private final static String CURRENCY = "VND";
 
@@ -51,37 +49,41 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         Integer userId = request.getRiderId();
         BigDecimal amount = request.getAmount();
 
-        Wallet walletBefore = walletService.getWalletByUserId(userId);
-        if (walletBefore.getShadowBalance().compareTo(amount) < 0) {
-            throw new ValidationException("Insufficient balance for hold. Available: " + walletBefore.getShadowBalance());
+        Wallet wallet = walletService.getWalletByUserId(userId);
+        
+        // ✅ SSOT: Check balance từ ledger
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
+        BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
+        
+        if (availableBalance.compareTo(amount) < 0) {
+            throw new ValidationException("Insufficient balance for hold. Available: " + availableBalance);
         }
-
-        walletService.decreaseShadowBalance(userId, amount);
-        walletService.increasePendingBalance(userId, amount);
 
         User user = userRepository.findById(userId)
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-id"));
 
-        BigDecimal afterAvail = walletBefore.getShadowBalance().subtract(amount);
-        BigDecimal afterPending = walletBefore.getPendingBalance().add(amount);
-
-        CreateTransactionRequest txnRequest = new CreateTransactionRequest(
-            UUID.randomUUID(), TransactionType.HOLD_CREATE, TransactionDirection.INTERNAL,
-            ActorKind.USER, userId, null, amount, CURRENCY,
-            null, request.getRideRequestId(), null, TransactionStatus.SUCCESS,
-            request.getNote(), walletBefore.getShadowBalance(), afterAvail,
-            walletBefore.getPendingBalance(), afterPending
+        // ✅ SSOT: Sử dụng WalletService.holdAmount() method
+        UUID groupId = UUID.randomUUID();
+        Transaction holdTxn = walletService.holdAmount(
+            wallet.getWalletId(),
+            amount,
+            groupId,
+            request.getNote() != null ? request.getNote() : "Hold for ride request #" + request.getRideRequestId()
         );
 
-        log.info("Holding funds for user {}, amount {}", userId, amount);
+        // Calculate snapshots for audit trail
+        BigDecimal afterAvail = availableBalance.subtract(amount);
 
-        transactionService.createTransaction(txnRequest);
+        log.info("Holding funds for user {}, amount {}, groupId {}", userId, amount, groupId);
+
+        // ✅ SSOT: Transaction đã được tạo bởi WalletService.holdAmount()
+        // KHÔNG cần tạo transaction thêm nữa
 
         String riderPayloadJson = String.format(
             "{\"oldWalletBalance\": %s, \"newWalletBalance\": %s, \"capturedAmount\": %s, \"bookingId\": %d}",
-            txnRequest.beforeAvail(),
-            txnRequest.afterAvail(),
-            txnRequest.amount(),
+            availableBalance,
+            afterAvail,
+            amount,
             request.getRideRequestId()
         );
 
@@ -99,70 +101,101 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
     @Transactional
     public RideRequestSettledResponse settleRideFunds(RideCompleteSettlementRequest request, FareBreakdown fareBreakdown) {
         //1. Call Pricing Service to get settlement result
-        //2. Decrease pending balance from rider
-        //3. Increase available balance to driver
-        //4. Create 3 transactions row with same groupId
+        //2. ✅ SSOT: Tạo CAPTURE_FARE transactions (không update balance trực tiếp)
+        //3. Create 3 transactions row with same groupId
         UUID groupId = UUID.randomUUID();
 
         SettlementResult settlementResult = pricingService.settle(fareBreakdown);
-        Wallet riderWalletBefore = walletService.getWalletByUserId(request.getRiderId());
-        Wallet driverWalletBefore = walletService.getWalletByUserId(request.getDriverId());
+        Wallet riderWallet = walletService.getWalletByUserId(request.getRiderId());
+        Wallet driverWallet = walletService.getWalletByUserId(request.getDriverId());
 
         log.info("Settling ride funds for rider {}, driver {}, amount {}", request.getRiderId(),
             request.getDriverId(), settlementResult.riderPay().amount());
 
-        // Manually calculate post-transaction balances for accurate logging
-        BigDecimal riderAfterAvail = riderWalletBefore.getShadowBalance();
-        BigDecimal riderAfterPending = riderWalletBefore.getPendingBalance().subtract(settlementResult.riderPay().amount());
-        BigDecimal driverAfterAvail = driverWalletBefore.getShadowBalance().add(settlementResult.driverPayout().amount());
-        BigDecimal driverAfterPending = driverWalletBefore.getPendingBalance();
+        // ✅ SSOT: Get balances từ ledger for snapshots
+        BigDecimal riderAvailableBefore = balanceCalculationService.calculateAvailableBalance(riderWallet.getWalletId());
+        BigDecimal riderPendingBefore = balanceCalculationService.calculatePendingBalance(riderWallet.getWalletId());
+        BigDecimal driverAvailableBefore = balanceCalculationService.calculateAvailableBalance(driverWallet.getWalletId());
+        BigDecimal driverPendingBefore = balanceCalculationService.calculatePendingBalance(driverWallet.getWalletId());
 
-        CreateTransactionRequest riderPayTxnRequest = new CreateTransactionRequest(
-            groupId, TransactionType.CAPTURE_FARE, TransactionDirection.OUT,
-            ActorKind.USER, request.getRiderId(), null,
-            settlementResult.riderPay().amount(), CURRENCY,
-            request.getRideId(), null, null, TransactionStatus.SUCCESS,
-            "Rider payment for ride " + request.getRideRequestId(),
-            riderWalletBefore.getShadowBalance(), riderAfterAvail,
-            riderWalletBefore.getPendingBalance(), riderAfterPending
-        );
+        // Calculate snapshots for audit trail
+        BigDecimal riderAfterAvail = riderAvailableBefore;
+        BigDecimal riderAfterPending = riderPendingBefore.subtract(settlementResult.riderPay().amount());
+        BigDecimal driverAfterAvail = driverAvailableBefore.add(settlementResult.driverPayout().amount());
+        BigDecimal driverAfterPending = driverPendingBefore;
 
-        CreateTransactionRequest driverPayoutTxnRequest = new CreateTransactionRequest(
-            groupId, TransactionType.CAPTURE_FARE, TransactionDirection.IN,
-            ActorKind.USER, request.getDriverId(), null,
-            settlementResult.driverPayout().amount(), CURRENCY,
-            request.getRideId(), null, null, TransactionStatus.SUCCESS,
-            "Driver payout for ride " + request.getRideRequestId(),
-            driverWalletBefore.getShadowBalance(), driverAfterAvail,
-            driverWalletBefore.getPendingBalance(), driverAfterPending
-        );
+        User rider = userRepository.findById(request.getRiderId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-id"));
+        User driver = userRepository.findById(request.getDriverId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-id"));
 
-        CreateTransactionRequest commissionTxnRequest = new CreateTransactionRequest(
-            groupId, TransactionType.CAPTURE_FARE, TransactionDirection.IN,
-            ActorKind.SYSTEM, null, SystemWallet.COMMISSION,
-            settlementResult.commission().amount(), CURRENCY,
-            request.getRideId(), null, null, TransactionStatus.SUCCESS,
-            "Platform commission for ride " + request.getRideRequestId(),
-            BigDecimal.ZERO, BigDecimal.ZERO,
-            BigDecimal.ZERO, BigDecimal.ZERO
-        );
+        // ✅ SSOT: Create rider payment transaction (OUT)
+        Transaction riderPayTxn = Transaction.builder()
+            .groupId(groupId)
+            .wallet(riderWallet)  // ✅ Set wallet relationship
+            .type(TransactionType.CAPTURE_FARE)
+            .direction(TransactionDirection.OUT)
+            .actorKind(ActorKind.USER)
+            .actorUser(rider)
+            .amount(settlementResult.riderPay().amount())
+            .currency(CURRENCY)
+            .sharedRide(null)  // TODO: Set sharedRide relationship if needed
+            .status(TransactionStatus.SUCCESS)
+            .beforeAvail(riderAvailableBefore)  // Snapshot for audit
+            .afterAvail(riderAfterAvail)  // Snapshot for audit
+            .beforePending(riderPendingBefore)  // Snapshot for audit
+            .afterPending(riderAfterPending)  // Snapshot for audit
+            .note("Rider payment for ride " + request.getRideRequestId())
+            .build();
 
-        walletService.decreasePendingBalance(request.getRiderId(), settlementResult.riderPay().amount());
-        walletService.increaseShadowBalance(request.getDriverId(), settlementResult.driverPayout().amount());
+        // ✅ SSOT: Create driver payout transaction (IN)
+        Transaction driverPayoutTxn = Transaction.builder()
+            .groupId(groupId)
+            .wallet(driverWallet)  // ✅ Set wallet relationship
+            .type(TransactionType.CAPTURE_FARE)
+            .direction(TransactionDirection.IN)
+            .actorKind(ActorKind.USER)
+            .actorUser(driver)
+            .amount(settlementResult.driverPayout().amount())
+            .currency(CURRENCY)
+            .sharedRide(null)  // TODO: Set sharedRide relationship if needed
+            .status(TransactionStatus.SUCCESS)
+            .beforeAvail(driverAvailableBefore)  // Snapshot for audit
+            .afterAvail(driverAfterAvail)  // Snapshot for audit
+            .beforePending(driverPendingBefore)  // Snapshot for audit
+            .afterPending(driverAfterPending)  // Snapshot for audit
+            .note("Driver payout for ride " + request.getRideRequestId())
+            .build();
 
-        transactionService.createTransaction(riderPayTxnRequest);
-        transactionService.createTransaction(driverPayoutTxnRequest);
-        transactionService.createTransaction(commissionTxnRequest);
+        // ✅ SSOT: Create commission transaction (system)
+        Transaction commissionTxn = Transaction.builder()
+            .groupId(groupId)
+            .type(TransactionType.CAPTURE_FARE)
+            .direction(TransactionDirection.IN)
+            .actorKind(ActorKind.SYSTEM)
+            .systemWallet(SystemWallet.COMMISSION)
+            .amount(settlementResult.commission().amount())
+            .currency(CURRENCY)
+            .sharedRide(null)  // TODO: Set sharedRide relationship if needed
+            .status(TransactionStatus.SUCCESS)
+            .note("Platform commission for ride " + request.getRideRequestId())
+            .build();
+
+        transactionRepository.save(riderPayTxn);
+        transactionRepository.save(driverPayoutTxn);
+        transactionRepository.save(commissionTxn);
+
+        // ✅ SSOT: KHÔNG update wallet balance trực tiếp
+        // Balance sẽ được tính từ transactions table khi query
 
         String riderPayloadJson = String.format(
             "{\"oldWalletBalance\": %s, \"newWalletBalance\": %s, \"capturedAmount\": %s, \"bookingId\": %d}",
-            riderPayTxnRequest.beforeAvail(),
-            riderPayTxnRequest.afterAvail(),
-            riderPayTxnRequest.amount(),
+            riderAvailableBefore,
+            riderAfterAvail,
+            settlementResult.riderPay().amount(),
             request.getRideRequestId()
         );
 
-        User rider = userRepository.findById(request.getRiderId()).orElseThrow(() -> BaseDomainException.of("user.not-found.by-id"));
         notificationService.sendNotification(rider,
             NotificationType.WALLET_CAPTURE,
             "Payment Successful",
@@ -174,13 +207,12 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
 
         String driverPayloadJson = String.format(
             "{\"oldWalletBalance\": %s, \"newWalletBalance\": %s, \"capturedAmount\": %s, \"bookingId\": %d}",
-            driverPayoutTxnRequest.beforeAvail(),
-            driverPayoutTxnRequest.afterAvail(),
-            driverPayoutTxnRequest.amount(),
+            driverAvailableBefore,
+            driverAfterAvail,
+            settlementResult.driverPayout().amount(),
             request.getRideRequestId()
         );
 
-        User driver = userRepository.findById(request.getDriverId()).orElseThrow(() -> BaseDomainException.of("user.not-found.by-id"));
         notificationService.sendNotification(driver,
             NotificationType.WALLET_PAYOUT,
             "You've Been Paid",
@@ -199,6 +231,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
     @Override
     @Transactional
     public void releaseRideFunds(RideHoldReleaseRequest request) {
+        // Find the original hold transaction
         Transaction transaction = transactionRepository.findAll().stream()
             .filter(t -> t.getSharedRideRequest() != null && t.getSharedRideRequest().getSharedRideRequestId().equals(request.getRideRequestId()))
             .filter(t -> t.getActorUser() != null && t.getActorUser().getUserId().equals(request.getRiderId()))
@@ -210,49 +243,31 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         }
         UUID groupId = transaction.getGroupId();
 
-        List<Transaction> holdTransactions = transactionRepository.findByGroupIdAndStatus(groupId, TransactionStatus.SUCCESS);
-        Transaction holdTransaction = holdTransactions.stream()
-            .filter(t -> t.getType() == TransactionType.HOLD_CREATE)
-            .findFirst()
-            .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
-
-        boolean alreadyReleased = holdTransactions.stream()
-            .anyMatch(t -> t.getType() == TransactionType.HOLD_RELEASE);
-        if (alreadyReleased) {
-            throw new ValidationException("Hold has already been released for groupId: " + groupId);
-        }
-
-        BigDecimal heldAmount = holdTransaction.getAmount();
-        Integer riderId = request.getRiderId();
-
-        Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
-            .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
-
-        UUID newGroupId = UUID.randomUUID();
-
-        BigDecimal afterAvail = riderWallet.getShadowBalance().add(heldAmount);
-        BigDecimal afterPending = riderWallet.getPendingBalance().subtract(heldAmount);
-
-        CreateTransactionRequest releaseTxnRequest = new CreateTransactionRequest(
-            newGroupId, TransactionType.HOLD_RELEASE, TransactionDirection.INTERNAL,
-            ActorKind.USER, request.getRiderId(), null, heldAmount, CURRENCY,
-            null, request.getRideRequestId(), null, TransactionStatus.SUCCESS,
-            request.getNote(), riderWallet.getShadowBalance(), afterAvail,
-            riderWallet.getPendingBalance(), afterPending
+        // ✅ SSOT: Sử dụng WalletService.releaseHold() method
+        Transaction releaseTxn = walletService.releaseHold(
+            groupId,
+            request.getNote() != null ? request.getNote() : "Release hold for ride request #" + request.getRideRequestId()
         );
 
-        // Persist balance changes
-        walletService.increaseShadowBalance(riderId, heldAmount);
-        walletService.decreasePendingBalance(riderId, heldAmount);
-        log.info("Releasing held funds for rider {}, amount {}", riderId, heldAmount);
+        BigDecimal heldAmount = releaseTxn.getAmount();
+        Integer riderId = request.getRiderId();
 
-        transactionService.createTransaction(releaseTxnRequest);
+        // ✅ SSOT: Get balances từ ledger for notification payload
+        Wallet riderWallet = walletRepository.findByUser_UserId(riderId)
+            .orElseThrow(() -> new NotFoundException("Rider wallet not found"));
+        
+        BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(riderWallet.getWalletId());
+
+        log.info("Releasing held funds for rider {}, amount {}, groupId {}", riderId, heldAmount, groupId);
+
+        // ✅ SSOT: Transaction đã được tạo bởi WalletService.releaseHold()
+        // KHÔNG cần tạo transaction thêm nữa
 
         String riderPayloadJson = String.format(
             "{\"oldWalletBalance\": %s, \"newWalletBalance\": %s, \"capturedAmount\": %s, \"bookingId\": %d}",
-            releaseTxnRequest.beforeAvail(),
-            releaseTxnRequest.afterAvail(),
-            releaseTxnRequest.amount(),
+            availableBalance.subtract(heldAmount),  // Before release
+            availableBalance,  // After release
+            heldAmount,
             request.getRideRequestId()
         );
 

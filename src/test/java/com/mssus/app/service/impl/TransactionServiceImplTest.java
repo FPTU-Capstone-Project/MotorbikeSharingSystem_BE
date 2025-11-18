@@ -17,6 +17,7 @@ import com.mssus.app.mapper.TransactionMapper;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.service.BalanceCalculationService;
 import com.mssus.app.service.EmailService;
 import com.mssus.app.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +70,8 @@ class TransactionServiceImplTest {
     private WalletRepository walletRepository;
     @Mock
     private TransactionMapper transactionMapper;
+    @Mock
+    private BalanceCalculationService balanceCalculationService;
 
     @Spy
     @InjectMocks
@@ -80,12 +83,11 @@ class TransactionServiceImplTest {
     void should_createTopupTransactions_when_requestValid() {
         doReturn(UUID.fromString("11111111-1111-1111-1111-111111111111"))
             .when(service).generateGroupId();
-        doReturn(List.of()).when(transactionRepository)
-            .findByPspRefAndStatus(PSP_REF, TransactionStatus.PENDING);
+        doReturn(Optional.empty()).when(transactionRepository)
+            .findByIdempotencyKey(anyString());
 
         Wallet wallet = Wallet.builder()
-            .shadowBalance(BigDecimal.valueOf(500_000))
-            .pendingBalance(BigDecimal.valueOf(100_000))
+            .walletId(1)
             .build();
         doReturn(Optional.of(wallet)).when(walletRepository).findByUser_UserId(7);
 
@@ -107,23 +109,38 @@ class TransactionServiceImplTest {
         assertThat(savedTransactions).extracting(Transaction::getType)
             .containsExactly(TransactionType.TOPUP, TransactionType.TOPUP);
         assertThat(savedTransactions.get(1).getActorUser()).isEqualTo(user);
-        assertThat(savedTransactions.get(1).getAfterPending())
-            .isEqualTo(wallet.getPendingBalance().add(AMOUNT));
+        assertThat(savedTransactions.get(1).getWallet()).isEqualTo(wallet);
+        assertThat(savedTransactions.get(1).getIdempotencyKey()).isNotNull();
 
-        verify(walletService).increasePendingBalance(7, AMOUNT);
+        verify(transactionRepository).findByIdempotencyKey(anyString());
         verifyNoMoreInteractions(walletService);
     }
 
     @Test
     void should_throwValidationException_when_initTopupDuplicatePspRef() {
-        doReturn(List.of(new Transaction())).when(transactionRepository)
-            .findByPspRefAndStatus(PSP_REF, TransactionStatus.PENDING);
+        UUID existingGroupId = UUID.randomUUID();
+        Transaction existingTxn = Transaction.builder()
+            .txnId(1)
+            .groupId(existingGroupId)
+            .actorKind(ActorKind.USER)
+            .idempotencyKey("TOPUP_" + PSP_REF + "_" + AMOUNT)
+            .build();
+        Transaction systemTxn = Transaction.builder()
+            .txnId(2)
+            .groupId(existingGroupId)
+            .actorKind(ActorKind.SYSTEM)
+            .build();
+        doReturn(Optional.of(existingTxn)).when(transactionRepository)
+            .findByIdempotencyKey(anyString());
+        doReturn(List.of(systemTxn, existingTxn)).when(transactionRepository).findByGroupId(existingGroupId);
 
-        assertThatThrownBy(() -> service.initTopup(5, AMOUNT, PSP_REF, "duplicate"))
-            .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("already exists");
+        List<Transaction> result = service.initTopup(5, AMOUNT, PSP_REF, "duplicate");
 
-        verify(transactionRepository).findByPspRefAndStatus(PSP_REF, TransactionStatus.PENDING);
+        // Should return existing transactions (idempotency)
+        assertThat(result)
+            .containsExactly(systemTxn, existingTxn);
+        verify(transactionRepository).findByIdempotencyKey(anyString());
+        verify(transactionRepository).findByGroupId(existingGroupId);
         verifyNoMoreInteractions(transactionRepository);
         verifyNoInteractions(walletService, walletRepository, userRepository);
     }
@@ -131,6 +148,9 @@ class TransactionServiceImplTest {
     @Test
     void should_updateTransactionsAndBalances_when_handleTopupSuccess() {
         User user = createUser(7, "user@example.com");
+        Wallet wallet = Wallet.builder()
+            .walletId(1)
+            .build();
         Transaction systemTxn = Transaction.builder()
             .txnId(10)
             .actorKind(ActorKind.SYSTEM)
@@ -141,44 +161,36 @@ class TransactionServiceImplTest {
             .txnId(11)
             .actorKind(ActorKind.USER)
             .actorUser(user)
+            .wallet(wallet)
             .amount(AMOUNT)
             .status(TransactionStatus.PENDING)
             .build();
         doReturn(List.of(systemTxn, userTxn)).when(transactionRepository)
             .findByPspRefAndStatus(PSP_REF, TransactionStatus.PENDING);
 
-        Wallet walletBefore = Wallet.builder()
-            .shadowBalance(BigDecimal.valueOf(600_000))
-            .pendingBalance(BigDecimal.valueOf(150_000))
-            .build();
-        Wallet walletAfter = Wallet.builder()
-            .shadowBalance(walletBefore.getShadowBalance().add(AMOUNT))
-            .pendingBalance(walletBefore.getPendingBalance().subtract(AMOUNT))
-            .build();
-        org.mockito.Mockito.when(walletRepository.findByUser_UserId(user.getUserId()))
-            .thenReturn(Optional.of(walletBefore), Optional.of(walletAfter));
+        BigDecimal newBalance = BigDecimal.valueOf(750_000);
+        doReturn(Optional.of(wallet)).when(walletRepository).findByUser_UserId(user.getUserId());
+        doReturn(newBalance).when(balanceCalculationService).calculateAvailableBalance(1);
         doReturnSavingTransactions();
 
         doReturn(Optional.of(user)).when(userRepository).findById(user.getUserId());
-
 
         service.handleTopupSuccess(PSP_REF);
 
         assertThat(systemTxn.getStatus()).isEqualTo(TransactionStatus.SUCCESS);
         assertThat(userTxn.getStatus()).isEqualTo(TransactionStatus.SUCCESS);
-        assertThat(userTxn.getAfterAvail()).isEqualTo(walletBefore.getShadowBalance().add(AMOUNT));
-        assertThat(userTxn.getAfterPending()).isEqualTo(walletBefore.getPendingBalance().subtract(AMOUNT));
 
         verify(transactionRepository).findByPspRefAndStatus(PSP_REF, TransactionStatus.PENDING);
         verify(transactionRepository, times(2)).save(any(Transaction.class));
-        verify(walletService).transferPendingToAvailable(user.getUserId(), AMOUNT);
+        verify(balanceCalculationService).calculateAvailableBalance(1);
         verify(emailService).sendTopUpSuccessEmail(
             eq(user.getEmail()),
             eq(user.getFullName()),
             eq(AMOUNT),
             anyString(),
-            eq(walletAfter.getShadowBalance())
+            eq(newBalance)
         );
+        verifyNoInteractions(walletService);
     }
 
     @Test
@@ -219,7 +231,7 @@ class TransactionServiceImplTest {
 
         assertThat(userTxn.getStatus()).isEqualTo(TransactionStatus.FAILED);
         assertThat(userTxn.getNote()).contains("Failed: Bank declined");
-        verify(walletService).decreasePendingBalance(user.getUserId(), AMOUNT);
+        verify(transactionRepository, times(2)).save(any(Transaction.class));
         verify(emailService).sendPaymentFailedEmail(
             eq(user.getEmail()),
             eq(user.getFullName()),
@@ -227,6 +239,7 @@ class TransactionServiceImplTest {
             anyString(),
             eq("Bank declined")
         );
+        verifyNoInteractions(walletService);
     }
 
     @Test

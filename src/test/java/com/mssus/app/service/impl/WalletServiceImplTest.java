@@ -18,6 +18,7 @@ import com.mssus.app.entity.Wallet;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.service.BalanceCalculationService;
 import com.mssus.app.service.PayOSService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,6 +63,9 @@ class WalletServiceImplTest {
     private PayOSService payOSService;
 
     @Mock
+    private BalanceCalculationService balanceCalculationService;
+
+    @Mock
     private Authentication authentication;
 
     @InjectMocks
@@ -94,256 +98,118 @@ class WalletServiceImplTest {
         when(walletRepository.findByUser_UserId(1)).thenReturn(Optional.of(testWallet));
         when(walletRepository.existsByUserId(1)).thenReturn(true);
         when(walletRepository.save(any(Wallet.class))).thenReturn(testWallet);
-        when(walletRepository.increasePendingBalance(anyInt(), any(BigDecimal.class))).thenReturn(1);
-        when(walletRepository.decreasePendingBalance(anyInt(), any(BigDecimal.class))).thenReturn(1);
-        when(walletRepository.increaseShadowBalance(anyInt(), any(BigDecimal.class))).thenReturn(1);
-        when(walletRepository.decreaseShadowBalance(anyInt(), any(BigDecimal.class))).thenReturn(1);
         when(transactionRepository.findByActorUserIdOrderByCreatedAtDesc(anyInt())).thenReturn(List.of(testTransaction));
         when(transactionRepository.findByUserIdAndStatus(anyInt(), any(TransactionStatus.class))).thenReturn(List.of(testTransaction));
+        
+        // ✅ SSOT: Mock BalanceCalculationService
+        when(balanceCalculationService.calculateAvailableBalance(1))
+            .thenReturn(new BigDecimal("100000"));
+        when(balanceCalculationService.calculatePendingBalance(1))
+            .thenReturn(new BigDecimal("20000"));
     }
 
     // ========== BALANCE UPDATE TESTS ==========
+    // ❌ DEPRECATED: These tests are for methods that have been removed in SSOT refactor
+    // Balance updates should now be done through Transaction ledger, not direct wallet updates
+    // All tests below have been commented out as they test deprecated methods:
+    // - updateWalletBalanceOnTopUp
+    // - increasePendingBalance / decreasePendingBalance
+    // - increaseShadowBalance / decreaseShadowBalance
+    // - transferPendingToAvailable
 
+    /*
     @Test
     @DisplayName("should_updateWalletBalanceOnTopUp_when_validInput")
     void should_updateWalletBalanceOnTopUp_when_validInput() {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal amount = new BigDecimal("100000");
-        BigDecimal initialShadowBalance = testWallet.getShadowBalance();
-        BigDecimal initialTotalToppedUp = testWallet.getTotalToppedUp();
-
-        // Act
-        walletService.updateWalletBalanceOnTopUp(userId, amount);
-
-        // Assert
-        assertThat(testWallet.getShadowBalance()).isEqualTo(initialShadowBalance.add(amount));
-        assertThat(testWallet.getTotalToppedUp()).isEqualTo(initialTotalToppedUp.add(amount));
-
-        verify(walletRepository).findByUser_UserId(userId);
-        verify(walletRepository).save(testWallet);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_throwNotFoundException_when_walletNotFoundForTopUp")
     void should_throwNotFoundException_when_walletNotFoundForTopUp() {
-        // Arrange
-        Integer userId = 999;
-        BigDecimal amount = new BigDecimal("100000");
-        when(walletRepository.findByUser_UserId(userId)).thenReturn(Optional.empty());
-
-        // Act & Assert
-        assertThatThrownBy(() -> walletService.updateWalletBalanceOnTopUp(userId, amount))
-            .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user: " + userId);
-
-        verify(walletRepository).findByUser_UserId(userId);
-        verify(walletRepository, never()).save(any(Wallet.class));
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_increasePendingBalance_when_validInput")
     void should_increasePendingBalance_when_validInput() {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal amount = new BigDecimal("50000");
-
-        // Act
-        walletService.increasePendingBalance(userId, amount);
-
-        // Assert
-        verify(walletRepository).increasePendingBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_throwNotFoundException_when_increasePendingBalanceFails")
     void should_throwNotFoundException_when_increasePendingBalanceFails() {
-        // Arrange
-        Integer userId = 999;
-        BigDecimal amount = new BigDecimal("50000");
-        when(walletRepository.increasePendingBalance(userId, amount)).thenReturn(0);
-
-        // Act & Assert
-        assertThatThrownBy(() -> walletService.increasePendingBalance(userId, amount))
-            .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user or update failed: " + userId);
-
-        verify(walletRepository).increasePendingBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_decreasePendingBalance_when_validInput")
     void should_decreasePendingBalance_when_validInput() {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal amount = new BigDecimal("30000");
-
-        // Act
-        walletService.decreasePendingBalance(userId, amount);
-
-        // Assert
-        verify(walletRepository).decreasePendingBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_throwValidationException_when_decreasePendingBalanceFails")
     void should_throwValidationException_when_decreasePendingBalanceFails() {
-        // Arrange
-        Integer userId = 999;
-        BigDecimal amount = new BigDecimal("30000");
-        when(walletRepository.decreasePendingBalance(userId, amount)).thenReturn(0);
-
-        // Act & Assert
-        assertThatThrownBy(() -> walletService.decreasePendingBalance(userId, amount))
-            .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Failed to decrease pending balance for user: " + userId);
-
-        verify(walletRepository).decreasePendingBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
-
-    // ========== SHADOW BALANCE TESTS ==========
 
     @Test
     @DisplayName("should_increaseShadowBalance_when_validInput")
     void should_increaseShadowBalance_when_validInput() {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal amount = new BigDecimal("75000");
-
-        // Act
-        walletService.increaseShadowBalance(userId, amount);
-
-        // Assert
-        verify(walletRepository).increaseShadowBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_throwNotFoundException_when_increaseShadowBalanceFails")
     void should_throwNotFoundException_when_increaseShadowBalanceFails() {
-        // Arrange
-        Integer userId = 999;
-        BigDecimal amount = new BigDecimal("75000");
-        when(walletRepository.increaseShadowBalance(userId, amount)).thenReturn(0);
-
-        // Act & Assert
-        assertThatThrownBy(() -> walletService.increaseShadowBalance(userId, amount))
-            .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user or update failed: " + userId);
-
-        verify(walletRepository).increaseShadowBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_decreaseShadowBalance_when_validInput")
     void should_decreaseShadowBalance_when_validInput() {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal amount = new BigDecimal("25000");
-
-        // Act
-        walletService.decreaseShadowBalance(userId, amount);
-
-        // Assert
-        verify(walletRepository).decreaseShadowBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_throwValidationException_when_decreaseShadowBalanceFails")
     void should_throwValidationException_when_decreaseShadowBalanceFails() {
-        // Arrange
-        Integer userId = 999;
-        BigDecimal amount = new BigDecimal("25000");
-        when(walletRepository.decreaseShadowBalance(userId, amount)).thenReturn(0);
-
-        // Act & Assert
-        assertThatThrownBy(() -> walletService.decreaseShadowBalance(userId, amount))
-            .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Failed to decrease shadow balance for user: " + userId);
-
-        verify(walletRepository).decreaseShadowBalance(userId, amount);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
-
-    // ========== TRANSFER TESTS ==========
 
     @Test
     @DisplayName("should_transferPendingToAvailable_when_validInput")
     void should_transferPendingToAvailable_when_validInput() {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal amount = new BigDecimal("40000");
-        BigDecimal initialPendingBalance = testWallet.getPendingBalance();
-        BigDecimal initialShadowBalance = testWallet.getShadowBalance();
-        BigDecimal initialTotalToppedUp = testWallet.getTotalToppedUp();
-
-        // Act
-        walletService.transferPendingToAvailable(userId, amount);
-
-        // Assert
-        assertThat(testWallet.getPendingBalance()).isEqualTo(initialPendingBalance.subtract(amount));
-        assertThat(testWallet.getShadowBalance()).isEqualTo(initialShadowBalance.add(amount));
-        assertThat(testWallet.getTotalToppedUp()).isEqualTo(initialTotalToppedUp.add(amount));
-
-        verify(walletRepository).findByUser_UserId(userId);
-        verify(walletRepository).save(testWallet);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_transferPendingToAvailable_when_shadowBalanceIsNull")
     void should_transferPendingToAvailable_when_shadowBalanceIsNull() {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal amount = new BigDecimal("40000");
-        testWallet.setShadowBalance(null);
-        BigDecimal initialPendingBalance = testWallet.getPendingBalance();
-        BigDecimal initialTotalToppedUp = testWallet.getTotalToppedUp();
-
-        // Act
-        walletService.transferPendingToAvailable(userId, amount);
-
-        // Assert
-        assertThat(testWallet.getPendingBalance()).isEqualTo(initialPendingBalance.subtract(amount));
-        assertThat(testWallet.getShadowBalance()).isEqualTo(amount); // Should be set to amount since it was null
-        assertThat(testWallet.getTotalToppedUp()).isEqualTo(initialTotalToppedUp.add(amount));
-
-        verify(walletRepository).findByUser_UserId(userId);
-        verify(walletRepository).save(testWallet);
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
 
     @Test
     @DisplayName("should_throwNotFoundException_when_walletNotFoundForTransfer")
     void should_throwNotFoundException_when_walletNotFoundForTransfer() {
-        // Arrange
-        Integer userId = 999;
-        BigDecimal amount = new BigDecimal("40000");
-        when(walletRepository.findByUser_UserId(userId)).thenReturn(Optional.empty());
-
-        // Act & Assert
-        assertThatThrownBy(() -> walletService.transferPendingToAvailable(userId, amount))
-            .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("Wallet not found for user: " + userId);
-
-        verify(walletRepository).findByUser_UserId(userId);
-        verify(walletRepository, never()).save(any(Wallet.class));
-        verifyNoMoreInteractions(walletRepository);
+        // ... test code ...
     }
+    */
 
     // ========== GET BALANCE TESTS ==========
 
     @Test
     @DisplayName("should_getBalance_when_validAuthentication")
     void should_getBalance_when_validAuthentication() {
+        // ✅ SSOT: Mock balance from ledger
+        BigDecimal availableBalance = new BigDecimal("100000");
+        BigDecimal pendingBalance = new BigDecimal("20000");
+        when(balanceCalculationService.calculateAvailableBalance(testWallet.getWalletId()))
+            .thenReturn(availableBalance);
+        when(balanceCalculationService.calculatePendingBalance(testWallet.getWalletId()))
+            .thenReturn(pendingBalance);
+
         // Act
         WalletResponse result = walletService.getBalance(authentication);
 
@@ -351,8 +217,8 @@ class WalletServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result.getWalletId()).isEqualTo(testWallet.getWalletId());
         assertThat(result.getUserId()).isEqualTo(testUser.getUserId());
-        assertThat(result.getAvailableBalance()).isEqualTo(testWallet.getShadowBalance());
-        assertThat(result.getPendingBalance()).isEqualTo(testWallet.getPendingBalance());
+        assertThat(result.getAvailableBalance()).isEqualTo(availableBalance);  // ✅ SSOT: From ledger
+        assertThat(result.getPendingBalance()).isEqualTo(pendingBalance);  // ✅ SSOT: From ledger
         assertThat(result.getTotalToppedUp()).isEqualTo(testWallet.getTotalToppedUp());
         assertThat(result.getTotalSpent()).isEqualTo(testWallet.getTotalSpent());
         assertThat(result.getIsActive()).isEqualTo(testWallet.getIsActive());
@@ -360,7 +226,10 @@ class WalletServiceImplTest {
         verify(authentication).getName();
         verify(userRepository).findByEmail("test@example.com");
         verify(walletRepository).findByUser_UserId(testUser.getUserId());
-        verifyNoMoreInteractions(authentication, userRepository, walletRepository);
+        // ✅ SSOT: Verify balance is calculated from ledger
+        verify(balanceCalculationService).calculateAvailableBalance(testWallet.getWalletId());
+        verify(balanceCalculationService).calculatePendingBalance(testWallet.getWalletId());
+        verifyNoMoreInteractions(authentication, userRepository, walletRepository, balanceCalculationService);
     }
 
     @Test
@@ -456,7 +325,10 @@ class WalletServiceImplTest {
     }
 
     // ========== INITIATE TOP UP TESTS ==========
+    // ❌ DEPRECATED: initiateTopUp method has been moved to TopUpService
+    // These tests should be moved to TopUpServiceImplTest
 
+    /*
     @Test
     @DisplayName("should_initiateTopUp_when_validRequest")
     void should_initiateTopUp_when_validRequest() throws Exception {
@@ -550,6 +422,7 @@ class WalletServiceImplTest {
             testTopUpRequest.getCancelUrl()
         );
     }
+    */
 
     // ========== INITIATE PAYOUT TESTS ==========
 
@@ -577,12 +450,16 @@ class WalletServiceImplTest {
     void should_throwValidationException_when_insufficientBalance() {
         // Arrange
         testPayoutRequest.setAmount(new BigDecimal("1000000")); // More than available balance
-        testWallet.setShadowBalance(new BigDecimal("500000"));
+
+        // ✅ SSOT: Mock insufficient balance from ledger
+        BigDecimal insufficientBalance = new BigDecimal("30000");
+        when(balanceCalculationService.calculateAvailableBalance(testWallet.getWalletId()))
+            .thenReturn(insufficientBalance);
 
         // Act & Assert
         assertThatThrownBy(() -> walletService.initiatePayout(testPayoutRequest, authentication))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Insufficient balance. Available: " + testWallet.getShadowBalance() + ", Required: " + testPayoutRequest.getAmount());
+            .hasMessageContaining("Insufficient balance. Available: " + insufficientBalance + ", Required: " + testPayoutRequest.getAmount());
 
         verify(authentication).getName();
         verify(userRepository).findByEmail("test@example.com");
@@ -610,13 +487,21 @@ class WalletServiceImplTest {
     @Test
     @DisplayName("should_getDriverEarnings_when_validAuthentication")
     void should_getDriverEarnings_when_validAuthentication() {
+        // ✅ SSOT: Mock balance from ledger
+        BigDecimal availableBalance = new BigDecimal("100000");
+        BigDecimal pendingBalance = new BigDecimal("20000");
+        when(balanceCalculationService.calculateAvailableBalance(testWallet.getWalletId()))
+            .thenReturn(availableBalance);
+        when(balanceCalculationService.calculatePendingBalance(testWallet.getWalletId()))
+            .thenReturn(pendingBalance);
+
         // Act
         DriverEarningsResponse result = walletService.getDriverEarnings(authentication);
 
         // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getAvailableBalance()).isEqualTo(testWallet.getShadowBalance());
-        assertThat(result.getPendingEarnings()).isEqualTo(testWallet.getPendingBalance());
+        assertThat(result.getAvailableBalance()).isEqualTo(availableBalance);  // ✅ SSOT: From ledger
+        assertThat(result.getPendingEarnings()).isEqualTo(pendingBalance);  // ✅ SSOT: From ledger
         assertThat(result.getTotalEarnings()).isEqualByComparingTo(testTransaction.getAmount());
         assertThat(result.getTotalTrips()).isEqualTo(1);
         assertThat(result.getMonthEarnings()).isEqualByComparingTo(testTransaction.getAmount());
@@ -628,6 +513,9 @@ class WalletServiceImplTest {
         verify(userRepository).findByEmail("test@example.com");
         verify(walletRepository).findByUser_UserId(testUser.getUserId());
         verify(transactionRepository).findByActorUserIdOrderByCreatedAtDesc(testUser.getUserId());
+        // ✅ SSOT: Verify balance is calculated from ledger
+        verify(balanceCalculationService).calculateAvailableBalance(testWallet.getWalletId());
+        verify(balanceCalculationService).calculatePendingBalance(testWallet.getWalletId());
     }
 
     @Test
@@ -635,14 +523,22 @@ class WalletServiceImplTest {
     void should_getDriverEarnings_when_noTransactions() {
         // Arrange
         when(transactionRepository.findByActorUserIdOrderByCreatedAtDesc(testUser.getUserId())).thenReturn(List.of());
+        
+        // ✅ SSOT: Mock balance from ledger
+        BigDecimal availableBalance = new BigDecimal("100000");
+        BigDecimal pendingBalance = new BigDecimal("20000");
+        when(balanceCalculationService.calculateAvailableBalance(testWallet.getWalletId()))
+            .thenReturn(availableBalance);
+        when(balanceCalculationService.calculatePendingBalance(testWallet.getWalletId()))
+            .thenReturn(pendingBalance);
 
         // Act
         DriverEarningsResponse result = walletService.getDriverEarnings(authentication);
 
         // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getAvailableBalance()).isEqualTo(testWallet.getShadowBalance());
-        assertThat(result.getPendingEarnings()).isEqualTo(testWallet.getPendingBalance());
+        assertThat(result.getAvailableBalance()).isEqualTo(availableBalance);  // ✅ SSOT: From ledger
+        assertThat(result.getPendingEarnings()).isEqualTo(pendingBalance);  // ✅ SSOT: From ledger
         assertThat(result.getTotalEarnings()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(result.getTotalTrips()).isEqualTo(0);
         assertThat(result.getMonthEarnings()).isEqualByComparingTo(BigDecimal.ZERO);
@@ -651,6 +547,9 @@ class WalletServiceImplTest {
         assertThat(result.getTotalCommissionPaid()).isEqualByComparingTo(BigDecimal.ZERO);
 
         verify(transactionRepository).findByActorUserIdOrderByCreatedAtDesc(testUser.getUserId());
+        // ✅ SSOT: Verify balance is calculated from ledger
+        verify(balanceCalculationService).calculateAvailableBalance(testWallet.getWalletId());
+        verify(balanceCalculationService).calculatePendingBalance(testWallet.getWalletId());
     }
 
     // ========== CREATE WALLET FOR USER TESTS ==========
@@ -679,8 +578,8 @@ class WalletServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result.getWalletId()).isEqualTo(2);
         assertThat(result.getUser().getUserId()).isEqualTo(userId);
-        assertThat(result.getShadowBalance()).isEqualTo(BigDecimal.ZERO);
-        assertThat(result.getPendingBalance()).isEqualTo(BigDecimal.ZERO);
+        // ✅ SSOT: Wallet entity không còn shadowBalance/pendingBalance fields
+        // Balance sẽ được tính từ Transaction ledger khi query
         assertThat(result.getTotalToppedUp()).isEqualTo(BigDecimal.ZERO);
         assertThat(result.getTotalSpent()).isEqualTo(BigDecimal.ZERO);
         assertThat(result.getIsActive()).isTrue();
@@ -873,25 +772,15 @@ class WalletServiceImplTest {
 
     // ========== PARAMETERIZED TESTS ==========
 
+    // ❌ DEPRECATED: updateWalletBalanceOnTopUp method removed in SSOT refactor
+    /*
     @ParameterizedTest
     @MethodSource("amountProvider")
     @DisplayName("should_updateWalletBalanceOnTopUp_when_differentAmounts")
     void should_updateWalletBalanceOnTopUp_when_differentAmounts(BigDecimal amount) {
-        // Arrange
-        Integer userId = 1;
-        BigDecimal initialShadowBalance = testWallet.getShadowBalance();
-        BigDecimal initialTotalToppedUp = testWallet.getTotalToppedUp();
-
-        // Act
-        walletService.updateWalletBalanceOnTopUp(userId, amount);
-
-        // Assert
-        assertThat(testWallet.getShadowBalance()).isEqualTo(initialShadowBalance.add(amount));
-        assertThat(testWallet.getTotalToppedUp()).isEqualTo(initialTotalToppedUp.add(amount));
-
-        verify(walletRepository).findByUser_UserId(userId);
-        verify(walletRepository).save(testWallet);
+        // ... test code ...
     }
+    */
 
     @ParameterizedTest
     @MethodSource("amountProvider")
@@ -899,15 +788,22 @@ class WalletServiceImplTest {
     void should_hasSufficientBalance_when_differentAmounts(BigDecimal amount) {
         // Arrange
         Integer userId = 1;
+        BigDecimal availableBalance = new BigDecimal("100000");
+        
+        // ✅ SSOT: Mock balance from ledger
+        when(balanceCalculationService.calculateAvailableBalance(testWallet.getWalletId()))
+            .thenReturn(availableBalance);
 
         // Act
         boolean result = walletService.hasSufficientBalance(userId, amount);
 
         // Assert
-        boolean expected = testWallet.getShadowBalance().compareTo(amount) >= 0;
+        boolean expected = availableBalance.compareTo(amount) >= 0;  // ✅ SSOT: Compare with ledger balance
         assertThat(result).isEqualTo(expected);
 
         verify(walletRepository).findByUser_UserId(userId);
+        // ✅ SSOT: Verify balance is calculated from ledger
+        verify(balanceCalculationService).calculateAvailableBalance(testWallet.getWalletId());
     }
 
     // ========== HELPER METHODS ==========
@@ -925,8 +821,8 @@ class WalletServiceImplTest {
         return Wallet.builder()
             .walletId(1)
             .user(testUser)
-            .shadowBalance(new BigDecimal("100000"))
-            .pendingBalance(new BigDecimal("20000"))
+            // ✅ SSOT: shadowBalance và pendingBalance không còn trong Wallet entity
+            // Balance sẽ được tính từ Transaction ledger
             .totalToppedUp(new BigDecimal("150000"))
             .totalSpent(new BigDecimal("50000"))
             .isActive(true)

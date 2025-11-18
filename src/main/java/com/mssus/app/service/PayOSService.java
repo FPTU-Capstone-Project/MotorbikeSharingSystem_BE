@@ -1,12 +1,31 @@
 package com.mssus.app.service;
 
-import com.mssus.app.entity.Transaction;
 import jakarta.annotation.Nonnull;
 import vn.payos.type.CheckoutResponseData;
 
 import java.math.BigDecimal;
 
 public interface PayOSService {
-    CheckoutResponseData createTopUpPaymentLink(Integer userId, BigDecimal amount, @Nonnull String description,String returnUrl,String cancelUrl) throws Exception;
-    void handleWebhook(String payload);
+    /**
+     * ✅ Chỉ tạo PayOS payment link, KHÔNG tạo transaction
+     */
+    CheckoutResponseData createTopUpPaymentLink(
+        Integer userId,
+        BigDecimal amount,
+        String email,
+        @Nonnull String description,
+        String returnUrl,
+        String cancelUrl
+    ) throws Exception;
+    
+    /**
+     * ✅ Parse webhook payload, KHÔNG xử lý transaction
+     * @return WebhookPayload với orderCode, status, amount
+     */
+    WebhookPayload parseWebhook(String payload);
+    
+    /**
+     * DTO cho parsed webhook data
+     */
+    record WebhookPayload(String orderCode, String status, BigDecimal amount) {}
 }

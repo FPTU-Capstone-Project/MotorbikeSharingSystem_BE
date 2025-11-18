@@ -12,23 +12,23 @@ import org.springframework.security.core.Authentication;
 import java.math.BigDecimal;
 
 public interface WalletService {
-    void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount);
-
-    void increasePendingBalance(Integer userId, BigDecimal amount);
-
-    void decreasePendingBalance(Integer userId, BigDecimal amount);
-
-    void increaseShadowBalance(Integer userId, BigDecimal amount);
-
-    void decreaseShadowBalance(Integer userId, BigDecimal amount);
-
-    void transferPendingToAvailable(Integer userId, BigDecimal amount);
+//    void updateWalletBalanceOnTopUp(Integer userId, BigDecimal amount);
+//
+//    void increasePendingBalance(Integer userId, BigDecimal amount);
+//
+//    void decreasePendingBalance(Integer userId, BigDecimal amount);
+//
+//    void increaseShadowBalance(Integer userId, BigDecimal amount);
+//
+//    void decreaseShadowBalance(Integer userId, BigDecimal amount);
+//
+//    void transferPendingToAvailable(Integer userId, BigDecimal amount);
 
     WalletResponse getBalance(Authentication authentication);
 
     Wallet getWalletByUserId(Integer userId);
 
-    TopUpInitResponse initiateTopUp(TopUpInitRequest request, Authentication authentication);
+    // ✅ initiateTopUp đã được move sang TopUpService để tách PayOS integration
 
     PayoutInitResponse initiatePayout(PayoutInitRequest request, Authentication authentication);
 
@@ -45,4 +45,53 @@ public interface WalletService {
     boolean hasSufficientBalance(Integer userId, BigDecimal amount);
 
     void reconcileWalletBalance(Integer userId);
+
+    // ========== SSOT Methods ==========
+    
+    /**
+     * Tạo top-up transaction (SSOT)
+     * @param userId User ID
+     * @param amount Amount to top-up
+     * @param pspRef Payment service provider reference (orderCode)
+     * @param idempotencyKey Idempotency key để prevent duplicates
+     * @param status Transaction status (PENDING or SUCCESS)
+     * @return Created transaction
+     */
+    com.mssus.app.entity.Transaction createTopUpTransaction(
+        Integer userId, 
+        BigDecimal amount, 
+        String pspRef, 
+        String idempotencyKey, 
+        com.mssus.app.common.enums.TransactionStatus status
+    );
+    
+    /**
+     * Complete top-up transaction (update status từ PENDING -> SUCCESS)
+     */
+    void completeTopUpTransaction(Integer txnId);
+    
+    /**
+     * Fail top-up transaction (update status từ PENDING -> FAILED)
+     */
+    void failTopUpTransaction(Integer txnId, String reason);
+    
+    /**
+     * Find transaction by idempotency key
+     */
+    java.util.Optional<com.mssus.app.entity.Transaction> findTransactionByIdempotencyKey(String idempotencyKey);
+    
+    /**
+     * Hold amount: Create HOLD_CREATE transaction
+     */
+    com.mssus.app.entity.Transaction holdAmount(
+        Integer walletId, 
+        BigDecimal amount, 
+        java.util.UUID groupId, 
+        String reason
+    );
+    
+    /**
+     * Release hold: Create HOLD_RELEASE transaction
+     */
+    com.mssus.app.entity.Transaction releaseHold(java.util.UUID groupId, String reason);
 }
