@@ -74,6 +74,8 @@ public class TransactionServiceImpl implements TransactionService {
         // ✅ SSOT: Create system transaction (no wallet, system wallet only)
         // ✅ FIX P0-DOUBLE_ENTRY: System.MASTER OUT (Debit) để balance với User IN (Credit)
         // Logic: External source (PSP) → System.MASTER OUT (system gives to user) → User IN
+        // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint violation)
+        // pspRef chỉ cần ở User transaction (vì đó là reference từ PSP cho user payment)
         Transaction systemOutflow = Transaction.builder()
                 .type(TransactionType.TOPUP)
                 .groupId(groupId)
@@ -83,7 +85,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .amount(amount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)
+                .pspRef(null)  // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint)
                 .note("PSP Inflow - System transfers to user - " + description)
                 .build();
 
@@ -599,6 +601,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         // ✅ FIX P0-DOUBLE_ENTRY: Create system payout transaction để balance
         // User OUT + System.MASTER OUT = Balanced (cả 2 đều OUT, money leaves system)
+        // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint violation)
         Transaction systemPayoutTransaction = Transaction.builder()
                 .groupId(groupId)
                 .type(TransactionType.PAYOUT)
@@ -608,7 +611,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .amount(amount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)
+                .pspRef(null)  // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint)
                 .note("System payout to external - " + description)
                 .build();
 
@@ -758,6 +761,7 @@ public class TransactionServiceImpl implements TransactionService {
             // ✅ FIX P0-REFUND: Create system refund transaction (reversal of original system OUT)
             // Original PAYOUT: System.MASTER OUT → Refund: System.MASTER IN (reversal)
             // Logic: System phải nhận lại tiền từ user (reversal của original OUT)
+            // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint violation)
             Transaction systemRefundTxn = Transaction.builder()
                 .groupId(refundGroupId)
                 .type(TransactionType.REFUND)
@@ -767,7 +771,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .amount(amount)
                 .currency("VND")
                 .status(TransactionStatus.SUCCESS)
-                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .pspRef(null)  // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint)
                 .note("System refund for failed payout (reversal of groupId: " + originalGroupId + "): " + pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
             
@@ -962,6 +966,7 @@ public class TransactionServiceImpl implements TransactionService {
         // ✅ FIX P0-REFUND: Create system refund transaction (reversal of original system OUT)
         // Original TOPUP: System.MASTER OUT → Refund: System.MASTER IN (reversal)
         // Logic: System phải nhận lại tiền từ user (reversal của original OUT)
+        // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint violation)
         Transaction systemCredit = Transaction.builder()
                 .type(TransactionType.REFUND)
                 .groupId(refundGroupId)
@@ -971,7 +976,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .pspRef(null)  // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint)
                 .note("System refund credit (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
@@ -1058,6 +1063,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         // ✅ FIX P0-REFUND: Create system refund transaction (reversal of original system OUT)
         // Original: System.MASTER OUT → Refund: System.MASTER IN (reversal)
+        // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint violation)
         Transaction systemCredit = Transaction.builder()
                 .type(TransactionType.REFUND)
                 .groupId(refundGroupId)
@@ -1067,7 +1073,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .amount(refundAmount)
                 .currency("VND")
                 .status(TransactionStatus.PENDING)
-                .pspRef(pspRef)  // ✅ FIX P0-REFUND: Ledger correlation
+                .pspRef(null)  // ✅ FIX: System transaction không có pspRef (tránh UNIQUE constraint)
                 .note("System refund credit (reversal of groupId: " + originalGroupId + ") - " + description)  // ✅ FIX P0-REFUND: Ledger correlation
                 .build();
 
