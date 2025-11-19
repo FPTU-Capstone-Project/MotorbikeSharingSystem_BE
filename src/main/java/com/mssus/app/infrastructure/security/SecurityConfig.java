@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -71,6 +72,11 @@ public class SecurityConfig {
                 "/debug/throw-test",
                 "/debug/catalog-test",
                 "/api/v1/payos/**"
+                // WebSocket/STOMP handshake endpoints
+                "/ws",
+                "/ws/**",
+                "/ws-native",
+                "/ws-native/**"
         };
 
         // Endpoints requiring ADMIN role
@@ -271,23 +277,26 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-//                        // Public endpoints (no authentication required)
-//                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
-//
-//                        // Admin-only endpoints
-//                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
-//
-//                        // Admin or Staff endpoints
-//                        .requestMatchers(SecurityEndpoints.ADMIN_STAFF_PATHS).hasAnyRole("ADMIN", "STAFF")
-//
-//                        // Rider-specific endpoints
-//                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
-//
-//                        // Driver-specific endpoints
-//                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
-//
-//                        // Authenticated endpoints (any authenticated user)
-//                        .requestMatchers(SecurityEndpoints.AUTHENTICATED_PATHS).authenticated()
+                        // Public endpoints (no authentication required)
+                        .requestMatchers(SecurityEndpoints.PUBLIC_PATHS).permitAll()
+
+                        // SOS trigger endpoint (drivers & riders)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/sos/alerts").hasAnyRole("DRIVER", "RIDER")
+
+                        // Admin-only endpoints
+                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
+
+                        // Admin or Staff endpoints
+                        .requestMatchers(SecurityEndpoints.ADMIN_STAFF_PATHS).hasAnyRole("ADMIN", "STAFF")
+
+                        // Rider-specific endpoints
+                        .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
+
+                        // Driver-specific endpoints
+                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
+
+                        // Authenticated endpoints (any authenticated user)
+                        .requestMatchers(SecurityEndpoints.AUTHENTICATED_PATHS).authenticated()
 
                          //All other requests require authentication
                         .anyRequest().permitAll()
