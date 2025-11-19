@@ -36,11 +36,18 @@ public class TransactionController {
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir
+            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir,
+            @Parameter(description = "Filter by transaction type") @RequestParam(required = false) String type,
+            @Parameter(description = "Filter by status") @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by direction (IN/OUT/INTERNAL)") @RequestParam(required = false) String direction,
+            @Parameter(description = "Filter by actor kind (USER/SYSTEM/PSP)") @RequestParam(required = false) String actorKind,
+            @Parameter(description = "Filter by start date (yyyy-MM-dd)") @RequestParam(required = false) String dateFrom,
+            @Parameter(description = "Filter by end date (yyyy-MM-dd)") @RequestParam(required = false) String dateTo
     ) {
         Sort.Direction sort = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(sort, sortBy));
-        PageResponse<TransactionResponse> response = transactionService.getAllTransactions(pageable);
+        PageResponse<TransactionResponse> response = transactionService.getAllTransactions(
+                pageable, type, status, direction, actorKind, dateFrom, dateTo);
         return ResponseEntity.ok(response);
     }
 
