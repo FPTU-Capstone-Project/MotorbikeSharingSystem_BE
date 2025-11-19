@@ -71,7 +71,7 @@ public class SecurityConfig {
                 // Debug endpoints (remove in production)
                 "/debug/throw-test",
                 "/debug/catalog-test",
-                "/api/v1/payos/**"
+                "/api/v1/payos/**",
                 // WebSocket/STOMP handshake endpoints
                 "/ws",
                 "/ws/**",

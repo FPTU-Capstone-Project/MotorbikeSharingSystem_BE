@@ -4,12 +4,10 @@ import com.mssus.app.entity.Wallet;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 
 @Repository
@@ -89,9 +87,8 @@ public interface WalletRepository extends JpaRepository<Wallet, Integer> {
 
     long countByIsActiveTrue();
 
-    @Query("SELECT COALESCE(SUM(w.shadowBalance), 0) FROM Wallet w")
-    BigDecimal sumShadowBalance();
-
-    @Query("SELECT COALESCE(SUM(w.pendingBalance), 0) FROM Wallet w")
-    BigDecimal sumPendingBalance();
+    // ❌ SSOT: Removed sumShadowBalance() and sumPendingBalance()
+    // Balance fields (shadowBalance, pendingBalance) no longer exist in Wallet entity
+    // Use BalanceCalculationService to calculate balances from transaction ledger instead
+    // @see com.mssus.app.service.BalanceCalculationService
 }
