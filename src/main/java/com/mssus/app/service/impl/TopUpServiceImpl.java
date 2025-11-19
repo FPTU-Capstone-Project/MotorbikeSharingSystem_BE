@@ -1,6 +1,5 @@
 package com.mssus.app.service.impl;
 
-import com.mssus.app.common.enums.TransactionStatus;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.dto.request.wallet.TopUpInitRequest;
@@ -9,10 +8,12 @@ import com.mssus.app.dto.response.wallet.TopUpWebhookConfirmResponse;
 import com.mssus.app.entity.Transaction;
 import com.mssus.app.entity.User;
 import com.mssus.app.entity.Wallet;
+import java.util.List;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
 import com.mssus.app.service.PayOSService;
 import com.mssus.app.service.TopUpService;
+import com.mssus.app.service.TransactionService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +30,8 @@ import java.math.BigDecimal;
 public class TopUpServiceImpl implements TopUpService {
     
     private final PayOSService payOSService;
-    private final WalletService walletService;  // ✅ SSOT service
+    private final TransactionService transactionService;
+    private final WalletService walletService;
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
     
@@ -73,20 +75,17 @@ public class TopUpServiceImpl implements TopUpService {
             
             String orderCode = String.valueOf(paymentData.getOrderCode());
             
-            // 2. ✅ SSOT: Tạo PENDING transaction
-            // Generate idempotency key từ orderCode
-            String idempotencyKey = generateIdempotencyKey(orderCode, request.getAmount());
-            
-            Transaction pendingTxn = walletService.createTopUpTransaction(
+            // 2. ✅ FIX: Dùng TransactionService.initTopup() để tạo double-entry transactions
+            // initTopup() tạo 2 transactions: System.MASTER OUT + User IN (balanced)
+            List<Transaction> pendingTransactions = transactionService.initTopup(
                 user.getUserId(),
                 request.getAmount(),
                 orderCode,  // pspRef
-                idempotencyKey,
-                TransactionStatus.PENDING  // ✅ PENDING until webhook confirms
+                description
             );
             
-            log.info("Top-up initiated for user {} - amount: {}, orderCode: {}, txnId: {}",
-                user.getUserId(), request.getAmount(), orderCode, pendingTxn.getTxnId());
+            log.info("Top-up initiated for user {} - amount: {}, orderCode: {}, transactions: {} (System OUT + User IN)",
+                user.getUserId(), request.getAmount(), orderCode, pendingTransactions.size());
             
             return TopUpInitResponse.builder()
                 .transactionRef(orderCode)
@@ -104,33 +103,25 @@ public class TopUpServiceImpl implements TopUpService {
     
     /**
      * Handle PayOS webhook callback
+     * ✅ FIX: Dùng TransactionService.handleTopupSuccess/Failed() để update cả 2 transactions
      */
     @Override
     @Transactional
     public void handleTopUpWebhook(String orderCode, String status, BigDecimal amount) {
-        // 1. Generate idempotency key (same as in initiateTopUp)
-        String idempotencyKey = generateIdempotencyKey(orderCode, amount);
-        
-        // 2. Find existing transaction by idempotency key
-        Transaction existingTxn = walletService.findTransactionByIdempotencyKey(idempotencyKey)
-            .orElseThrow(() -> new NotFoundException(
-                "Transaction not found for orderCode: " + orderCode));
-        
-        // 3. Update transaction status based on webhook status
+        // ✅ FIX: Dùng TransactionService methods để update cả 2 transactions (System + User)
         switch (status.toUpperCase()) {
             case "PAID":
             case "PROCESSING":
-                walletService.completeTopUpTransaction(existingTxn.getTxnId());
-                log.info("Top-up completed for orderCode: {}, txnId: {}", 
-                    orderCode, existingTxn.getTxnId());
+                // ✅ FIX: handleTopupSuccess() update cả System.MASTER OUT và User IN → SUCCESS
+                transactionService.handleTopupSuccess(orderCode);
+                log.info("Top-up completed for orderCode: {}", orderCode);
                 break;
                 
             case "CANCELLED":
             case "EXPIRED":
-                walletService.failTopUpTransaction(existingTxn.getTxnId(), 
-                    "Payment " + status.toLowerCase());
-                log.info("Top-up failed for orderCode: {}, txnId: {}", 
-                    orderCode, existingTxn.getTxnId());
+                // ✅ FIX: handleTopupFailed() update cả System.MASTER OUT và User IN → FAILED
+                transactionService.handleTopupFailed(orderCode, "Payment " + status.toLowerCase());
+                log.info("Top-up failed for orderCode: {}", orderCode);
                 break;
                 
             default:
@@ -142,7 +133,9 @@ public class TopUpServiceImpl implements TopUpService {
     @Override
     @Transactional(readOnly = true)
     public TopUpWebhookConfirmResponse confirmTopUpWebhook(String orderCode, BigDecimal amount) {
-        String idempotencyKey = generateIdempotencyKey(orderCode, amount);
+        // ✅ FIX: Tìm transaction bằng pspRef (orderCode)
+        // initTopup() tạo 2 transactions với cùng pspRef, lấy user transaction
+        String idempotencyKey = "TOPUP_" + orderCode + "_" + amount;
         Transaction txn = walletService.findTransactionByIdempotencyKey(idempotencyKey)
                 .orElseThrow(() -> new NotFoundException("Transaction not found for orderCode: " + orderCode));
 
@@ -155,11 +148,6 @@ public class TopUpServiceImpl implements TopUpService {
                 .transactionStatus(txn.getStatus() != null ? txn.getStatus().name() : "UNKNOWN")
                 .message("Webhook already processed")
                 .build();
-    }
-    
-    private String generateIdempotencyKey(String orderCode, BigDecimal amount) {
-        // Unique key từ orderCode + amount
-        return String.format("TOPUP_%s_%s", orderCode, amount);
     }
 }
 

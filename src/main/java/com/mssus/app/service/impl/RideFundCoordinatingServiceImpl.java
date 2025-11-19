@@ -10,6 +10,7 @@ import com.mssus.app.dto.response.ride.RideRequestSettledResponse;
 import com.mssus.app.entity.Transaction;
 import com.mssus.app.entity.User;
 import com.mssus.app.entity.Wallet;
+import com.mssus.app.repository.SharedRideRepository;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
@@ -41,6 +42,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
     private final NotificationService notificationService;
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
+    private final SharedRideRepository sharedRideRepository;
     private final BalanceCalculationService balanceCalculationService;  // ✅ SSOT: Calculate balance from ledger
 
     private final static String CURRENCY = "VND";
@@ -70,7 +72,8 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             wallet.getWalletId(),
             amount,
             groupId,
-            request.getNote() != null ? request.getNote() : "Hold for ride request #" + request.getRideRequestId()
+            request.getNote() != null ? request.getNote() : "Hold for ride request #" + request.getRideRequestId(),
+            request.getRideRequestId()  // ✅ FIX: Pass sharedRideRequestId for database constraint
         );
 
         // Calculate snapshots for audit trail
@@ -110,6 +113,14 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
         SettlementResult settlementResult = pricingService.settle(fareBreakdown);
         Wallet riderWallet = walletService.getWalletByUserId(request.getRiderId());
         Wallet driverWallet = walletService.getWalletByUserId(request.getDriverId());
+        
+        // ✅ FIX: Load SharedRide entity (required for database constraint txn_booking_required_for_ride)
+        // Constraint requires: CAPTURE_FARE must have shared_ride_id IS NOT NULL
+        if (request.getRideId() == null) {
+            throw new ValidationException("Ride ID is required for CAPTURE_FARE transaction");
+        }
+        com.mssus.app.entity.SharedRide sharedRide = sharedRideRepository.findById(request.getRideId())
+            .orElseThrow(() -> BaseDomainException.of("ride.not-found"));
         
         // ✅ FIX P0-CONCURRENCY: Lock wallets để tránh race condition
         Wallet lockedRiderWallet = walletRepository.findByIdWithLock(riderWallet.getWalletId())
@@ -176,7 +187,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             .actorUser(rider)
             .amount(settlementResult.riderPay().amount())
             .currency(CURRENCY)
-            .sharedRide(null)  // TODO: Set sharedRide relationship if needed
+            .sharedRide(sharedRide)  // ✅ FIX: Required for database constraint txn_booking_required_for_ride
             .status(TransactionStatus.SUCCESS)
             .beforeAvail(riderAvailableBefore)  // Snapshot for audit
             .afterAvail(riderAfterAvail)  // Snapshot for audit
@@ -195,7 +206,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             .actorUser(driver)
             .amount(settlementResult.driverPayout().amount())
             .currency(CURRENCY)
-            .sharedRide(null)  // TODO: Set sharedRide relationship if needed
+            .sharedRide(sharedRide)  // ✅ FIX: Required for database constraint txn_booking_required_for_ride
             .status(TransactionStatus.SUCCESS)
             .beforeAvail(driverAvailableBefore)  // Snapshot for audit
             .afterAvail(driverAfterAvail)  // Snapshot for audit
@@ -213,7 +224,7 @@ public class RideFundCoordinatingServiceImpl implements RideFundCoordinatingServ
             .systemWallet(SystemWallet.COMMISSION)
             .amount(settlementResult.commission().amount())
             .currency(CURRENCY)
-            .sharedRide(null)  // TODO: Set sharedRide relationship if needed
+            .sharedRide(sharedRide)  // ✅ FIX: Required for database constraint txn_booking_required_for_ride
             .status(TransactionStatus.SUCCESS)
             .note("Platform commission for ride " + request.getRideRequestId())
             .build();

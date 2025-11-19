@@ -82,12 +82,14 @@ public interface WalletService {
     
     /**
      * Hold amount: Create HOLD_CREATE transaction
+     * @param sharedRideRequestId Required for HOLD_CREATE (database constraint)
      */
     Transaction holdAmount(
         Integer walletId, 
         BigDecimal amount, 
         UUID groupId,
-        String reason
+        String reason,
+        Integer sharedRideRequestId  // ✅ FIX: Required for database constraint
     );
     
     /**

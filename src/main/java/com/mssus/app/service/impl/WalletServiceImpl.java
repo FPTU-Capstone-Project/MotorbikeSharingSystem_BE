@@ -16,6 +16,7 @@ import com.mssus.app.entity.Transaction;
 import com.mssus.app.entity.User;
 import com.mssus.app.entity.Wallet;
 import com.mssus.app.common.exception.NotFoundException;
+import com.mssus.app.repository.SharedRideRequestRepository;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class WalletServiceImpl implements WalletService {
     private final WalletRepository walletRepository;
+    private final SharedRideRequestRepository sharedRideRequestRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final FileUploadService fileUploadService;
@@ -937,7 +939,7 @@ public class WalletServiceImpl implements WalletService {
     
     @Override
     @Transactional
-    public Transaction holdAmount(Integer walletId, BigDecimal amount, UUID groupId, String reason) {
+    public Transaction holdAmount(Integer walletId, BigDecimal amount, UUID groupId, String reason, Integer sharedRideRequestId) {
         // ✅ FIX P0-CONCURRENCY: Get wallet với pessimistic lock để tránh race condition
         Wallet wallet = walletRepository.findByIdWithLock(walletId)
             .orElseThrow(() -> new NotFoundException("Wallet not found: " + walletId));
@@ -948,6 +950,13 @@ public class WalletServiceImpl implements WalletService {
             throw new ValidationException(
                 String.format("Insufficient balance. Available: %s, Required: %s",
                     availableBalance, amount));
+        }
+        
+        // ✅ FIX: Load SharedRideRequest để set vào transaction (required by database constraint)
+        com.mssus.app.entity.SharedRideRequest sharedRideRequest = null;
+        if (sharedRideRequestId != null) {
+            sharedRideRequest = sharedRideRequestRepository.findById(sharedRideRequestId)
+                .orElseThrow(() -> new NotFoundException("SharedRideRequest not found: " + sharedRideRequestId));
         }
         
         // ✅ FIX P1-5: Generate idempotency key và check duplicate
@@ -970,6 +979,7 @@ public class WalletServiceImpl implements WalletService {
             .currency("VND")
             .status(TransactionStatus.SUCCESS)
             .idempotencyKey(idempotencyKey)  // ✅ FIX P1-5: Thêm idempotency key
+            .sharedRideRequest(sharedRideRequest)  // ✅ FIX: Required for database constraint txn_booking_required_for_ride
             .note("Hold: " + reason)
             .build();
         
