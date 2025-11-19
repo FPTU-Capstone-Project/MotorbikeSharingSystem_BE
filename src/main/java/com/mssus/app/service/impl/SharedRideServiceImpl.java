@@ -577,11 +577,11 @@ public class SharedRideServiceImpl implements SharedRideService {
                 rideRequest.getDropoffLocation().getLat(),
                 rideRequest.getDropoffLocation().getLng());
 
-        if (distanceToDropoff > 100d) {
-            log.warn("Driver {} is too far from the request {} dropoff ({}m)",
-                    driver.getDriverId(), rideRequest.getSharedRideRequestId(), distanceToDropoff);
-            throw BaseDomainException.of("ride.validation.too-far-from-dropoff");
-        }
+//        if (distanceToDropoff > 100d) {
+//            log.warn("Driver {} is too far from the request {} dropoff ({}m)",
+//                    driver.getDriverId(), rideRequest.getSharedRideRequestId(), distanceToDropoff);
+//            throw BaseDomainException.of("ride.validation.too-far-from-dropoff");
+//        }
 
         RideRequestSettledResponse requestSettledResponse;
         try {

@@ -2,32 +2,28 @@ package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mssus.app.entity.IdempotencyKey;
-import com.mssus.app.repository.IdempotencyKeyRepository;
 import com.mssus.app.service.PayOSService;
-import com.mssus.app.service.TransactionService;
-import com.twilio.rest.api.v2010.account.call.PaymentCreator;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import vn.payos.PayOS;
 import vn.payos.type.CheckoutResponseData;
 import vn.payos.type.PaymentData;
+import vn.payos.type.Webhook;
+import vn.payos.type.WebhookData;
 
 import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class PayOSServiceImpl implements PayOSService {
 
-    private final TransactionService transactionService;
     private final ObjectMapper objectMapper;
-    private final IdempotencyKeyRepository idempotencyKeyRepository;
     @Value("${payos.client-id}")
     private String clientId;
 
@@ -45,17 +41,13 @@ public class PayOSServiceImpl implements PayOSService {
 
     private PayOS payOS;
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
-
-    public PayOSServiceImpl(@Lazy TransactionService transactionService, ObjectMapper objectMapper, IdempotencyKeyRepository idempotencyKeyRepository) {
-        this.transactionService = transactionService;
-        this.objectMapper = objectMapper;
-        this.idempotencyKeyRepository = idempotencyKeyRepository;
-    }
+    private static final long expiredAt = (System.currentTimeMillis() / 1000) + 15 * 60;
 
     @PostConstruct
     public void init() {
         try {
             this.payOS = new PayOS(clientId, apiKey, checksumKey);
+            log.info("PayOS service initialized with client ID: {}", clientId);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize PayOS client", e);
         }
@@ -65,83 +57,64 @@ public class PayOSServiceImpl implements PayOSService {
         return orderCodeCounter.incrementAndGet();
     }
 
+    /**
+     * ✅ Chỉ tạo PayOS payment link, KHÔNG tạo transaction
+     */
     @Override
-    public CheckoutResponseData createTopUpPaymentLink(Integer userId, BigDecimal amount, @Nonnull String description, String returnUrl, String cancelUrl) throws Exception {
-        try {
-            Long orderCode = generateUniqueOrderCode();
-
-            if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("Amount must be greater than zero");
-            }
-
-            PaymentData data = PaymentData.builder()
-                .orderCode(orderCode)
-                .amount(amount.intValue())
-                .description(description)
-                .returnUrl(returnUrl)
-                .cancelUrl(cancelUrl)
-                .build();
-
-            // Idempotency guard: ensure we haven't already created this orderCode
-            String keyHash = String.valueOf(orderCode);
-            if (idempotencyKeyRepository.findByKeyHash(keyHash).isPresent()) {
-                throw new IllegalStateException("Duplicate orderCode detected");
-            }
-
-            CheckoutResponseData response = payOS.createPaymentLink(data);
-
-            transactionService.initTopup(userId, amount, orderCode.toString(), description);
-
-            // record idempotency key after success
-            IdempotencyKey idem = IdempotencyKey.builder()
-                    .keyHash(keyHash)
-                    .reference(orderCode.toString())
-                    .createdAt(java.time.LocalDateTime.now())
-                    .build();
-            idempotencyKeyRepository.save(idem);
-
-            log.info("Created top-up payment link for user {} with amount {} and orderCode {}",
-                userId, amount, orderCode);
-
-            return response;
-        } catch (Exception e) {
-            log.error("Error creating top-up payment link for user: {}", userId, e);
-            throw new RuntimeException("Error creating top-up payment link for user: " + userId, e);
+    public CheckoutResponseData createTopUpPaymentLink(
+            Integer userId, 
+            BigDecimal amount,
+            String email,
+            @Nonnull String description, 
+            String returnUrl, 
+            String cancelUrl) throws Exception {
+        
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be greater than zero");
         }
+        
+        Long orderCode = generateUniqueOrderCode();
+        
+        PaymentData data = PaymentData.builder()
+            .orderCode(orderCode)
+            .amount(amount.intValue())
+            .description(description)
+            .returnUrl(returnUrl)
+            .cancelUrl(cancelUrl)
+                .expiredAt(expiredAt)
+            .buyerEmail(email)
+            .build();
+        
+        CheckoutResponseData response = payOS.createPaymentLink(data);
+        
+        log.info("Created PayOS payment link for user {} with amount {} and orderCode {}",
+            userId, amount, orderCode);
+        
+        return response;
     }
 
+    /**
+     * ✅ Parse webhook payload, KHÔNG xử lý transaction
+     */
     @Override
-    public void handleWebhook(String payload) {
+    public PayOSService.WebhookPayload parseWebhook(String payload) {
         try {
-            JsonNode jsonNode = objectMapper.readTree(payload);
-            JsonNode data = jsonNode.get("data");
+            Webhook webhook = objectMapper.readValue(payload, Webhook.class);
 
-            if (data != null) {
-                String orderCode = data.get("orderCode").asText();
-                String status = data.get("status").asText();
-                String description = data.has("description") ? data.get("description").asText() : "";
+            WebhookData data = payOS.verifyPaymentWebhookData(webhook);
 
-                log.info("Processing webhook for orderCode: {} with status: {}", orderCode, status);
+            Long orderCode = data.getOrderCode();
+            Integer amount = data.getAmount();
+            String status = "00".equals(data.getCode()) ? "PAID" : "FAILED";
 
-                switch (status.toUpperCase()) {
-                    case "PAID":
-                    case "PROCESSING":
-                        transactionService.handleTopupSuccess(orderCode);
-                        log.info("Transaction completed for orderCode: {}", orderCode);
-                        break;
-                    case "CANCELLED":
-                    case "EXPIRED":
-                        transactionService.handleTopupFailed(orderCode, "Payment " + status.toLowerCase());
-                        log.info("Transaction failed for orderCode: {} with reason: {}", orderCode, status);
-                        break;
-                    default:
-                        log.warn("Unknown payment status: {} for orderCode: {}", status, orderCode);
-                        break;
-                }
-            }
+            return new PayOSService.WebhookPayload(
+                    orderCode != null ? orderCode.toString() : null,
+                    status,
+                    amount != null ? BigDecimal.valueOf(amount) : BigDecimal.ZERO
+            );
         } catch (Exception e) {
-            log.error("Error processing webhook payload: {}", payload, e);
-            throw new RuntimeException("Error processing webhook", e);
+            log.error("Error parsing webhook payload: {}", payload, e);
+            throw new RuntimeException("Error parsing webhook", e);
         }
     }
 

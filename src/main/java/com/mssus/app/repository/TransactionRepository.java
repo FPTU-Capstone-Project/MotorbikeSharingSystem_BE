@@ -92,4 +92,129 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
     @Query("SELECT t FROM Transaction t WHERE t.type = :type AND t.status = :status AND t.actorKind = com.mssus.app.common.enums.ActorKind.USER")
     List<Transaction> findByTypeAndStatusAndActorKindUser(@Param("type") TransactionType type,
                                                            @Param("status") TransactionStatus status);
+
+
+    /**
+     * Tính số dư khả dụng từ ledger
+     * SSOT - Single Source of Truth
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            CASE 
+                WHEN direction = 'IN' AND type IN ('TOPUP', 'REFUND', 'CAPTURE_FARE') THEN amount
+                WHEN direction = 'OUT' AND type = 'PAYOUT' THEN -amount
+                WHEN direction = 'INTERNAL' AND type = 'HOLD_CREATE' THEN -amount
+                WHEN direction = 'INTERNAL' AND type = 'HOLD_RELEASE' THEN amount
+                ELSE 0
+            END
+        ), 0)
+        FROM transactions
+        WHERE wallet_id = :walletId
+          AND status = 'SUCCESS'
+        """, nativeQuery = true)
+    BigDecimal calculateAvailableBalance(@Param("walletId") Integer walletId);
+
+    /**
+     * Tính số dư đang hold
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            CASE 
+                WHEN type = 'HOLD_CREATE' THEN amount
+                WHEN type = 'HOLD_RELEASE' THEN -amount
+                WHEN type = 'CAPTURE_FARE' AND direction = 'OUT' THEN -amount
+                ELSE 0
+            END
+        ), 0)
+        FROM transactions
+        WHERE wallet_id = :walletId
+          AND status = 'SUCCESS'
+        """, nativeQuery = true)
+    BigDecimal calculatePendingBalance(@Param("walletId") Integer walletId);
+
+    /**
+     * Tìm transaction theo idempotency key
+     */
+    Optional<Transaction> findByIdempotencyKey(String idempotencyKey);
+
+    /**
+     * Tìm transaction theo groupId và type
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.groupId = :groupId AND t.type = :type")
+    Optional<Transaction> findByGroupIdAndType(@Param("groupId") java.util.UUID groupId, 
+                                               @Param("type") TransactionType type);
+
+    /**
+     * ✅ FIX P2-9: Find transactions by status, type and created before threshold
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.status = :status AND t.type = :type AND t.createdAt < :threshold")
+    List<Transaction> findByStatusAndTypeAndCreatedAtBefore(
+        @Param("status") TransactionStatus status,
+        @Param("type") TransactionType type,
+        @Param("threshold") java.time.LocalDateTime threshold);
+
+    /**
+     * ✅ FIX P0-LEDGER: Calculate total debit (OUT direction) for ledger invariant validation
+     * 
+     * Chỉ tính SUCCESS transactions, không tính INTERNAL (vì không ảnh hưởng tổng)
+     * 
+     * Lưu ý: TOPUP và PAYOUT có system transactions (external source/destination)
+     * nên sẽ không balanced. Validation nên focus vào internal transactions.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE direction = 'OUT'
+          AND status = 'SUCCESS'
+        """, nativeQuery = true)
+    BigDecimal calculateTotalDebit();
+
+    /**
+     * ✅ FIX P0-LEDGER: Calculate total credit (IN direction) for ledger invariant validation
+     * 
+     * Chỉ tính SUCCESS transactions, không tính INTERNAL (vì không ảnh hưởng tổng)
+     * 
+     * Lưu ý: TOPUP và PAYOUT có system transactions (external source/destination)
+     * nên sẽ không balanced. Validation nên focus vào internal transactions.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE direction = 'IN'
+          AND status = 'SUCCESS'
+        """, nativeQuery = true)
+    BigDecimal calculateTotalCredit();
+    
+    /**
+     * ✅ FIX P0-LEDGER: Calculate total debit cho internal transactions only
+     * Loại trừ TOPUP và PAYOUT system transactions (external source/destination)
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE direction = 'OUT'
+          AND status = 'SUCCESS'
+          AND type NOT IN ('TOPUP', 'PAYOUT')
+          AND (actor_kind = 'USER' OR (actor_kind = 'SYSTEM' AND system_wallet = 'COMMISSION'))
+        """, nativeQuery = true)
+    BigDecimal calculateInternalDebit();
+    
+    /**
+     * ✅ FIX P0-LEDGER: Calculate total credit cho internal transactions only
+     * Loại trừ TOPUP và PAYOUT system transactions (external source/destination)
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE direction = 'IN'
+          AND status = 'SUCCESS'
+          AND type NOT IN ('TOPUP', 'PAYOUT')
+          AND (actor_kind = 'USER' OR (actor_kind = 'SYSTEM' AND system_wallet = 'COMMISSION'))
+        """, nativeQuery = true)
+    BigDecimal calculateInternalCredit();
+    
+    /**
+     * ✅ FIX P0-BALANCE_CACHE: Đếm số lượng transactions của wallet với status cụ thể
+     */
+    long countByWallet_WalletIdAndStatus(Integer walletId, TransactionStatus status);
 }

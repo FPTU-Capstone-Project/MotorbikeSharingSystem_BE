@@ -12,6 +12,7 @@ import com.mssus.app.entity.Transaction;
 import com.mssus.app.entity.User;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.service.BalanceCalculationService;
 import com.mssus.app.service.ReportService;
 import com.mssus.app.common.exception.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class ReportServiceImpl implements ReportService {
 
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
+    private final BalanceCalculationService balanceCalculationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -48,9 +50,21 @@ public class ReportServiceImpl implements ReportService {
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
 
         long activeWallets = walletRepository.countByIsActiveTrue();
-        BigDecimal totalShadow = defaultAmount(walletRepository.sumShadowBalance());
-        BigDecimal totalPending = defaultAmount(walletRepository.sumPendingBalance());
-        BigDecimal totalWalletBalance = totalShadow.add(totalPending);
+        
+        // ✅ SSOT: Calculate total balance from ledger (not from Wallet entity)
+        // Sum available and pending balances for all active wallets
+        BigDecimal totalAvailable = BigDecimal.ZERO;
+        BigDecimal totalPending = BigDecimal.ZERO;
+        List<com.mssus.app.entity.Wallet> activeWalletsList = walletRepository.findAll().stream()
+                .filter(w -> w.getIsActive() != null && w.getIsActive())
+                .collect(java.util.stream.Collectors.toList());
+        
+        for (com.mssus.app.entity.Wallet wallet : activeWalletsList) {
+            totalAvailable = totalAvailable.add(balanceCalculationService.calculateAvailableBalance(wallet.getWalletId()));
+            totalPending = totalPending.add(balanceCalculationService.calculatePendingBalance(wallet.getWalletId()));
+        }
+        
+        BigDecimal totalWalletBalance = totalAvailable.add(totalPending);
 
         BigDecimal topupsToday = defaultAmount(
                 transactionRepository.sumAmountByTypeStatusDirectionAndActorBetween(
