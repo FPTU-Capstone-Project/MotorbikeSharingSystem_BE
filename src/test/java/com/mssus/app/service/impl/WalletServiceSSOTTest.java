@@ -43,6 +43,9 @@ class WalletServiceSSOTTest {
     private TransactionRepository transactionRepository;
 
     @Mock
+    private com.mssus.app.repository.SharedRideRequestRepository sharedRideRequestRepository;
+
+    @Mock
     private BalanceCalculationService balanceCalculationService;
 
     @InjectMocks
@@ -213,11 +216,14 @@ class WalletServiceSSOTTest {
 
         when(balanceCalculationService.calculateAvailableBalance(WALLET_ID))
             .thenReturn(availableBalance);
-        when(walletRepository.findById(WALLET_ID))
+        when(walletRepository.findByIdWithLock(WALLET_ID))
             .thenReturn(Optional.of(testWallet));
+        // Mock SharedRideRequestRepository (not used in this test, but required by implementation)
+        lenient().when(sharedRideRequestRepository.findById(any()))
+            .thenReturn(Optional.empty());
 
         // When
-        Transaction result = walletService.holdAmount(WALLET_ID, AMOUNT, groupId, "Ride payment");
+        Transaction result = walletService.holdAmount(WALLET_ID, AMOUNT, groupId, "Ride payment", null);
 
         // Then
         assertThat(result).isNotNull();
@@ -242,11 +248,14 @@ class WalletServiceSSOTTest {
 
         when(balanceCalculationService.calculateAvailableBalance(WALLET_ID))
             .thenReturn(insufficientBalance);
-        when(walletRepository.findById(WALLET_ID))
+        when(walletRepository.findByIdWithLock(WALLET_ID))
             .thenReturn(Optional.of(testWallet));
+        // Mock SharedRideRequestRepository (not used in this test, but required by implementation)
+        lenient().when(sharedRideRequestRepository.findById(any()))
+            .thenReturn(Optional.empty());
 
         // When/Then
-        assertThatThrownBy(() -> walletService.holdAmount(WALLET_ID, AMOUNT, groupId, "Ride payment"))
+        assertThatThrownBy(() -> walletService.holdAmount(WALLET_ID, AMOUNT, groupId, "Ride payment", null))
             .isInstanceOf(ValidationException.class)
             .hasMessageContaining("Insufficient balance");
     }

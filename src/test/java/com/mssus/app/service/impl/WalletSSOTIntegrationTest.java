@@ -46,6 +46,9 @@ class WalletSSOTIntegrationTest {
     private TransactionRepository transactionRepository;
 
     @Mock
+    private com.mssus.app.repository.SharedRideRequestRepository sharedRideRequestRepository;
+
+    @Mock
     private BalanceCalculationService balanceCalculationService;
 
     @InjectMocks
@@ -175,14 +178,17 @@ class WalletSSOTIntegrationTest {
         BigDecimal initialBalance = BigDecimal.valueOf(500_000);
         when(balanceCalculationService.calculateAvailableBalance(WALLET_ID))
             .thenReturn(initialBalance);
-        when(walletRepository.findById(WALLET_ID))
+        when(walletRepository.findByIdWithLock(WALLET_ID))
             .thenReturn(Optional.of(testWallet));
+        // Mock SharedRideRequestRepository (not used in this test, but required by implementation)
+        lenient().when(sharedRideRequestRepository.findById(any()))
+            .thenReturn(Optional.empty());
 
         // Step 2: Hold amount
         UUID groupId = UUID.randomUUID();
         BigDecimal holdAmount = BigDecimal.valueOf(100_000);
 
-        Transaction holdTxn = walletService.holdAmount(WALLET_ID, holdAmount, groupId, "Ride payment");
+        Transaction holdTxn = walletService.holdAmount(WALLET_ID, holdAmount, groupId, "Ride payment", null);
 
         assertThat(holdTxn.getType()).isEqualTo(TransactionType.HOLD_CREATE);
         assertThat(holdTxn.getStatus()).isEqualTo(TransactionStatus.SUCCESS);

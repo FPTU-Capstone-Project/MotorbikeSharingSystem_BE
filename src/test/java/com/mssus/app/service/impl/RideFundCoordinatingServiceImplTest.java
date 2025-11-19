@@ -122,14 +122,14 @@ class RideFundCoordinatingServiceImplTest {
         doReturn(availableBalance).when(balanceCalculationService).calculateAvailableBalance(1);
         doReturn(pendingBalance).when(balanceCalculationService).calculatePendingBalance(1);
         doReturn(Optional.of(rider)).when(userRepository).findById(10);
-        doReturn(holdTransaction).when(walletService).holdAmount(eq(1), eq(ONE_HUNDRED), any(UUID.class), anyString());
+        doReturn(holdTransaction).when(walletService).holdAmount(eq(1), eq(ONE_HUNDRED), any(UUID.class), anyString(), anyInt());
 
         service.holdRideFunds(request);
 
         verify(walletService).getWalletByUserId(10);
         verify(balanceCalculationService).calculateAvailableBalance(1);
         verify(balanceCalculationService).calculatePendingBalance(1);
-        verify(walletService).holdAmount(eq(1), eq(ONE_HUNDRED), any(UUID.class), anyString());
+        verify(walletService).holdAmount(eq(1), eq(ONE_HUNDRED), any(UUID.class), anyString(), anyInt());
 
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
         verify(notificationService).sendNotification(
@@ -170,7 +170,7 @@ class RideFundCoordinatingServiceImplTest {
 
         verify(walletService).getWalletByUserId(77);
         verify(balanceCalculationService).calculateAvailableBalance(2);
-        verify(walletService, never()).holdAmount(anyInt(), any(), any(), anyString());
+        verify(walletService, never()).holdAmount(anyInt(), any(), any(), anyString(), anyInt());
         verifyNoInteractions(userRepository, notificationService, pricingService, transactionRepository, walletRepository);
     }
 
