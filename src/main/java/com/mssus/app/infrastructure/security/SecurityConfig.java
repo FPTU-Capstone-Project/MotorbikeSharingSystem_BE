@@ -110,9 +110,10 @@ public class SecurityConfig {
                 // Note: POST /api/v1/user-reports, GET /my-reports, POST /{reportId}/driver-response 
                 // are in AUTHENTICATED_PATHS for regular users
                 "/api/v1/user-reports/analytics",
-                "/api/v1/user-reports/*/start-chat"
+                "/api/v1/user-reports/*/start-chat",
                 // GET /api/v1/user-reports, GET /{reportId}, POST /{reportId}/resolve, PATCH /{reportId}
                 // are protected by @PreAuthorize("hasRole('ADMIN')") in controller
+                "/api/v1/banks/**"
         };
 
         // Endpoints requiring ADMIN or STAFF role
@@ -299,7 +300,7 @@ public class SecurityConfig {
                         .requestMatchers(SecurityEndpoints.AUTHENTICATED_PATHS).authenticated()
 
                          //All other requests require authentication
-                        .anyRequest().permitAll()
+                        .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

@@ -147,6 +147,7 @@ public class OtpServiceImpl implements OtpService {
 
 
             if (Boolean.TRUE.equals(user.getPhoneVerified())) {
+                
                 riderProfileRepository.findByUserUserId(user.getUserId())
                     .orElseGet(() -> {
                         RiderProfile rp = RiderProfile.builder()

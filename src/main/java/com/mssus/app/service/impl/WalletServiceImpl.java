@@ -5,12 +5,15 @@ import com.mssus.app.common.enums.SystemWallet;
 import com.mssus.app.common.enums.TransactionDirection;
 import com.mssus.app.common.enums.TransactionStatus;
 import com.mssus.app.common.enums.TransactionType;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.mssus.app.common.exception.InvalidPayoutStateException;
+import com.mssus.app.common.exception.PayosClientException;
 import com.mssus.app.common.exception.ValidationException;
+import com.mssus.app.dto.request.PayoutMode;
+import com.mssus.app.dto.request.PayoutOrderRequest;
 import com.mssus.app.dto.request.wallet.PayoutInitRequest;
-import com.mssus.app.dto.request.wallet.TopUpInitRequest;
 import com.mssus.app.dto.response.wallet.DriverEarningsResponse;
 import com.mssus.app.dto.response.wallet.PayoutInitResponse;
-import com.mssus.app.dto.response.wallet.TopUpInitResponse;
 import com.mssus.app.dto.response.wallet.WalletResponse;
 import com.mssus.app.entity.Transaction;
 import com.mssus.app.entity.User;
@@ -23,7 +26,9 @@ import com.mssus.app.repository.WalletRepository;
 import com.mssus.app.dto.response.wallet.PendingPayoutResponse;
 import com.mssus.app.dto.response.wallet.PayoutProcessResponse;
 import com.mssus.app.service.BalanceCalculationService;
+import com.mssus.app.service.BankService;
 import com.mssus.app.service.FileUploadService;
+import com.mssus.app.service.PayoutNotificationService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,13 +36,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import vn.payos.type.CheckoutResponseData;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,6 +61,15 @@ public class WalletServiceImpl implements WalletService {
     private final TransactionRepository transactionRepository;
     private final FileUploadService fileUploadService;
     private final BalanceCalculationService balanceCalculationService;
+    private final PayOSPayoutClient payOSPayoutClient;
+    private final PayoutNotificationService payoutNotificationService;
+    private final BankService bankService;
+
+    @Value("${app.payout.mode:HYBRID}")
+    private String defaultPayoutMode;
+
+    @Value("${app.payout.manual-review-threshold:500000}")
+    private BigDecimal manualReviewThreshold;
     
     // ✅ SSOT: Balance luôn được tính từ ledger, không update trực tiếp
 
@@ -196,6 +212,29 @@ public class WalletServiceImpl implements WalletService {
             throw new ValidationException("Tên chủ tài khoản phải có ít nhất 2 ký tự");
         }
 
+        // Validate bank BIN format and existence
+        String bankBin = request.getBankBin().trim();
+        if (!bankBin.matches("^\\d{6}$")) {
+            throw new ValidationException("Mã BIN ngân hàng phải có 6 chữ số");
+        }
+
+        // Validate bank BIN exists in supported banks list
+        if (!bankService.isValidBankBin(bankBin)) {
+            throw new ValidationException("Mã BIN ngân hàng không hợp lệ hoặc không được hỗ trợ: " + bankBin);
+        }
+
+        // Optional: Validate transfer is supported
+        var bankInfo = bankService.getBankByBin(bankBin);
+        if (bankInfo.isPresent() && (bankInfo.get().getTransferSupported() == null || bankInfo.get().getTransferSupported() != 1)) {
+            log.warn("Bank BIN {} may not support transfers: {}", bankBin, bankInfo.get().getName());
+            // Warning only, not blocking - let PayOS handle the validation
+        }
+
+        List<String> categories = resolveCategories(request.getCategories());
+
+        // Determine payout mode: from request or config-based rule
+        PayoutMode payoutMode = determinePayoutMode(request);
+
         // ✅ SSOT: Check balance từ ledger
         BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
         if (availableBalance.compareTo(request.getAmount()) < 0) {
@@ -208,10 +247,19 @@ public class WalletServiceImpl implements WalletService {
         UUID groupId = UUID.randomUUID();
 
         // Create description with bank account information
-        String description = String.format("Payout to %s - %s (%s)",
+        // Store full account number in note for later use in processPayout
+        String description = String.format("Payout to %s - %s (%s) [BIN:%s]",
                 request.getBankName(),
                 maskAccountNumber(bankAccountNumber),
-                accountHolderName);
+                accountHolderName,
+                bankBin);
+        
+        // Store bank details in note for processPayout to extract
+        String noteWithBankDetails = description + 
+                " | bankBin:" + bankBin + 
+                " | bankAccountNumber:" + bankAccountNumber +
+                " | bankName:" + request.getBankName() +
+                " | accountHolderName:" + accountHolderName;
 
         // ✅ SSOT: Get balances từ ledger
         BigDecimal beforeAvail = balanceCalculationService.calculateAvailableBalance(wallet.getWalletId());
@@ -274,6 +322,13 @@ public class WalletServiceImpl implements WalletService {
                 .note("System payout debit - " + description)
                 .build();
 
+        // Store mode in transaction note for later reference
+        String noteWithMode = noteWithBankDetails + " | mode:" + payoutMode.name();
+
+        // Update transaction notes with mode and bank details
+        userTransaction.setNote(noteWithMode);
+        systemTransaction.setNote("System payout debit - " + noteWithMode);
+
         // Save transactions
         transactionRepository.save(userTransaction);
         transactionRepository.save(systemTransaction);
@@ -284,9 +339,12 @@ public class WalletServiceImpl implements WalletService {
         // Mask account number (show only last 4 digits)
         String maskedAccount = maskAccountNumber(bankAccountNumber);
 
-        log.info("Initiated payout for user {} with amount {} and pspRef {}. Balance: {} -> {} (available), {} -> {} (pending)",
-                user.getUserId(), request.getAmount(), payoutRef,
+        log.info("Initiated payout for user {} with amount {} and pspRef {}. Mode: {}. Balance: {} -> {} (available), {} -> {} (pending)",
+                user.getUserId(), request.getAmount(), payoutRef, payoutMode,
                 beforeAvail, afterAvail, beforePending, afterPending);
+
+        // Send notification
+        payoutNotificationService.notifyPayoutInitiated(user, payoutRef, request.getAmount());
 
         return PayoutInitResponse.builder()
                 .payoutRef(payoutRef)
@@ -298,6 +356,49 @@ public class WalletServiceImpl implements WalletService {
     }
 
     /**
+     * Determine payout mode from request or config-based rules.
+     */
+    private PayoutMode determinePayoutMode(PayoutInitRequest request) {
+        // 1. Use mode from request if provided
+        if (request.getMode() != null) {
+            return request.getMode();
+        }
+
+        // 2. Rule-based: amount >= threshold → MANUAL, else AUTOMATIC
+        if ("HYBRID".equalsIgnoreCase(defaultPayoutMode) || "AUTOMATIC".equalsIgnoreCase(defaultPayoutMode)) {
+            if (request.getAmount().compareTo(manualReviewThreshold) >= 0) {
+                return PayoutMode.MANUAL;
+            } else {
+                return PayoutMode.AUTOMATIC;
+            }
+        }
+
+        // 3. Default from config
+        if ("MANUAL".equalsIgnoreCase(defaultPayoutMode)) {
+            return PayoutMode.MANUAL;
+        }
+
+        // Default to AUTOMATIC
+        return PayoutMode.AUTOMATIC;
+    }
+
+    /**
+     * Extract payout mode from transaction note.
+     */
+    private PayoutMode extractPayoutModeFromNote(String note) {
+        if (note == null || !note.contains("mode:")) {
+            return PayoutMode.MANUAL; // Default to MANUAL for backward compatibility
+        }
+        try {
+            String modeStr = note.substring(note.indexOf("mode:") + 5).split("\\|")[0].trim();
+            return PayoutMode.valueOf(modeStr.toUpperCase());
+        } catch (Exception e) {
+            log.warn("Failed to extract payout mode from note: {}", note, e);
+            return PayoutMode.MANUAL;
+        }
+    }
+
+    /**
      * Mask bank account number (show only last 4 digits)
      */
     private String maskAccountNumber(String accountNumber) {
@@ -305,6 +406,34 @@ public class WalletServiceImpl implements WalletService {
             return "****";
         }
         return "****" + accountNumber.substring(accountNumber.length() - 4);
+    }
+
+    private long normalizeToVnd(BigDecimal amount) {
+        if (amount == null) {
+            throw new ValidationException("Số tiền rút không được để trống");
+        }
+        try {
+            return amount.setScale(0, RoundingMode.UNNECESSARY).longValueExact();
+        } catch (ArithmeticException ex) {
+            throw new ValidationException("Số tiền rút phải là số nguyên VNĐ");
+        }
+    }
+
+    private List<String> resolveCategories(List<String> rawCategories) {
+        if (rawCategories == null) {
+            return Collections.singletonList("wallet_payout");
+        }
+
+        List<String> cleaned = rawCategories.stream()
+                .filter(StringUtils::hasText)
+                .map(value -> value.trim().toUpperCase())
+                .collect(Collectors.toList());
+
+        if (cleaned.isEmpty()) {
+            return Collections.singletonList("wallet_payout");
+        }
+
+        return cleaned;
     }
 
     @Override
@@ -604,6 +733,7 @@ public class WalletServiceImpl implements WalletService {
             throw new ValidationException("Authentication cannot be null");
         }
 
+        // Find PENDING transactions
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PENDING);
         if (transactions.isEmpty()) {
             throw new NotFoundException("No pending payout transactions found for pspRef: " + payoutRef);
@@ -614,20 +744,185 @@ public class WalletServiceImpl implements WalletService {
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy giao dịch rút tiền của người dùng cho pspRef: " + payoutRef));
 
+        // Extract payout mode from transaction note
+        PayoutMode payoutMode = extractPayoutModeFromNote(userTransaction.getNote());
+
         // Update all transactions to PROCESSING status
+        String processedBy = authentication.getName();
+        LocalDateTime processedAt = LocalDateTime.now();
+        
         for (Transaction txn : transactions) {
             txn.setStatus(TransactionStatus.PROCESSING);
+            // Store processedBy in note
+            String note = txn.getNote() != null ? txn.getNote() : "";
+            note += " | processedBy:" + processedBy + " | processedAt:" + processedAt;
+            txn.setNote(note);
             transactionRepository.save(txn);
         }
 
-        log.info("Admin {} marked payout {} as PROCESSING", authentication.getName(), payoutRef);
+        // If AUTOMATIC mode, call PayOS API
+        if (payoutMode == PayoutMode.AUTOMATIC) {
+            try {
+                // Extract bank details from note
+                String note = userTransaction.getNote();
+                String bankBin = extractValueFromNote(note, "bankBin:");
+                String bankAccountNumber = extractValueFromNote(note, "bankAccountNumber:");
+                String bankName = extractValueFromNote(note, "bankName:");
+                String accountHolderName = extractValueFromNote(note, "accountHolderName:");
+                String description = extractDescriptionFromNote(note);
+                
+                if (bankBin == null || bankAccountNumber == null) {
+                    throw new ValidationException("Cannot extract bank details from transaction note for automatic payout");
+                }
 
-        return PayoutProcessResponse.builder()
-                .payoutRef(payoutRef)
-                .amount(userTransaction.getAmount())
-                .status("PROCESSING")
-                .processedAt(LocalDateTime.now())
-                .build();
+                // Build PayOS request
+                String payoutDescription = description != null ? description : 
+                        String.format("Payout to %s - %s (%s)", 
+                                bankName != null ? bankName : "Bank",
+                                maskAccountNumber(bankAccountNumber),
+                                accountHolderName != null ? accountHolderName : "");
+                
+                PayoutOrderRequest payoutOrderRequest = PayoutOrderRequest.builder()
+                        .referenceId(payoutRef)
+                        .amount(normalizeToVnd(userTransaction.getAmount()))
+                        .description(payoutDescription)
+                        .toBin(bankBin)
+                        .toAccountNumber(bankAccountNumber)
+                        .category(resolveCategories(null)) // Default categories
+                        .build();
+
+                String idempotencyKey = userTransaction.getIdempotencyKey();
+                
+                // Call PayOS API
+                JsonNode payosResponse = payOSPayoutClient.createPayoutOrder(payoutOrderRequest, idempotencyKey);
+                
+                // Handle PayOS response
+                String payosCode = payosResponse.path("code").asText();
+                String payosDesc = payosResponse.path("desc").asText();
+                String payosTransactionId = payosResponse.path("data").path("transactionId").asText("");
+
+                // Update transaction with PayOS response
+                for (Transaction txn : transactions) {
+                    String txnNote = txn.getNote() != null ? txn.getNote() : "";
+                    txnNote += " | payos_code:" + payosCode + " | payos_desc:" + payosDesc;
+                    if (!payosTransactionId.isEmpty()) {
+                        txnNote += " | payos_txn_id:" + payosTransactionId;
+                    }
+                    txnNote += " | payos_response:" + payosResponse.toString();
+                    txn.setNote(txnNote);
+                    
+                    // Update status based on PayOS response
+                    if ("00".equals(payosCode) || "SUCCESS".equalsIgnoreCase(payosCode)) {
+                        txn.setStatus(TransactionStatus.SUCCESS);
+                    } else if ("PROCESSING".equalsIgnoreCase(payosCode) || "PENDING".equalsIgnoreCase(payosCode)) {
+                        txn.setStatus(TransactionStatus.PROCESSING);
+                    } else {
+                        txn.setStatus(TransactionStatus.FAILED);
+                        txnNote += " | error:" + payosDesc;
+                    }
+                    txn.setNote(txnNote);
+                    transactionRepository.save(txn);
+                }
+
+                // Invalidate balance cache
+                if (userTransaction.getWallet() != null) {
+                    balanceCalculationService.invalidateBalanceCache(userTransaction.getWallet().getWalletId());
+                }
+
+                log.info("Admin {} processed AUTOMATIC payout {} via PayOS. Code: {}, TransactionId: {}",
+                        processedBy, payoutRef, payosCode, payosTransactionId);
+
+                // Get final status from user transaction
+                TransactionStatus finalStatus = userTransaction.getStatus();
+                
+                // Send notification based on status
+                if (userTransaction.getActorUser() != null) {
+                    if (finalStatus == TransactionStatus.SUCCESS) {
+                        payoutNotificationService.notifyPayoutSuccess(
+                                userTransaction.getActorUser(),
+                                payoutRef,
+                                userTransaction.getAmount());
+                    } else if (finalStatus == TransactionStatus.PROCESSING) {
+                        payoutNotificationService.notifyPayoutProcessing(
+                                userTransaction.getActorUser(),
+                                payoutRef,
+                                userTransaction.getAmount());
+                    } else if (finalStatus == TransactionStatus.FAILED) {
+                        payoutNotificationService.notifyPayoutFailed(
+                                userTransaction.getActorUser(),
+                                payoutRef,
+                                userTransaction.getAmount(),
+                                payosDesc);
+                    }
+                }
+                
+                return PayoutProcessResponse.builder()
+                        .payoutRef(payoutRef)
+                        .amount(userTransaction.getAmount())
+                        .status(finalStatus.name())
+                        .processedAt(processedAt)
+                        .build();
+
+            } catch (PayosClientException ex) {
+                log.error("PayOS API error for payout {}: {}", payoutRef, ex.getMessage(), ex);
+                
+                // Mark as FAILED
+                for (Transaction txn : transactions) {
+                    txn.setStatus(TransactionStatus.FAILED);
+                    String note = txn.getNote() != null ? txn.getNote() : "";
+                    note += " | payos_error:" + ex.getMessage();
+                    txn.setNote(note);
+                    transactionRepository.save(txn);
+                }
+
+                throw new ValidationException("PayOS payout failed: " + ex.getMessage());
+            }
+        } else {
+            // MANUAL mode: just mark as PROCESSING, admin will handle transfer manually
+            log.info("Admin {} marked MANUAL payout {} as PROCESSING", processedBy, payoutRef);
+
+            // Send processing notification
+            if (userTransaction.getActorUser() != null) {
+                payoutNotificationService.notifyPayoutProcessing(
+                        userTransaction.getActorUser(),
+                        payoutRef,
+                        userTransaction.getAmount());
+            }
+
+            return PayoutProcessResponse.builder()
+                    .payoutRef(payoutRef)
+                    .amount(userTransaction.getAmount())
+                    .status("PROCESSING")
+                    .processedAt(processedAt)
+                    .build();
+        }
+    }
+
+    /**
+     * Extract value from note by key pattern "key:value"
+     */
+    private String extractValueFromNote(String note, String key) {
+        if (note == null || key == null) return null;
+        int keyIndex = note.indexOf(key);
+        if (keyIndex >= 0) {
+            int valueStart = keyIndex + key.length();
+            int valueEnd = note.indexOf(" |", valueStart);
+            if (valueEnd < 0) {
+                valueEnd = note.length();
+            }
+            return note.substring(valueStart, valueEnd).trim();
+        }
+        return null;
+    }
+
+    private String extractDescriptionFromNote(String note) {
+        if (note == null) return null;
+        // Extract description before first "|"
+        int firstPipe = note.indexOf(" |");
+        if (firstPipe > 0) {
+            return note.substring(0, firstPipe).trim();
+        }
+        return note;
     }
 
     @Override
@@ -641,6 +936,7 @@ public class WalletServiceImpl implements WalletService {
             throw new ValidationException("Evidence file is required for payout completion");
         }
 
+        // Find transactions
         List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PROCESSING);
         if (transactions.isEmpty()) {
             // Try PENDING status as fallback
@@ -654,6 +950,12 @@ public class WalletServiceImpl implements WalletService {
                 .filter(txn -> txn.getActorKind() == ActorKind.USER && txn.getType() == TransactionType.PAYOUT)
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy giao dịch rút tiền của người dùng cho pspRef: " + payoutRef));
+
+        // Check if payout mode is MANUAL (completePayout only for MANUAL)
+        PayoutMode payoutMode = extractPayoutModeFromNote(userTransaction.getNote());
+        if (payoutMode == PayoutMode.AUTOMATIC) {
+            throw new InvalidPayoutStateException("completePayout is only available for MANUAL payouts. This payout is AUTOMATIC and handled by PayOS webhook.");
+        }
 
         User user = userTransaction.getActorUser();
         if (user == null) {
@@ -702,6 +1004,11 @@ public class WalletServiceImpl implements WalletService {
 
         log.info("Admin {} completed payout {} with evidence URL: {}. New pending balance: {}",
                 authentication.getName(), payoutRef, evidenceUrl, newPendingBalance);
+
+        // Send success notification
+        if (user != null) {
+            payoutNotificationService.notifyPayoutSuccess(user, payoutRef, payoutAmount);
+        }
 
         return PayoutProcessResponse.builder()
                 .payoutRef(payoutRef)
@@ -783,6 +1090,11 @@ public class WalletServiceImpl implements WalletService {
 
         log.info("Admin {} failed payout {} with reason: {}. Refund transaction created. New balance: available={}, pending={}",
                 authentication.getName(), payoutRef, reason, newAvailableBalance, newPendingBalance);
+
+        // Send failed notification
+        if (user != null) {
+            payoutNotificationService.notifyPayoutFailed(user, payoutRef, payoutAmount, reason);
+        }
 
         return PayoutProcessResponse.builder()
                 .payoutRef(payoutRef)

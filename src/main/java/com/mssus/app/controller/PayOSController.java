@@ -1,19 +1,17 @@
 package com.mssus.app.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mssus.app.dto.request.wallet.PayoutWebhookRequest;
 import com.mssus.app.dto.response.wallet.TopUpWebhookConfirmResponse;
 import com.mssus.app.service.PayOSService;
+import com.mssus.app.service.PayoutWebhookService;
 import com.mssus.app.service.TopUpService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import vn.payos.type.CheckoutResponseData;
 
 import java.math.BigDecimal;
@@ -26,6 +24,8 @@ public class PayOSController {
 
     private final PayOSService payOSService;
     private final TopUpService topUpService;
+    private final PayoutWebhookService payoutWebhookService;
+    private final ObjectMapper objectMapper;
 
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Top-up payment link created successfully"),
@@ -76,6 +76,35 @@ public class PayOSController {
     ) {
         TopUpWebhookConfirmResponse response = topUpService.confirmTopUpWebhook(orderCode, amount);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Handle PayOS payout webhook callback.
+     * Verifies signature and updates transaction status.
+     */
+    @PostMapping("/payout/webhook")
+    public ResponseEntity<String> handlePayoutWebhook(
+            @RequestBody String rawPayload,
+            @RequestHeader(value = "x-signature", required = false) String signature) {
+        try {
+            log.info("Received PayOS payout webhook");
+            
+            // Parse webhook payload
+            PayoutWebhookRequest webhookRequest = objectMapper.readValue(rawPayload, PayoutWebhookRequest.class);
+            
+            // Set signature from header if not in body
+            if (webhookRequest.getSignature() == null && signature != null) {
+                webhookRequest.setSignature(signature);
+            }
+            
+            // Process webhook
+            payoutWebhookService.handlePayoutWebhook(webhookRequest, rawPayload);
+            
+            return ResponseEntity.ok("Succeeded");
+        } catch (Exception e) {
+            log.error("Error processing payout webhook", e);
+            return ResponseEntity.internalServerError().body("Failed: " + e.getMessage());
+        }
     }
 }
 
