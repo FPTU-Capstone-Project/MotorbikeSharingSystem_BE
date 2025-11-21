@@ -2,8 +2,8 @@ package com.mssus.app.service.domain.matching;
 
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
-import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
-import com.mssus.app.infrastructure.config.properties.RideMessagingProperties;
+import com.mssus.app.appconfig.config.properties.RideConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.RideMessagingProperties;
 import com.mssus.app.dto.domain.notification.DriverRideOfferNotification;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.DriverProfile;

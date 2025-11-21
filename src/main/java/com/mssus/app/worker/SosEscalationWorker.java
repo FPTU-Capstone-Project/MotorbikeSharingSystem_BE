@@ -2,7 +2,7 @@ package com.mssus.app.worker;
 
 import com.mssus.app.common.enums.SosAlertEventType;
 import com.mssus.app.common.enums.SosAlertStatus;
-import com.mssus.app.infrastructure.config.properties.SosConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.SosConfigurationProperties;
 import com.mssus.app.entity.SosAlert;
 import com.mssus.app.repository.SosAlertRepository;
 import com.mssus.app.service.SosAlertEventService;

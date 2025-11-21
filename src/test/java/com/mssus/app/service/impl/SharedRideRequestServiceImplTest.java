@@ -2,7 +2,7 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.request.wallet.RideConfirmHoldRequest;
 import com.mssus.app.dto.request.wallet.RideHoldReleaseRequest;
 import com.mssus.app.dto.response.LocationResponse;

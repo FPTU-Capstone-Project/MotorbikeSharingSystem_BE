@@ -2,7 +2,7 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.request.ride.CompleteRideReqRequest;
 import com.mssus.app.dto.request.ride.CreateRideRequest;
 import com.mssus.app.dto.request.ride.StartRideRequest;
@@ -111,22 +111,44 @@ public class SharedRideServiceImpl implements SharedRideService {
             }
         }
 
-        Location startLoc = findOrCreateLocation(request.startLocationId(), request.startLatLng(), "Start");
-        Location endLoc = findOrCreateLocation(request.endLocationId(), request.endLatLng(), "End");
+        Route templateRoute = null;
+        if (request.routeId() != null) {
+            templateRoute = routeAssignmentService.getRoute(request.routeId());
+            log.info("Using predefined route {} with locations {} -> {}",
+                    templateRoute.getRouteId(),
+                    templateRoute.getFromLocation() != null ? templateRoute.getFromLocation().getLocationId() : null,
+                    templateRoute.getToLocation() != null ? templateRoute.getToLocation().getLocationId() : null);
+        }
+
+        Location startLoc;
+        Location endLoc;
+
+        if (templateRoute != null) {
+            startLoc = templateRoute.getFromLocation();
+            endLoc = templateRoute.getToLocation();
+        } else {
+            startLoc = findOrCreateLocation(request.startLocationId(), request.startLatLng(), "Start");
+            endLoc = findOrCreateLocation(request.endLocationId(), request.endLatLng(), "End");
+        }
 
         PricingConfig pricingConfig = pricingConfigRepository.findActive(Instant.now())
                 .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
 
         try {
-            RouteResponse routeResponse = routingService.getRoute(
-                    startLoc.getLat(), startLoc.getLng(),
-                    endLoc.getLat(), endLoc.getLng());
-            log.info("Route validated - distance: {} m, duration: {} s",
-                    routeResponse.distance(), routeResponse.time());
+            RouteResponse routeResponse = null;
+            if (templateRoute == null) {
+                routeResponse = routingService.getRoute(
+                        startLoc.getLat(), startLoc.getLng(),
+                        endLoc.getLat(), endLoc.getLng());
+                log.info("Route validated - distance: {} m, duration: {} s",
+                        routeResponse.distance(), routeResponse.time());
+            }
 
             Route resolvedRoute = routeAssignmentService.resolveRoute(
                     request.routeId(), startLoc, endLoc,
-                    routeResponse != null ? routeResponse.polyline() : null);
+                    templateRoute != null && templateRoute.getPolyline() != null
+                            ? templateRoute.getPolyline()
+                            : routeResponse != null ? routeResponse.polyline() : null);
 
             SharedRide ride = new SharedRide();
             ride.setDriver(driver);
@@ -141,7 +163,14 @@ public class SharedRideServiceImpl implements SharedRideService {
             ride.setScheduledTime(request.scheduledDepartureTime() != null
                     ? request.scheduledDepartureTime()
                     : LocalDateTime.now());
-            if (routeResponse != null) {
+            if (templateRoute != null) {
+                if (templateRoute.getDurationSeconds() != null) {
+                    ride.setEstimatedDuration((int) Math.ceil(templateRoute.getDurationSeconds() / 60.0));
+                }
+                if (templateRoute.getDistanceMeters() != null) {
+                    ride.setEstimatedDistance(templateRoute.getDistanceMeters() / 1000F);
+                }
+            } else if (routeResponse != null) {
                 ride.setEstimatedDuration((int) Math.ceil(routeResponse.time() / 60.0)); // in minutes
                 ride.setEstimatedDistance((float) routeResponse.distance() / 1000); // in km
             }

@@ -17,7 +17,7 @@ import com.mssus.app.entity.*;
 import com.mssus.app.mapper.UserMapper;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.*;
-import com.mssus.app.infrastructure.security.JwtService;
+import com.mssus.app.appconfig.security.JwtService;
 import com.mssus.app.service.FileUploadService;
 import com.mssus.app.service.ProfileService;
 import lombok.RequiredArgsConstructor;
