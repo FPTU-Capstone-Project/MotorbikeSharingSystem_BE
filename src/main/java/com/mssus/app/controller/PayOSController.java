@@ -1,15 +1,19 @@
 package com.mssus.app.controller;
 
+import com.mssus.app.dto.response.wallet.TopUpWebhookConfirmResponse;
 import com.mssus.app.service.PayOSService;
+import com.mssus.app.service.TopUpService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.view.RedirectView;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import vn.payos.type.CheckoutResponseData;
 
 import java.math.BigDecimal;
@@ -19,7 +23,9 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 @Slf4j
 public class PayOSController {
+
     private final PayOSService payOSService;
+    private final TopUpService topUpService;
 
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Top-up payment link created successfully"),
@@ -30,24 +36,46 @@ public class PayOSController {
     public ResponseEntity<CheckoutResponseData> createTopUpPaymentLink(
             @RequestParam Integer userId,
             @RequestParam BigDecimal amount,
+            @RequestParam String email,
             @RequestParam(defaultValue = "Wallet Top-up") String description,
             @RequestParam String returnUrl,
             @RequestParam String cancelUrl
-            ) throws Exception {
-
-        CheckoutResponseData response = payOSService.createTopUpPaymentLink(userId, amount, description,returnUrl,cancelUrl);
+    ) throws Exception {
+        CheckoutResponseData response = payOSService.createTopUpPaymentLink(
+                userId,
+                amount,
+                email,
+                description,
+                returnUrl,
+                cancelUrl
+        );
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/webhook")
-    public ResponseEntity<String>  handleWebhook(@RequestBody String payload) {
+    public ResponseEntity<String> handleWebhook(@RequestBody String payload) {
         try {
             log.info("Received PayOS webhook");
-            payOSService.handleWebhook(payload);
+            PayOSService.WebhookPayload webhookPayload = payOSService.parseWebhook(payload);
+            topUpService.handleTopUpWebhook(
+                    webhookPayload.orderCode(),
+                    webhookPayload.status(),
+                    webhookPayload.amount()
+            );
             return ResponseEntity.ok("Succeeded");
         } catch (Exception e) {
             log.error("Error processing webhook", e);
-            return ResponseEntity.status(500).body("Failed");
+            return ResponseEntity.internalServerError().body("Failed");
         }
     }
+
+    @GetMapping("/webhook/confirm")
+    public ResponseEntity<TopUpWebhookConfirmResponse> confirmWebhook(
+            @RequestParam String orderCode,
+            @RequestParam BigDecimal amount
+    ) {
+        TopUpWebhookConfirmResponse response = topUpService.confirmTopUpWebhook(orderCode, amount);
+        return ResponseEntity.ok(response);
+    }
 }
+

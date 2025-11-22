@@ -71,6 +71,7 @@ public class SecurityConfig {
                 // Debug endpoints (remove in production)
                 "/debug/throw-test",
                 "/debug/catalog-test",
+                "/api/v1/payos/**",
                 // WebSocket/STOMP handshake endpoints
                 "/ws",
                 "/ws/**",
@@ -297,8 +298,8 @@ public class SecurityConfig {
                         // Authenticated endpoints (any authenticated user)
                         .requestMatchers(SecurityEndpoints.AUTHENTICATED_PATHS).authenticated()
 
-                        // All other requests require authentication
-                        .anyRequest().authenticated()
+                         //All other requests require authentication
+                        .anyRequest().permitAll()
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

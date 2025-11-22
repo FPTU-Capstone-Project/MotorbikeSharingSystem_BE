@@ -28,13 +28,13 @@ public class Wallet {
     @JoinColumn(name = "user_id", referencedColumnName = "user_id", unique = true)
     private User user;
 
-    @Column(name = "shadow_balance", precision = 10, scale = 2)
-    @Builder.Default
-    private BigDecimal shadowBalance = BigDecimal.ZERO;
-
-    @Column(name = "pending_balance", precision = 10, scale = 2)
-    @Builder.Default
-    private BigDecimal pendingBalance = BigDecimal.ZERO;
+//    @Column(name = "shadow_balance", precision = 10, scale = 2)
+//    @Builder.Default
+//    private BigDecimal shadowBalance = BigDecimal.ZERO;
+//
+//    @Column(name = "pending_balance", precision = 10, scale = 2)
+//    @Builder.Default
+//    private BigDecimal pendingBalance = BigDecimal.ZERO;
 
     @Column(name = "total_topped_up", precision = 10, scale = 2)
     @Builder.Default
@@ -61,5 +61,5 @@ public class Wallet {
 
     @Version
     @Column(name = "version", nullable = false)
-    private Long version;
+    private Long version = 0L;
 }

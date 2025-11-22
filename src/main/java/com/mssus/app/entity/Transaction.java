@@ -10,7 +10,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Table(name = "transactions")
+@Table(name = "transactions", indexes = {
+        @Index(name="idx_txn_wallet_status", columnList = "wallet_id,status,created_at"),
+        @Index(name="idx_txn_group", columnList = "group_id"),
+        @Index(name = "idx_idempotency_key", columnList = "idempotency_key"),
+        @Index(name= "idx_txn_psp_ref", columnList = "psp_ref")
+})
 @Entity
 @Getter
 @Setter
@@ -25,7 +30,7 @@ public class Transaction {
     @Column(name = "txn_id")
     private Integer txnId;
 
-    @Column(name = "group_id")
+    @Column(name = "group_id",nullable = false)
     private UUID groupId;
 
     @Column(name = "type", nullable = false)
@@ -44,6 +49,10 @@ public class Transaction {
     @JoinColumn(name = "actor_user_id")
     private User actorUser;
 
+    @ManyToOne
+    @JoinColumn(name = "wallet_id", nullable = false)
+    private Wallet wallet;
+
     @Column(name = "system_wallet")
     @Enumerated(EnumType.STRING)
     private SystemWallet systemWallet;
@@ -52,6 +61,7 @@ public class Transaction {
     private BigDecimal amount;
 
     @Column(name = "currency", length = 3)
+    @Builder.Default
     private String currency = "VND";
 
     @ManyToOne
@@ -62,7 +72,7 @@ public class Transaction {
     @JoinColumn(name = "shared_ride_request_id")
     private SharedRideRequest sharedRideRequest;
 
-    @Column(name = "psp_ref")
+    @Column(name = "psp_ref", unique = true)
     private String pspRef;
 
     @Column(name = "status")
@@ -82,7 +92,7 @@ public class Transaction {
     private BigDecimal afterPending;
 
     @CreatedDate
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false,updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "note")
@@ -90,4 +100,7 @@ public class Transaction {
 
     @Column(name = "evidence_url", length = 500)
     private String evidenceUrl;
+
+    @Column(name="idempotency_key", unique = true, nullable = false)
+    private String idempotencyKey;
 }

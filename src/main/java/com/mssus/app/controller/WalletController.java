@@ -4,7 +4,7 @@ import com.mssus.app.dto.request.wallet.PayoutInitRequest;
 import com.mssus.app.dto.request.wallet.TopUpInitRequest;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.wallet.*;
-import com.mssus.app.service.TransactionService;
+import com.mssus.app.service.TopUpService;
 import com.mssus.app.service.WalletService;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.*;
 public class WalletController {
 
     private final WalletService walletService;
+    private final TopUpService topUpService;
     @Operation(summary = "Get wallet balance", description = "Retrieve current wallet balance and summary")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Balance retrieved successfully",
@@ -66,7 +67,8 @@ public class WalletController {
             Authentication authentication) {
         log.info("Top-up init request from user: {}, amount: {}, method: {}",
                 authentication.getName(), request.getAmount(), request.getPaymentMethod());
-        TopUpInitResponse response = walletService.initiateTopUp(request, authentication);
+        // ✅ Delegate to TopUpService (handles PayOS integration)
+        TopUpInitResponse response = topUpService.initiateTopUp(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

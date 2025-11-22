@@ -41,6 +41,9 @@ import static org.mockito.Mockito.*;
 @DisplayName("AuthService Unit Tests")
 class AuthServiceImplTest {
 
+    private static final String OTP_SENT_MESSAGE_VI = "Mã OTP đã được gửi đến thông tin liên lạc của bạn";
+    private static final String LOGOUT_SUCCESS_MESSAGE_VI = "Đăng xuất thành công";
+
     @Mock
     private UserRepository userRepository;
 
@@ -121,8 +124,8 @@ class AuthServiceImplTest {
         testWallet = Wallet.builder()
                 .walletId(1)
                 .user(testUser)
-                .shadowBalance(BigDecimal.ZERO)
-                .pendingBalance(BigDecimal.ZERO)
+                // ✅ SSOT: shadowBalance và pendingBalance không còn trong Wallet entity
+                // Balance sẽ được tính từ Transaction ledger
                 .totalToppedUp(BigDecimal.ZERO)
                 .totalSpent(BigDecimal.ZERO)
                 .isActive(true)
@@ -133,6 +136,13 @@ class AuthServiceImplTest {
 
         lenient().when(emailService.sendEmail(anyString(), anyString(), anyString(), anyMap(), any(EmailPriority.class),
             anyLong(), anyString())).thenReturn(CompletableFuture.completedFuture(EmailResult.success("email-1")));
+    }
+
+    private void stubRegisterValidation(MockedStatic<ValidationUtil> validationUtil) {
+        validationUtil.when(() -> ValidationUtil.isValidEmail(anyString())).thenReturn(true);
+        validationUtil.when(() -> ValidationUtil.isValidFullName(anyString())).thenReturn(true);
+        validationUtil.when(() -> ValidationUtil.sanitizeText(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        validationUtil.when(() -> ValidationUtil.normalizePhone(anyString())).thenReturn("0901234567");
     }
 
     @Nested
@@ -151,7 +161,7 @@ class AuthServiceImplTest {
             when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("jwt-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
-                validationUtil.when(() -> ValidationUtil.normalizePhone(anyString())).thenReturn("0901234567");
+                stubRegisterValidation(validationUtil);
 
                 // Act
                 RegisterResponse response = authService.register(registerRequest);
@@ -182,7 +192,7 @@ class AuthServiceImplTest {
             when(userRepository.existsByEmailAndStatusNot(anyString(), any(UserStatus.class))).thenReturn(true);
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
-                validationUtil.when(() -> ValidationUtil.normalizePhone(anyString())).thenReturn("0901234567");
+                stubRegisterValidation(validationUtil);
 
                 // Act & Assert
                 assertThatThrownBy(() -> authService.register(registerRequest))
@@ -202,7 +212,7 @@ class AuthServiceImplTest {
             when(userRepository.existsByEmailAndStatus(anyString(), any(UserStatus.class))).thenReturn(true);
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
-                validationUtil.when(() -> ValidationUtil.normalizePhone(anyString())).thenReturn("0901234567");
+                stubRegisterValidation(validationUtil);
 
                 // Act & Assert
                 assertThatThrownBy(() -> authService.register(registerRequest))
@@ -223,7 +233,7 @@ class AuthServiceImplTest {
             when(userRepository.existsByPhone(anyString())).thenReturn(true);
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
-                validationUtil.when(() -> ValidationUtil.normalizePhone(anyString())).thenReturn("0901234567");
+                stubRegisterValidation(validationUtil);
 
                 // Act & Assert
                 assertThatThrownBy(() -> authService.register(registerRequest))
@@ -248,7 +258,7 @@ class AuthServiceImplTest {
             when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("jwt-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
-                validationUtil.when(() -> ValidationUtil.normalizePhone(anyString())).thenReturn("0901234567");
+                stubRegisterValidation(validationUtil);
 
                 // Act
                 RegisterResponse response = authService.register(registerRequest);
@@ -272,7 +282,7 @@ class AuthServiceImplTest {
             when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("jwt-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
-                validationUtil.when(() -> ValidationUtil.normalizePhone(anyString())).thenReturn("0901234567");
+                stubRegisterValidation(validationUtil);
 
                 // Act
                 RegisterResponse response = authService.register(registerRequest);
@@ -357,22 +367,25 @@ class AuthServiceImplTest {
         }
 
         @Test
-        @DisplayName("login_UserDoesNotHaveProfile_ThrowsValidationException")
-        void login_UserDoesNotHaveProfile_ThrowsValidationException() {
+        @DisplayName("login_UserDoesNotHaveProfile_AllowsLoginWithNullActiveProfile")
+        void login_UserDoesNotHaveProfile_AllowsLoginWithNullActiveProfile() {
             // Arrange
             testUser.setRiderProfile(null);
             when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
+            when(jwtService.generateToken(anyString(), any(Map.class))).thenReturn("access-token");
+            when(jwtService.getExpirationTime()).thenReturn(3600000L);
+            when(refreshTokenService.generateRefreshToken(any(User.class))).thenReturn("refresh-token");
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
                 validationUtil.when(() -> ValidationUtil.isValidEmail(anyString())).thenReturn(true);
 
-                // Act & Assert
-                assertThatThrownBy(() -> authService.login(loginRequest))
-                        .isInstanceOf(BaseDomainException.class)
-                        .extracting("errorId")
-                        .isEqualTo("user.validation.profile-not-exists");
+                // Act
+                LoginResponse response = authService.login(loginRequest);
 
-                verify(authenticationManager, never()).authenticate(any());
+                // Assert
+                assertThat(response).isNotNull();
+                assertThat(response.getActiveProfile()).isNull();
+                verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
             }
         }
 
@@ -452,6 +465,7 @@ class AuthServiceImplTest {
         void login_UserEmailVerifying_ThrowsUnauthorizedException() {
             // Arrange
             testUser.setStatus(UserStatus.EMAIL_VERIFYING);
+            testUser.setEmailVerified(false);
             when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
 
             try (MockedStatic<ValidationUtil> validationUtil = mockStatic(ValidationUtil.class)) {
@@ -501,7 +515,7 @@ class AuthServiceImplTest {
 
             // Assert
             assertThat(response).isNotNull();
-            assertThat(response.getMessage()).isEqualTo("Logged out successfully");
+            assertThat(response.getMessage()).isEqualTo(LOGOUT_SUCCESS_MESSAGE_VI);
             verify(refreshTokenService).invalidateRefreshToken(refreshToken);
         }
     }
@@ -648,7 +662,7 @@ class AuthServiceImplTest {
 
                 // Assert
                 assertThat(response).isNotNull();
-                assertThat(response.getMessage()).isEqualTo("OTP sent to your registered contact");
+                assertThat(response.getMessage()).isEqualTo(OTP_SENT_MESSAGE_VI);
                 verify(userRepository).findByEmail("test@example.com");
                 otpUtil.verify(() -> OtpUtil.generateOtp());
                 otpUtil.verify(() -> OtpUtil.storeOtp("test@example.com:" + Constants.OTP_FORGOT_PASSWORD, "123456", OtpFor.FORGOT_PASSWORD));
@@ -676,7 +690,7 @@ class AuthServiceImplTest {
 
                 // Assert
                 assertThat(response).isNotNull();
-                assertThat(response.getMessage()).isEqualTo("OTP sent to your registered contact");
+                assertThat(response.getMessage()).isEqualTo(OTP_SENT_MESSAGE_VI);
                 verify(userRepository).findByPhone("0901234567");
                 otpUtil.verify(() -> OtpUtil.generateOtp());
                 otpUtil.verify(() -> OtpUtil.storeOtp("test@example.com:" + Constants.OTP_FORGOT_PASSWORD, "123456", OtpFor.FORGOT_PASSWORD));
@@ -700,7 +714,7 @@ class AuthServiceImplTest {
 
                 // Assert
                 assertThat(response).isNotNull();
-                assertThat(response.getMessage()).isEqualTo("OTP sent to your registered contact");
+                assertThat(response.getMessage()).isEqualTo(OTP_SENT_MESSAGE_VI);
                 verify(userRepository).findByEmail("nonexistent@example.com");
             }
         }
@@ -811,6 +825,7 @@ class AuthServiceImplTest {
         void validateUserBeforeGrantingToken_EmailVerifyingUser_ThrowsException() {
             // Arrange
             testUser.setStatus(UserStatus.EMAIL_VERIFYING);
+            testUser.setEmailVerified(false);
 
             // Act & Assert
             assertThatThrownBy(() -> authService.validateUserBeforeGrantingToken(testUser))

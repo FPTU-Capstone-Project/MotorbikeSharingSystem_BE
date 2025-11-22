@@ -9,6 +9,7 @@ import com.mssus.app.dto.response.*;
 import com.mssus.app.dto.domain.sos.EmergencyContactRequest;
 import com.mssus.app.dto.domain.sos.EmergencyContactResponse;
 import com.mssus.app.service.AuthService;
+import com.mssus.app.service.BalanceCalculationService;
 import com.mssus.app.service.EmergencyContactService;
 import com.mssus.app.service.FPTAIService;
 import org.springframework.data.domain.Page;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,6 +54,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final FileUploadService fileUploadService;
     private final FPTAIService fptaiService;
     private final EmergencyContactService emergencyContactService;
+    private final BalanceCalculationService balanceCalculationService;  // ✅ SSOT: Calculate balance from ledger
 
 
     @Override
@@ -81,22 +84,33 @@ public class ProfileServiceImpl implements ProfileService {
                         .toList())
                 .orElse(List.of());
 
-        return switch (UserProfileType.valueOf(activeProfile.toUpperCase())) {
+        UserProfileResponse response = switch (UserProfileType.valueOf(activeProfile.toUpperCase())) {
             case DRIVER -> {
-                UserProfileResponse response = userMapper.toDriverProfileResponse(user);
-                response.setAvailableProfiles(availableProfiles);
-                response.setActiveProfile(activeProfile);
-                response.setEmergencyContacts(emergencyContacts);
-                yield response;
+                UserProfileResponse r = userMapper.toDriverProfileResponse(user);
+                r.setAvailableProfiles(availableProfiles);
+                r.setActiveProfile(activeProfile);
+                r.setEmergencyContacts(emergencyContacts);
+                yield r;
             }
             case RIDER -> {
-                UserProfileResponse response = userMapper.toRiderProfileResponse(user);
-                response.setAvailableProfiles(availableProfiles);
-                response.setActiveProfile(activeProfile);
-                response.setEmergencyContacts(emergencyContacts);
-                yield response;
+                UserProfileResponse r = userMapper.toRiderProfileResponse(user);
+                r.setAvailableProfiles(availableProfiles);
+                r.setActiveProfile(activeProfile);
+                r.setEmergencyContacts(emergencyContacts);
+                yield r;
             }
         };
+
+        // ✅ SSOT: Populate WalletInfo với balance từ ledger
+        if (response.getWallet() != null && user.getWallet() != null) {
+            BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(user.getWallet().getWalletId());
+            BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(user.getWallet().getWalletId());
+            
+            response.getWallet().setShadowBalance(availableBalance);
+            response.getWallet().setPendingBalance(pendingBalance);
+        }
+
+        return response;
     }
 
     @Override

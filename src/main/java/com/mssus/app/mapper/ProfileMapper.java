@@ -21,6 +21,13 @@ public interface ProfileMapper {
 
 //    UserProfileResponse.AdminProfile toAdminProfileResponse(AdminProfile entity);
 
+    /**
+     * ✅ SSOT: Map Wallet to WalletInfo
+     * Note: shadowBalance và pendingBalance sẽ được populate từ BalanceCalculationService
+     * trong ProfileService, không phải từ Wallet entity
+     */
+    @Mapping(target = "shadowBalance", ignore = true)  // ✅ SSOT: Tính từ ledger
+    @Mapping(target = "pendingBalance", ignore = true)  // ✅ SSOT: Tính từ ledger
     UserProfileResponse.WalletInfo toWalletInfoResponse(Wallet entity);
 
     @Mapping(target = "status", expression = "java(entity.getStatus() != null ? entity.getStatus().name() : null)")
