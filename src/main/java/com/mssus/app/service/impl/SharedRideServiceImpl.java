@@ -806,7 +806,57 @@ public class SharedRideServiceImpl implements SharedRideService {
                     Map.of("currentState", ride.getStatus()));
         }
 
-        // Release holds for all CONFIRMED requests
+        if(ride.getStatus() == SharedRideStatus.ONGOING) {
+            try {
+                PricingConfig activePricingConfig = pricingConfigRepository.findActive(Instant.now())
+                        .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
+
+                // Capture fare for all ONGOING requests (similar to completeRide)
+                List<SharedRideRequest> ongoingRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
+                        rideId, SharedRideRequestStatus.ONGOING);
+
+                if (!ongoingRequests.isEmpty()) {
+                    for (SharedRideRequest request : ongoingRequests) {
+                        try {
+                            RideCompleteSettlementRequest settlementRequest = new RideCompleteSettlementRequest();
+                            settlementRequest.setRiderId(request.getRider().getRiderId());
+                            settlementRequest.setRideRequestId(request.getSharedRideRequestId());
+                            settlementRequest.setDriverId(ride.getDriver().getDriverId());
+                            settlementRequest.setRideId(ride.getSharedRideId());
+                            settlementRequest.setNote("Ride cancelled during ongoing ride - Request #" + request.getSharedRideRequestId());
+
+                            FareBreakdown fareBreakdown = new FareBreakdown(
+                                    activePricingConfig.getVersion(),
+                                    request.getDistanceMeters(),
+                                    MoneyVnd.VND(request.getDiscountAmount()),
+                                    MoneyVnd.VND(request.getSubtotalFare()),
+                                    MoneyVnd.VND(request.getTotalFare()),
+                                    activePricingConfig.getSystemCommissionRate());
+
+                            rideFundCoordinatingService.settleRideFunds(settlementRequest, fareBreakdown);
+
+                            request.setStatus(SharedRideRequestStatus.CANCELLED);
+                            requestRepository.save(request);
+
+                            log.info("Captured fare for cancelled ongoing request {} - amount: {}",
+                                    request.getSharedRideRequestId(), request.getTotalFare());
+
+                        } catch (Exception e) {
+                            log.error("Failed to capture fare for ongoing request {}: {}",
+                                    request.getSharedRideRequestId(), e.getMessage(), e);
+                            throw BaseDomainException.of("ride-request.settlement.failed",
+                                    "Failed to capture fare for ongoing request: " + e.getMessage());
+                        }
+                    }
+                }
+                rideTrackingService.stopTracking(ride.getSharedRideId());
+            } catch (Exception trackingEx) {
+                log.warn("Failed to stop tracking for cancelled ride {}: {}", ride.getSharedRideId(),
+                        trackingEx.getMessage());
+            }
+        }
+
+        // Release holds for all CONFIRMED requests (existing behavior)
         List<SharedRideRequest> confirmedRequests = requestRepository.findBySharedRideSharedRideIdAndStatus(
                 rideId, SharedRideRequestStatus.CONFIRMED);
 
