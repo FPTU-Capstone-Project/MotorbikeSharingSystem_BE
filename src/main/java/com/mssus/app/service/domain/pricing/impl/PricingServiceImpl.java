@@ -35,18 +35,19 @@ public class PricingServiceImpl implements PricingService {
     public FareBreakdown quote(PriceInput in) {
         var cfgEntity = cfgRepo.findActive(Instant.now())
             .orElseThrow(() -> BaseDomainException.of("pricing-config.not-found.resource"));
-        List<FareTier> tiers = fareTierRepository.findByPricingConfig_PricingConfigId(cfgEntity.getPricingConfigId());
         List<FareTierDomain> tierDomains = new ArrayList<>();
 
-        for (FareTier tier : tiers) {
-            tierDomains.add(new FareTierDomain(
-                tier.getFareTierId(),
-                tier.getTierLevel(),
-                tier.getMinKm(),
-                tier.getMaxKm(),
-                MoneyVnd.VND(tier.getAmount())
-            ));
-        }
+        fareTierRepository.findByPricingConfig_PricingConfigId(cfgEntity.getPricingConfigId()).stream()
+            .filter(tier -> tier.getIsActive() == null || Boolean.TRUE.equals(tier.getIsActive()))
+            .forEach(tier -> {
+                tierDomains.add(new FareTierDomain(
+                    tier.getFareTierId(),
+                    tier.getTierLevel(),
+                    tier.getMinKm(),
+                    tier.getMaxKm(),
+                    MoneyVnd.VND(tier.getAmount())
+                ));
+            });
 
         var cfg = pricingConfigMapper.toDomain(cfgEntity);
         cfg.setFareTiers(tierDomains);

@@ -1443,11 +1443,13 @@ VALUES ('Nhà Văn Hóa Sinh Viên',
 INSERT INTO pricing_configs (version,
                              system_commission_rate,
                              valid_from,
-                             valid_until)
+                             valid_until,
+                             status)
 VALUES ('2025-01-15 00:00:00',
         0.1000,
         '2025-01-15 00:00:00'::timestamp,
-        NULL);
+        NULL,
+        'ACTIVE');
 
 DO
 $$
@@ -1469,7 +1471,7 @@ $$
 
             -- Tier 2: Price per km for distances beyond 2km.
             INSERT INTO fare_tiers (pricing_config_id, tier_level, description, amount, min_km, max_km)
-            VALUES (v_pricing_config_id, 2, 'Fixed fare for above 5km', 15000.00, 5, 999);
+            VALUES (v_pricing_config_id, 2, 'Fixed fare for above 5km', 15000.00, 5, 25);
         END IF;
     END;
 $$;
