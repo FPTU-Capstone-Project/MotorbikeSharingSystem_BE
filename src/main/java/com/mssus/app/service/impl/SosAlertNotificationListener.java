@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mssus.app.common.enums.*;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.infrastructure.config.properties.SosConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.SosConfigurationProperties;
 import com.mssus.app.entity.EmergencyContact;
 import com.mssus.app.entity.SosAlert;
 import com.mssus.app.entity.User;

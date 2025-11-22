@@ -4,7 +4,7 @@ import com.mssus.app.common.enums.OtpFor;
 import com.mssus.app.common.enums.PaymentMethod;
 import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.infrastructure.config.properties.SosConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.SosConfigurationProperties;
 import com.mssus.app.dto.request.GetOtpRequest;
 import com.mssus.app.dto.request.OtpRequest;
 import com.mssus.app.dto.response.OtpResponse;

@@ -2,14 +2,14 @@ package com.mssus.app.service.domain.matching;
 
 import com.mssus.app.common.enums.RequestKind;
 import com.mssus.app.common.enums.SharedRideRequestStatus;
-import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.domain.notification.DriverRideOfferNotification;
 import com.mssus.app.dto.domain.notification.RiderMatchStatusNotification;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
 import com.mssus.app.entity.DriverProfile;
 import com.mssus.app.entity.Location;
 import com.mssus.app.entity.SharedRideRequest;
-import com.mssus.app.infrastructure.config.properties.RideMessagingProperties;
+import com.mssus.app.appconfig.config.properties.RideMessagingProperties;
 import com.mssus.app.messaging.RideMatchingCommandPublisher;
 import com.mssus.app.messaging.RideNotificationEventPublisher;
 import com.mssus.app.messaging.dto.MatchingCommandMessage;
@@ -24,7 +24,7 @@ import com.mssus.app.service.domain.matching.session.MatchingSessionPhase;
 import com.mssus.app.service.domain.matching.session.MatchingSessionRepository;
 import com.mssus.app.service.domain.matching.session.MatchingSessionState;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;

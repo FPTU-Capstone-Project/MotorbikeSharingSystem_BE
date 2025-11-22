@@ -7,7 +7,7 @@ import com.mssus.app.dto.response.*;
 import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.entity.*;
 import com.mssus.app.repository.*;
-import com.mssus.app.infrastructure.security.JwtService;
+import com.mssus.app.appconfig.security.JwtService;
 import com.mssus.app.service.AuthService;
 import com.mssus.app.service.EmailService;
 import com.mssus.app.service.RefreshTokenService;

@@ -8,7 +8,7 @@ import com.mssus.app.entity.User;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.RefreshTokenRepository;
 import com.mssus.app.repository.UserRepository;
-import com.mssus.app.infrastructure.security.JwtService;
+import com.mssus.app.appconfig.security.JwtService;
 import com.mssus.app.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

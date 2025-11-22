@@ -1,6 +1,6 @@
 package com.mssus.app.messaging;
 
-import com.mssus.app.infrastructure.config.properties.RideMessagingProperties;
+import com.mssus.app.appconfig.config.properties.RideMessagingProperties;
 import com.mssus.app.messaging.dto.DriverLocationUpdateMessage;
 import com.mssus.app.messaging.dto.RideRequestCreatedMessage;
 import lombok.RequiredArgsConstructor;

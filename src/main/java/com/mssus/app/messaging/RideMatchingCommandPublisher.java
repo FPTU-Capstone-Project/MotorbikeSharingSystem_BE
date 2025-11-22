@@ -1,6 +1,6 @@
 package com.mssus.app.messaging;
 
-import com.mssus.app.infrastructure.config.properties.RideMessagingProperties;
+import com.mssus.app.appconfig.config.properties.RideMessagingProperties;
 import com.mssus.app.messaging.dto.MatchingCommandMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
