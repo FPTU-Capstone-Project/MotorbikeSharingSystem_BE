@@ -1,4 +1,4 @@
-package com.mssus.app.infrastructure.config;
+package com.mssus.app.appconfig.config;
 
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
