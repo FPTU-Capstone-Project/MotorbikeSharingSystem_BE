@@ -11,6 +11,7 @@ import com.mssus.app.entity.Wallet;
 import java.util.List;
 import com.mssus.app.repository.UserRepository;
 import com.mssus.app.repository.WalletRepository;
+import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.service.PayOSService;
 import com.mssus.app.service.TopUpService;
 import com.mssus.app.service.TransactionService;
@@ -23,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.payos.type.CheckoutResponseData;
 
 import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +37,7 @@ public class TopUpServiceImpl implements TopUpService {
     private final WalletService walletService;
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
+    private final TransactionRepository transactionRepository;
     
     /**
      * Initiate top-up: Tạo PayOS payment link và PENDING transaction
@@ -61,6 +65,75 @@ public class TopUpServiceImpl implements TopUpService {
             throw new ValidationException("Ví đã bị đóng băng. Vui lòng liên hệ hỗ trợ.");
         }
         
+        // ✅ FIX: Client-side idempotency key
+        // Generate nếu client không gửi (backward compatibility)
+        String idempotencyKey = request.getIdempotencyKey();
+        if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
+            idempotencyKey = UUID.randomUUID().toString();
+            log.debug("Generated idempotency key for user {}: {}", user.getUserId(), idempotencyKey);
+        } else {
+            log.debug("Using client-provided idempotency key for user {}: {}", user.getUserId(), idempotencyKey);
+        }
+        
+        // ✅ FIX: Check idempotency TRƯỚC KHI gọi PayOS
+        // Tìm transaction với idempotencyKey này
+        Optional<Transaction> existingTransaction = walletService.findTransactionByIdempotencyKey(idempotencyKey);
+        if (existingTransaction.isPresent()) {
+            Transaction existingTxn = existingTransaction.get();
+            String existingPspRef = existingTxn.getPspRef();
+            
+            log.warn("Duplicate topup request detected for user {} with idempotencyKey: {}, existing pspRef: {}", 
+                user.getUserId(), idempotencyKey, existingPspRef);
+            
+            if (existingPspRef != null && !existingPspRef.trim().isEmpty()) {
+                Long existingOrderCode = Long.parseLong(existingPspRef);
+                String description = "Wallet top up";
+                
+                try {
+                    // ✅ PayOS không cho phép tạo trùng orderCode
+                    // 1. Hủy link cũ
+                    // 2. Tạo orderCode mới
+                    // 3. Tạo payment link mới với orderCode mới
+                    // 4. Update pspRef trong transaction
+                    CheckoutResponseData recreatedPaymentData = payOSService.recreateTopUpPaymentLink(
+                            existingOrderCode,
+                            user.getUserId(),
+                            request.getAmount(),
+                            user.getEmail(),
+                            description,
+                            request.getReturnUrl(),
+                            request.getCancelUrl()
+                    );
+                    
+                    // ✅ Lấy orderCode mới từ response
+                    String newOrderCode = String.valueOf(recreatedPaymentData.getOrderCode());
+                    
+                    // ✅ Update pspRef trong User transaction (System transaction không có pspRef)
+                    existingTxn.setPspRef(newOrderCode);
+                    transactionRepository.save(existingTxn);
+                    
+                    log.info("Updated pspRef for duplicate topup request: old={}, new={}, idempotencyKey={}", 
+                        existingPspRef, newOrderCode, idempotencyKey);
+
+                    return TopUpInitResponse.builder()
+                            .transactionRef(newOrderCode)  // ✅ Return orderCode mới
+                            .paymentUrl(recreatedPaymentData.getCheckoutUrl())
+                            .qrCodeUrl(recreatedPaymentData.getQrCode())
+                            .status(existingTxn.getStatus().name())
+                            .expirySeconds(900)
+                            .build();
+                } catch (Exception e) {
+                    log.error("Error recreating PayOS payment link for duplicate topup request, user {}: {}",
+                        user.getUserId(), e.getMessage(), e);
+                    throw new RuntimeException("Không thể tái tạo liên kết thanh toán: " + e.getMessage(), e);
+                }
+            } else {
+                // Transaction chưa có pspRef (edge case - transaction mới tạo nhưng chưa gọi PayOS)
+                // Cho phép tiếp tục nhưng log warning
+                log.warn("Found existing transaction without pspRef for idempotencyKey: {}", idempotencyKey);
+            }
+        }
+        
         try {
             // 1. Tạo PayOS payment link
             String description = "Wallet top up";
@@ -77,11 +150,13 @@ public class TopUpServiceImpl implements TopUpService {
             
             // 2. ✅ FIX: Dùng TransactionService.initTopup() để tạo double-entry transactions
             // initTopup() tạo 2 transactions: System.MASTER OUT + User IN (balanced)
+            // ✅ Pass idempotencyKey từ client để đảm bảo idempotency
             List<Transaction> pendingTransactions = transactionService.initTopup(
                 user.getUserId(),
                 request.getAmount(),
                 orderCode,  // pspRef
-                description
+                description,
+                idempotencyKey  // ✅ Client-side idempotency key
             );
             
             log.info("Top-up initiated for user {} - amount: {}, orderCode: {}, transactions: {} (System OUT + User IN)",

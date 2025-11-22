@@ -194,9 +194,9 @@ public class WalletServiceImpl implements WalletService {
         }
 
         // Validate minimum payout amount (50,000 VND)
-        BigDecimal minimumAmount = new BigDecimal("50000");
+        BigDecimal minimumAmount = new BigDecimal("2000");
         if (request.getAmount().compareTo(minimumAmount) < 0) {
-            throw new ValidationException("Số tiền rút tối thiểu là 50.000 VNĐ. Yêu cầu: " + request.getAmount());
+            throw new ValidationException("Số tiền rút tối thiểu là 2.000 VNĐ. Yêu cầu: " + request.getAmount());
         }
 
         // Validate bank account number format (9-16 digits)
