@@ -1,25 +1,23 @@
-package com.mssus.app.service.domain.pricing.config;
+package com.mssus.app.dto.response.pricing;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import com.mssus.app.common.enums.PricingConfigStatus;
+import lombok.Builder;
+import lombok.Value;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-@Data
+@Value
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class PricingConfigDomain {
+public class PricingConfigResponse {
     Integer pricingConfigId;
     Instant version;
-    List<FareTierDomain> fareTiers;
     BigDecimal systemCommissionRate;
     Instant validFrom;
     Instant validUntil;
     PricingConfigStatus status;
+    String changeReason;
+    Instant noticeSentAt;
+    List<FareTierAdminResponse> fareTiers;
 }
