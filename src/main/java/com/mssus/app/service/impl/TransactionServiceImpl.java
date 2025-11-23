@@ -1380,6 +1380,7 @@ public class TransactionServiceImpl implements TransactionService {
         ActorKind actorKindEnum = parseActorKind(actorKind);
         LocalDateTime startDateTime = parseBoundaryDate(dateFrom, true);
         LocalDateTime endDateTime = parseBoundaryDate(dateTo, false);
+        validateDateRangeLimit(startDateTime, endDateTime);
 
         Specification<Transaction> spec = Specification.where(null);
         if (typeEnum != null) {
@@ -1493,6 +1494,24 @@ public class TransactionServiceImpl implements TransactionService {
             return startOfDay ? localDate.atStartOfDay() : localDate.atTime(LocalTime.MAX);
         } catch (DateTimeParseException ex) {
             throw new ValidationException("Invalid date format (expected yyyy-MM-dd): " + date);
+        }
+    }
+
+    private void validateDateRangeLimit(LocalDateTime start, LocalDateTime end) {
+        LocalDate minAllowedDate = LocalDate.now().minusMonths(3);
+        LocalDate today = LocalDate.now();
+
+        if (start != null && start.toLocalDate().isBefore(minAllowedDate)) {
+            throw new ValidationException("Start date cannot be earlier than 3 months ago");
+        }
+        if (end != null && end.toLocalDate().isBefore(minAllowedDate)) {
+            throw new ValidationException("End date cannot be earlier than 3 months ago");
+        }
+        if (start != null && end != null && end.isBefore(start)) {
+            throw new ValidationException("End date must be on or after start date");
+        }
+        if (end != null && end.toLocalDate().isAfter(today)) {
+            throw new ValidationException("End date cannot be in the future");
         }
     }
 

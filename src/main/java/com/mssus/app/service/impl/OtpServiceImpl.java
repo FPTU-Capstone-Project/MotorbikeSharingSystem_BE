@@ -4,7 +4,7 @@ import com.mssus.app.common.enums.OtpFor;
 import com.mssus.app.common.enums.PaymentMethod;
 import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.infrastructure.config.properties.SosConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.SosConfigurationProperties;
 import com.mssus.app.dto.request.GetOtpRequest;
 import com.mssus.app.dto.request.OtpRequest;
 import com.mssus.app.dto.response.OtpResponse;
@@ -19,6 +19,7 @@ import com.mssus.app.service.EmergencyContactService;
 import com.mssus.app.service.OtpService;
 import com.mssus.app.common.util.OtpUtil;
 import com.mssus.app.dto.domain.sos.EmergencyContactRequest;
+import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class OtpServiceImpl implements OtpService {
     private final EmailService emailService;
     private final EmergencyContactService emergencyContactService;
     private final SosConfigurationProperties sosConfig;
+    private final WalletService walletService;
 
     @Override
     public OtpResponse requestOtp(GetOtpRequest request) {
@@ -162,6 +164,7 @@ public class OtpServiceImpl implements OtpService {
                         log.info("Rider profile created in PENDING for userId={}", user.getUserId());
                         return rp;
                     });
+                walletService.createWalletForUser(user.getUserId());
                 ensureFallbackContact(user);
             }
         } else {
@@ -196,6 +199,7 @@ public class OtpServiceImpl implements OtpService {
                     log.info("Rider profile created in PENDING for userId={}", user.getUserId());
                     return rp;
                 });
+            walletService.createWalletForUser(user.getUserId());
             ensureFallbackContact(user);
         }
     }

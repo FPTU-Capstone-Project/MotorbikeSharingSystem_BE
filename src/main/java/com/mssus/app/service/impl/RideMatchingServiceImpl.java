@@ -2,7 +2,8 @@ package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.SharedRideStatus;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.infrastructure.config.properties.RideConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.AiConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.RideConfigurationProperties;
 import com.mssus.app.dto.domain.ride.LatLng;
 import com.mssus.app.dto.response.RouteResponse;
 import com.mssus.app.dto.response.ride.RideMatchProposalResponse;
@@ -14,9 +15,11 @@ import com.mssus.app.repository.SharedRideRepository;
 import com.mssus.app.service.RideMatchingService;
 import com.mssus.app.service.RideTrackingService;
 import com.mssus.app.service.RoutingService;
+import com.mssus.app.service.ai.AiMatchingService;
 import com.mssus.app.common.util.GeoUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +39,16 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private final RideConfigurationProperties rideConfig;
     private final RoutingService routingService;
     private final RideTrackingService rideTrackingService;
+    private final AiConfigurationProperties aiConfig;
+    
+    @Autowired(required = false)
+    private AiMatchingService aiMatchingService;
 
     @Override
     @Transactional(readOnly = true)
     public List<RideMatchProposalResponse> findMatches(SharedRideRequest request) {
         log.info(">> findMatches(request={})", request);
+        
         // Step 1: Extract and validate locations
         LocationPair requestLocations = extractRequestLocations(request);
         log.debug("Request locations: {}", requestLocations);
@@ -54,15 +62,44 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             return List.of();
         }
 
-        // Step 3: Score and filter candidates
+        // Step 3: Score and filter candidates using BASE algorithm
         List<RideMatchProposalResponse> proposals = evaluateCandidates(
             candidateRides, requestLocations, request);
-        log.debug("Evaluated candidates, found {} proposals.", proposals.size());
+        log.debug("Base algorithm evaluated candidates, found {} proposals.", proposals.size());
 
-        // Step 4: Sort and limit results
-        List<RideMatchProposalResponse> topProposals = selectTopProposals(proposals);
-        log.info("<< findMatches(): {} proposals", topProposals.size());
-        return topProposals;
+        if (proposals.isEmpty()) {
+            log.info("<< findMatches(): No proposals after evaluation");
+            return List.of();
+        }
+
+        // Step 4: Sort by base algorithm scores
+        List<RideMatchProposalResponse> sortedProposals = selectTopProposals(proposals);
+        
+        // Step 5: AI MAKES FINAL RANKING DECISION (replaces weighted-sum as primary algorithm)
+        if (aiConfig.isEnabled() && aiMatchingService != null && aiMatchingService.isAvailable()) {
+            try {
+                log.info("Invoking AI matching algorithm for final ranking decision");
+                List<RideMatchProposalResponse> aiRankedProposals = 
+                    aiMatchingService.aiRankMatches(request, sortedProposals);
+                
+                log.info("<< findMatches(): {} proposals (AI-ranked successfully)", aiRankedProposals.size());
+                return aiRankedProposals;
+                
+            } catch (Exception e) {
+                log.error("AI matching failed: {}", e.getMessage());
+                if (aiConfig.isFallbackToBaseAlgorithm()) {
+                    log.warn("Falling back to base algorithm due to AI failure");
+                    log.info("<< findMatches(): {} proposals (base algorithm fallback)", sortedProposals.size());
+                    return sortedProposals;
+                } else {
+                    throw e;
+                }
+            }
+        } else {
+            log.info("AI matching disabled, using base algorithm only");
+            log.info("<< findMatches(): {} proposals (base algorithm)", sortedProposals.size());
+            return sortedProposals;
+        }
     }
 
     private LocationPair extractRequestLocations(SharedRideRequest request) {

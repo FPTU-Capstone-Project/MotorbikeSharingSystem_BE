@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.mssus.app.common.enums.PricingConfigStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -20,5 +21,5 @@ public class PricingConfigDomain {
     BigDecimal systemCommissionRate;
     Instant validFrom;
     Instant validUntil;
+    PricingConfigStatus status;
 }
-

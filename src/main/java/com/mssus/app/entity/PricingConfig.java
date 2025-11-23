@@ -1,12 +1,11 @@
 package com.mssus.app.entity;
 
+import com.mssus.app.common.enums.PricingConfigStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Entity
@@ -35,9 +34,27 @@ public class PricingConfig {
     @Column(name = "system_commission_rate", nullable = false, precision = 5, scale = 4)
     private BigDecimal systemCommissionRate;
 
-    @Column(name = "valid_from", nullable = false)
+    @Column(name = "valid_from")
     private Instant validFrom;
 
     @Column(name = "valid_until")
     private Instant validUntil;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private PricingConfigStatus status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by")
+    private User updatedBy;
+
+    @Column(name = "change_reason")
+    private String changeReason;
+
+    @Column(name = "notice_sent_at")
+    private Instant noticeSentAt;
 }

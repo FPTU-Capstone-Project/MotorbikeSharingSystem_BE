@@ -8,7 +8,7 @@ import java.time.LocalDate;
 
 public interface ReportService {
 
-    DashboardResponse getDashboardStats();
+    DashboardResponse getDashboardStats(LocalDate startDate, LocalDate endDate);
 
     TopUpTrendResponse getTopUpTrends(LocalDate startDate,
                                       LocalDate endDate,

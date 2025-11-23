@@ -6,7 +6,7 @@ import com.mssus.app.common.enums.AlertType;
 import com.mssus.app.common.enums.SosAlertEventType;
 import com.mssus.app.common.enums.SosAlertStatus;
 import com.mssus.app.common.exception.BaseDomainException;
-import com.mssus.app.infrastructure.config.properties.SosConfigurationProperties;
+import com.mssus.app.appconfig.config.properties.SosConfigurationProperties;
 import com.mssus.app.dto.domain.sos.AcknowledgeSosRequest;
 import com.mssus.app.dto.domain.sos.ResolveSosRequest;
 import com.mssus.app.dto.domain.sos.SosAlertResponse;

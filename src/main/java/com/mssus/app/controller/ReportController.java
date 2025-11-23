@@ -42,10 +42,12 @@ public class ReportController {
             @ApiResponse(responseCode = "403", description = "Forbidden - Admin or Analyst role required")
     })
     @GetMapping("/dashboard")
-    public ResponseEntity<DashboardResponse> getDashboard() {
-        log.info("Get wallet dashboard statistics");
+    public ResponseEntity<DashboardResponse> getDashboard(
+            @Parameter(description = "Start date (yyyy-MM-dd)") @RequestParam(required = false) LocalDate startDate,
+            @Parameter(description = "End date (yyyy-MM-dd)") @RequestParam(required = false) LocalDate endDate) {
+        log.info("Get wallet dashboard statistics start: {}, end: {}", startDate, endDate);
 
-        DashboardResponse response = reportService.getDashboardStats();
+        DashboardResponse response = reportService.getDashboardStats(startDate, endDate);
         return ResponseEntity.ok(response);
     }
 

@@ -66,6 +66,15 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
 
     @Query("SELECT COALESCE(SUM(CASE WHEN t.direction = com.mssus.app.common.enums.TransactionDirection.IN THEN t.amount ELSE -t.amount END), 0) "
             + "FROM Transaction t WHERE t.actorKind = com.mssus.app.common.enums.ActorKind.SYSTEM "
+            + "AND t.systemWallet = :systemWallet AND t.status = :status "
+            + "AND t.createdAt BETWEEN :start AND :end")
+    BigDecimal netAmountBySystemWalletStatusAndDate(@Param("systemWallet") SystemWallet systemWallet,
+                                                    @Param("status") TransactionStatus status,
+                                                    @Param("start") LocalDateTime start,
+                                                    @Param("end") LocalDateTime end);
+
+    @Query("SELECT COALESCE(SUM(CASE WHEN t.direction = com.mssus.app.common.enums.TransactionDirection.IN THEN t.amount ELSE -t.amount END), 0) "
+            + "FROM Transaction t WHERE t.actorKind = com.mssus.app.common.enums.ActorKind.SYSTEM "
             + "AND t.systemWallet = :systemWallet AND t.status = :status")
     BigDecimal netAmountBySystemWalletAndStatus(@Param("systemWallet") SystemWallet systemWallet,
                                                 @Param("status") TransactionStatus status);

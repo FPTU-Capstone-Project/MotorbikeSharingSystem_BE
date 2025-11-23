@@ -44,10 +44,13 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public DashboardResponse getDashboardStats() {
-        LocalDate today = LocalDate.now();
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
+    public DashboardResponse getDashboardStats(LocalDate startDate, LocalDate endDate) {
+        LocalDate effectiveStart = startDate != null ? startDate : LocalDate.now();
+        LocalDate effectiveEnd = endDate != null ? endDate : LocalDate.now();
+        validateDateRange(effectiveStart, effectiveEnd);
+
+        LocalDateTime startOfDay = effectiveStart.atStartOfDay();
+        LocalDateTime endOfDay = effectiveEnd.atTime(LocalTime.MAX);
 
         long activeWallets = walletRepository.countByIsActiveTrue();
         
@@ -84,9 +87,9 @@ public class ReportServiceImpl implements ReportService {
                 : BigDecimal.ZERO;
 
         BigDecimal systemMasterBalance = defaultAmount(
-                transactionRepository.netAmountBySystemWalletAndStatus(SystemWallet.MASTER, TransactionStatus.SUCCESS));
+                transactionRepository.netAmountBySystemWalletStatusAndDate(SystemWallet.MASTER, TransactionStatus.SUCCESS, startOfDay, endOfDay));
         BigDecimal systemCommissionBalance = defaultAmount(
-                transactionRepository.netAmountBySystemWalletAndStatus(SystemWallet.COMMISSION, TransactionStatus.SUCCESS));
+                transactionRepository.netAmountBySystemWalletStatusAndDate(SystemWallet.COMMISSION, TransactionStatus.SUCCESS, startOfDay, endOfDay));
         BigDecimal liabilityCoverageGap = systemMasterBalance.subtract(totalWalletBalance);
 
         return DashboardResponse.builder()
@@ -245,6 +248,13 @@ public class ReportServiceImpl implements ReportService {
     private void validateDateRange(LocalDate start, LocalDate end) {
         if (start.isAfter(end)) {
             throw new ValidationException("Start date must be before end date");
+        }
+        LocalDate minAllowed = LocalDate.now().minusMonths(3);
+        if (start.isBefore(minAllowed) || end.isBefore(minAllowed)) {
+            throw new ValidationException("Date range cannot exceed 3 months back from today");
+        }
+        if (end.isAfter(LocalDate.now())) {
+            throw new ValidationException("End date cannot be in the future");
         }
     }
 
