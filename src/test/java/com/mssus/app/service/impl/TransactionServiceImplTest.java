@@ -96,7 +96,7 @@ class TransactionServiceImplTest {
 
         doReturnSavingTransactions();
 
-        List<Transaction> transactions = service.initTopup(7, AMOUNT, PSP_REF, "Wallet top-up");
+        List<Transaction> transactions = service.initTopup(7, AMOUNT, PSP_REF, "Wallet top-up", null);
 
         assertThat(transactions).hasSize(2);
         assertThat(transactions)
@@ -134,7 +134,7 @@ class TransactionServiceImplTest {
             .findByIdempotencyKey(anyString());
         doReturn(List.of(systemTxn, existingTxn)).when(transactionRepository).findByGroupId(existingGroupId);
 
-        List<Transaction> result = service.initTopup(5, AMOUNT, PSP_REF, "duplicate");
+        List<Transaction> result = service.initTopup(5, AMOUNT, PSP_REF, "duplicate", null);
 
         // Should return existing transactions (idempotency)
         assertThat(result)

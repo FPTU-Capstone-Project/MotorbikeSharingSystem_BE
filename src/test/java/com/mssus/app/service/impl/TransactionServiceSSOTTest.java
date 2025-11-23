@@ -106,7 +106,7 @@ class TransactionServiceSSOTTest {
             });
 
         // When
-        List<Transaction> transactions = service.initTopup(USER_ID, AMOUNT, PSP_REF, DESCRIPTION);
+        List<Transaction> transactions = service.initTopup(USER_ID, AMOUNT, PSP_REF, DESCRIPTION, null);
 
         // Then
         assertThat(transactions).hasSize(2);
@@ -161,7 +161,7 @@ class TransactionServiceSSOTTest {
             .thenReturn(List.of(existingTxn, systemTxn));
 
         // When
-        List<Transaction> transactions = service.initTopup(USER_ID, AMOUNT, PSP_REF, DESCRIPTION);
+        List<Transaction> transactions = service.initTopup(USER_ID, AMOUNT, PSP_REF, DESCRIPTION, null);
 
         // Then
         assertThat(transactions).hasSize(2);
@@ -286,7 +286,7 @@ class TransactionServiceSSOTTest {
         when(walletRepository.findByUser_UserId(USER_ID))
             .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.initTopup(USER_ID, AMOUNT, PSP_REF, DESCRIPTION))
+        assertThatThrownBy(() -> service.initTopup(USER_ID, AMOUNT, PSP_REF, DESCRIPTION, null))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining("Wallet not found");
     }

@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 public interface WalletService {
@@ -35,7 +36,7 @@ public interface WalletService {
     DriverEarningsResponse getDriverEarnings(Authentication authentication);
 
     // Admin payout processing methods
-    java.util.List<PendingPayoutResponse> getPendingPayouts();
+    List<PendingPayoutResponse> getPendingPayouts();
     PayoutProcessResponse processPayout(String payoutRef, Authentication authentication);
     PayoutProcessResponse completePayout(String payoutRef, MultipartFile evidenceFile, String notes, Authentication authentication);
     PayoutProcessResponse failPayout(String payoutRef, String reason, Authentication authentication);

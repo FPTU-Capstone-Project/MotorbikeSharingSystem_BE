@@ -56,11 +56,17 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    public List<Transaction> initTopup(Integer userId, BigDecimal amount, String pspRef, String description) {
+    public List<Transaction> initTopup(Integer userId, BigDecimal amount, String pspRef, String description, String idempotencyKey) {
         validateTopupInput(userId, amount, pspRef);
 
-        // Check idempotency
-        String idempotencyKey = "TOPUP_" + pspRef + "_" + amount;
+        // ✅ FIX: Client-side idempotency key
+        // Nếu idempotencyKey = null, generate dựa trên pspRef (backward compatibility)
+        if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
+            idempotencyKey = "TOPUP_" + pspRef + "_" + amount;
+            log.debug("Generated server-side idempotency key: {}", idempotencyKey);
+        }
+        
+        // Check idempotency bằng key từ client (hoặc generated)
         Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             log.info("Duplicate topup request with idempotency_key: {}", idempotencyKey);
@@ -141,26 +147,43 @@ public class TransactionServiceImpl implements TransactionService {
             return; // Idempotent - already processed
         }
 
-        List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
-        if (transactions.isEmpty()) {
+        // ✅ FIX: Tìm User transaction bằng pspRef (System transaction không có pspRef)
+        List<Transaction> userTransactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
+        if (userTransactions.isEmpty()) {
             throw new NotFoundException("No pending transactions found for pspRef: " + pspRef);
+        }
+
+        // ✅ FIX: Lấy groupId từ User transaction để tìm tất cả transactions trong cùng group
+        Transaction userTransaction = userTransactions.get(0);
+        UUID groupId = userTransaction.getGroupId();
+        if (groupId == null) {
+            throw new ValidationException("User transaction must have a groupId");
+        }
+
+        // ✅ FIX: Tìm tất cả transactions trong cùng group với status PENDING (bao gồm cả System transaction)
+        List<Transaction> allTransactions = transactionRepository.findByGroupId(groupId);
+        List<Transaction> pendingTransactions = allTransactions.stream()
+                .filter(txn -> txn.getStatus() == TransactionStatus.PENDING)
+                .collect(Collectors.toList());
+
+        if (pendingTransactions.isEmpty()) {
+            log.warn("No pending transactions found in group {} for pspRef: {}", groupId, pspRef);
+            return;
         }
 
         Integer userId = null;
         BigDecimal amount = null;
         Integer userTxnId = null;
 
-        // ✅ SSOT: Update all transactions to SUCCESS
-        Transaction userTransaction = null;
+        // ✅ SSOT: Update all transactions to SUCCESS (bao gồm cả System transaction)
         Integer walletId = null;
-        for (Transaction txn : transactions) {
+        for (Transaction txn : pendingTransactions) {
             txn.setStatus(TransactionStatus.SUCCESS);
 
             if (txn.getActorKind() == ActorKind.USER && txn.getActorUser() != null) {
                 userId = txn.getActorUser().getUserId();
                 amount = txn.getAmount();
                 userTxnId = txn.getTxnId();
-                userTransaction = txn;
             }
             
             // Get walletId for cache invalidation
@@ -183,7 +206,7 @@ public class TransactionServiceImpl implements TransactionService {
             sendTopupSuccessEmail(userId, amount, userTxnId);
         }
 
-        log.info("Top-up success for pspRef: {}", pspRef);
+        log.info("Top-up success for pspRef: {}, updated {} transactions in group {}", pspRef, pendingTransactions.size(), groupId);
     }
 
     @Override
@@ -203,18 +226,37 @@ public class TransactionServiceImpl implements TransactionService {
             return; // Idempotent - already processed
         }
 
-        List<Transaction> transactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
-        if (transactions.isEmpty()) {
+        // ✅ FIX: Tìm User transaction bằng pspRef (System transaction không có pspRef)
+        List<Transaction> userTransactions = transactionRepository.findByPspRefAndStatus(pspRef, TransactionStatus.PENDING);
+        if (userTransactions.isEmpty()) {
             throw new NotFoundException("No pending transactions found for pspRef: " + pspRef);
+        }
+
+        // ✅ FIX: Lấy groupId từ User transaction để tìm tất cả transactions trong cùng group
+        Transaction userTransaction = userTransactions.get(0);
+        UUID groupId = userTransaction.getGroupId();
+        if (groupId == null) {
+            throw new ValidationException("User transaction must have a groupId");
+        }
+
+        // ✅ FIX: Tìm tất cả transactions trong cùng group với status PENDING (bao gồm cả System transaction)
+        List<Transaction> allTransactions = transactionRepository.findByGroupId(groupId);
+        List<Transaction> pendingTransactions = allTransactions.stream()
+                .filter(txn -> txn.getStatus() == TransactionStatus.PENDING)
+                .collect(Collectors.toList());
+
+        if (pendingTransactions.isEmpty()) {
+            log.warn("No pending transactions found in group {} for pspRef: {}", groupId, pspRef);
+            return;
         }
 
         Integer userId = null;
         BigDecimal amount = null;
         Integer userTxnId = null;
 
-        // ✅ SSOT: Update all transactions to FAILED
+        // ✅ SSOT: Update all transactions to FAILED (bao gồm cả System transaction)
         Integer walletId = null;
-        for (Transaction txn : transactions) {
+        for (Transaction txn : pendingTransactions) {
             txn.setStatus(TransactionStatus.FAILED);
             txn.setNote(txn.getNote() + " - Failed: " + reason);
 
@@ -244,7 +286,7 @@ public class TransactionServiceImpl implements TransactionService {
             sendTopupFailedEmail(userId, amount, userTxnId, reason);
         }
 
-        log.info("Top-up failed for pspRef: {} with reason: {}", pspRef, reason);
+        log.info("Top-up failed for pspRef: {} with reason: {}, updated {} transactions in group {}", pspRef, reason, pendingTransactions.size(), groupId);
     }
 
     @Override

@@ -615,6 +615,22 @@ The `dev.sh` script is designed to work on any computer with Docker installed:
 - Docker expertise
 - Any other software installed
 
+## PayOS Payout Configuration
+
+Driver/rider wallet withdrawals are executed via PayOS payouts. Make sure these Spring properties (or corresponding environment variables) are configured before calling `/api/v1/wallet/payout/init`:
+
+- `payos.payout.client-id` / `PAYOS_PAYOUT_CLIENT_ID`
+- `payos.payout.api-key` / `PAYOS_PAYOUT_API_KEY`
+- `payos.payout.checksum-key` / `PAYOS_PAYOUT_CHECKSUM_KEY`
+- `payos.payout.endpoint` / `PAYOS_PAYOUT_ENDPOINT` (defaults to `https://api.payos.vn/v1/payouts`)
+
+Each payout request must now include:
+
+- `bankBin`: 6-digit receiving bank BIN (PayOS uses it as `toBin`)
+- `categories` (optional): array of strings forwarded to PayOS for reporting; defaults to `["WALLET_PAYOUT"]` if omitted
+
+The backend signs every payout order with the configured checksum key (HMAC-SHA256) and forwards the generated `x-idempotency-key` to PayOS to prevent duplicate payouts.
+
 ## Support
 
 If you run into issues:

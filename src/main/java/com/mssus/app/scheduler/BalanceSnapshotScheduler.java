@@ -1,4 +1,4 @@
-package com.mssus.app.service.impl;
+package com.mssus.app.scheduler;
 
 import com.mssus.app.entity.Wallet;
 import com.mssus.app.entity.WalletBalanceSnapshot;
@@ -29,7 +29,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class BalanceSnapshotService {
+public class BalanceSnapshotScheduler {
     private final WalletRepository walletRepository;
     private final WalletBalanceSnapshotRepository snapshotRepository;
     private final TransactionRepository transactionRepository;

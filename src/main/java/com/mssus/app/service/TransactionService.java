@@ -12,7 +12,11 @@ import java.util.List;
 import java.util.UUID;
 
 public interface TransactionService {
-    List<Transaction> initTopup(Integer userId, BigDecimal amount, String pspRef, String description);
+    /**
+     * ✅ FIX: Thêm parameter idempotencyKey để support client-side idempotency
+     * Nếu idempotencyKey = null, sẽ tự generate dựa trên pspRef (backward compatibility)
+     */
+    List<Transaction> initTopup(Integer userId, BigDecimal amount, String pspRef, String description, String idempotencyKey);
 
     void handleTopupSuccess(String pspRef);
 

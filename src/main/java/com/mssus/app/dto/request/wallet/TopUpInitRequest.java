@@ -25,4 +25,13 @@ public class TopUpInitRequest {
 
     @Schema(description = "Cancel URL if payment is cancelled", example = "https://app.example.com/wallet/cancel")
     private String cancelUrl;
+
+    /**
+     * ✅ FIX: Client-side idempotency key
+     * Client tự generate UUID và gửi kèm để đảm bảo idempotency
+     * Nếu không gửi, server sẽ tự generate (backward compatibility)
+     */
+    @Schema(description = "Idempotency key for duplicate request prevention. Client should generate UUID v4. If not provided, server will generate one.", 
+            example = "550e8400-e29b-41d4-a716-446655440000")
+    private String idempotencyKey;
 }

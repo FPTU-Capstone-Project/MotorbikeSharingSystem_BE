@@ -95,7 +95,7 @@ public class Transaction {
     @Column(name = "created_at", nullable = false,updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "note")
+    @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
     @Column(name = "evidence_url", length = 500)
