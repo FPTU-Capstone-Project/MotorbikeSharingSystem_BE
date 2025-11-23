@@ -8,6 +8,7 @@ import com.mssus.app.repository.AiMatchingLogRepository;
 import com.mssus.app.repository.DriverProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@ConditionalOnProperty(prefix = "app.ai", name = "enabled", havingValue = "true")
 public class AiMatchingLogService {
 
     private final AiMatchingLogRepository aiLogRepository;
