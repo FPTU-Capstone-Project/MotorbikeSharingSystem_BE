@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mssus.app.common.exception.PayosClientException;
 import com.mssus.app.dto.request.PayoutOrderRequest;
-import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -16,6 +15,7 @@ import reactor.util.retry.Retry;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
@@ -41,8 +41,6 @@ public class PayOSPayoutClient {
     @Value("${payos.payout.checksum-key}")
     private String payoutChecksumKey;
 
-    @Value("${payos.payout.endpoint:" + DEFAULT_ENDPOINT + "}")
-    private String payoutEndpoint;
 
     public PayOSPayoutClient(ObjectMapper objectMapper, WebClient.Builder webClientBuilder) {
         this.objectMapper = objectMapper;
@@ -60,7 +58,7 @@ public class PayOSPayoutClient {
             String body = objectMapper.writeValueAsString(request);
 
             String responseBody = webClient.post()
-                    .uri(payoutEndpoint)
+                    .uri(DEFAULT_ENDPOINT)
                     .contentType(MediaType.APPLICATION_JSON)
                     .headers(headers -> buildHeaders(headers, request, idempotencyKey))
                     .bodyValue(body)
@@ -137,7 +135,7 @@ public class PayOSPayoutClient {
     public JsonNode getPayoutStatusByRef(String referenceId) {
         try {
             String responseBody = webClient.get()
-                    .uri(payoutEndpoint + "/" + referenceId)
+                    .uri(DEFAULT_ENDPOINT + "/" + referenceId)
                     .headers(headers -> {
                         headers.set("x-client-id", payoutClientId);
                         headers.set("x-api-key", payoutApiKey);
@@ -188,37 +186,77 @@ public class PayOSPayoutClient {
 
     /**
      * Generate HMAC-SHA256 signature per PayOS docs using checksum key + canonical payload.
+     * PayOS payout API signature format: key1=value1&key2=value2&... (sorted alphabetically)
      */
     private String generateSignature(PayoutOrderRequest request) {
         String payload = buildSignaturePayload(request);
+        log.debug("PayOS payout signature payload: {}", payload);
         try {
             Mac mac = Mac.getInstance(HMAC_SHA256);
             SecretKeySpec secretKeySpec = new SecretKeySpec(payoutChecksumKey.getBytes(StandardCharsets.UTF_8), HMAC_SHA256);
             mac.init(secretKeySpec);
             byte[] rawHmac = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-            return bytesToHex(rawHmac);
+            String signature = bytesToHex(rawHmac);
+            log.debug("PayOS payout signature: {}", signature);
+            return signature;
         } catch (Exception e) {
+            log.error("Error generating PayOS payout signature", e);
             throw new IllegalStateException("Unable to generate PayOS payout signature", e);
         }
     }
 
+    /**
+     * Build signature payload for PayOS payout API.
+     * PayOS payout API signature format:
+     * 1. Sort fields alphabetically: amount, category, description, referenceId, toAccountNumber, toBin
+     * 2. Format: key=value&key=value (URL encoded values)
+     * 3. Include category if present
+     */
     private String buildSignaturePayload(PayoutOrderRequest request) {
         StringBuilder builder = new StringBuilder();
-        builder.append(nullSafe(request.getReferenceId())).append('|')
-                .append(request.getAmount()).append('|')
-                .append(nullSafe(request.getDescription())).append('|')
-                .append(nullSafe(request.getToBin())).append('|')
-                .append(nullSafe(request.getToAccountNumber())).append('|');
-
-        String categories = CollectionUtils.isEmpty(request.getCategory())
-                ? ""
-                : String.join(",", request.getCategory());
-        builder.append(categories);
+        builder.append("amount").append(request.getAmount());
+        
+        // category (if present)
+        if (!CollectionUtils.isEmpty(request.getCategory())) {
+            String categories = String.join(",", request.getCategory());
+            builder.append("category").append(urlEncode(nullSafe(categories)));
+        }
+        
+        // description
+        builder.append("description").append(urlEncode(nullSafe(request.getDescription())));
+        
+        // referenceId
+        builder.append("referenceId").append(urlEncode(nullSafe(request.getReferenceId())));
+        
+        // toAccountNumber
+        builder.append("toAccountNumber").append(urlEncode(nullSafe(request.getToAccountNumber())));
+        
+        // toBin
+        builder.append("toBin").append(urlEncode(nullSafe(request.getToBin())));
+        
         return builder.toString();
     }
+    
+    /**
+     * URL encode string (equivalent to JavaScript encodeURI)
+     */
+    private String urlEncode(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        try {
+            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString())
+                    .replace("+", "%20")  // Replace + with %20 (encodeURI behavior)
+                    .replace("*", "%2A")   // Replace * with %2A
+                    .replace("%7E", "~"); // Keep ~ unencoded
+        } catch (Exception e) {
+            log.warn("Error URL encoding value: {}", value, e);
+            return value;
+        }
+    }
 
-    private String nullSafe(@Nullable String value) {
-        return value == null ? "" : value;
+    private String nullSafe(String value) {
+        return value != null ? value : "";
     }
 
     private String bytesToHex(byte[] bytes) {

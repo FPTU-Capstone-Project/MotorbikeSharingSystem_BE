@@ -41,6 +41,6 @@ public class PayoutInitRequest {
     @Schema(description = "Receiving bank BIN (6 digits)", example = "970415", required = true)
     private String bankBin;
 
-    @Schema(description = "Optional payout categories reported to PayOS", example = "[\"WALLET\",\"PAYOUT\"]")
+    @Schema(description = "Optional payout categories reported to PayOS", example = "[\"payout\"]")
     private List<String> categories;
 }

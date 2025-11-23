@@ -229,4 +229,14 @@ public class PayOSServiceImpl implements PayOSService {
         }
     }
 
+    @Override
+    public String confirmWebhook(String webhookUrl) {
+        try{
+            return payOS.confirmWebhook(webhookUrl);
+        }catch (Exception e){
+            log.error("Error confirming webhook URL: {}", webhookUrl, e);
+        }
+        return null;
+    }
+
 }

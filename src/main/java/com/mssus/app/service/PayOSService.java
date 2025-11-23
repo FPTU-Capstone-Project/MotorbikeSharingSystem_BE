@@ -50,6 +50,8 @@ public interface PayOSService {
      */
     WebhookPayload parseWebhook(String payload);
 
+    String confirmWebhook(String webhookUrl);
+
     /**
      * DTO cho parsed webhook data
      */

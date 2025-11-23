@@ -421,7 +421,7 @@ public class WalletServiceImpl implements WalletService {
 
     private List<String> resolveCategories(List<String> rawCategories) {
         if (rawCategories == null) {
-            return Collections.singletonList("wallet_payout");
+            return Collections.singletonList("payout");
         }
 
         List<String> cleaned = rawCategories.stream()
@@ -430,7 +430,7 @@ public class WalletServiceImpl implements WalletService {
                 .collect(Collectors.toList());
 
         if (cleaned.isEmpty()) {
-            return Collections.singletonList("wallet_payout");
+            return Collections.singletonList("payout");
         }
 
         return cleaned;
@@ -785,10 +785,9 @@ public class WalletServiceImpl implements WalletService {
                 PayoutOrderRequest payoutOrderRequest = PayoutOrderRequest.builder()
                         .referenceId(payoutRef)
                         .amount(normalizeToVnd(userTransaction.getAmount()))
-                        .description(payoutDescription)
+                        .description("Payout")
                         .toBin(bankBin)
                         .toAccountNumber(bankAccountNumber)
-                        .category(resolveCategories(null)) // Default categories
                         .build();
 
                 String idempotencyKey = userTransaction.getIdempotencyKey();
@@ -808,7 +807,9 @@ public class WalletServiceImpl implements WalletService {
                     if (!payosTransactionId.isEmpty()) {
                         txnNote += " | payos_txn_id:" + payosTransactionId;
                     }
-                    txnNote += " | payos_response:" + payosResponse.toString();
+                    // ✅ FIX: Không lưu toàn bộ payosResponse (có thể rất dài)
+                    // Chỉ lưu các field cần thiết để tránh vượt quá giới hạn
+                    // payosResponse đã được log ở PayOSPayoutClient
                     txn.setNote(txnNote);
                     
                     // Update status based on PayOS response
@@ -819,8 +820,8 @@ public class WalletServiceImpl implements WalletService {
                     } else {
                         txn.setStatus(TransactionStatus.FAILED);
                         txnNote += " | error:" + payosDesc;
+                        txn.setNote(txnNote);
                     }
-                    txn.setNote(txnNote);
                     transactionRepository.save(txn);
                 }
 
