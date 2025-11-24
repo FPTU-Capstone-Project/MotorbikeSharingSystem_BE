@@ -270,7 +270,7 @@ public class WalletServiceImpl implements WalletService {
         BigDecimal afterPending = beforePending.add(request.getAmount());
 
         // Generate idempotency key
-        String idempotencyKey = "PAYOUT_" + payoutRef + "_" + request.getAmount();
+        String idempotencyKey =  payoutRef + "_" + request.getAmount();
 
         // Check duplicate (idempotency)
         Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
@@ -799,11 +799,11 @@ public class WalletServiceImpl implements WalletService {
                 String payosCode = payosResponse.path("code").asText();
                 String payosDesc = payosResponse.path("desc").asText();
                 String payosTransactionId = payosResponse.path("data").path("transactionId").asText("");
-
+                String payoutId = payosResponse.path("data").path("id").asText();
                 // Update transaction with PayOS response
                 for (Transaction txn : transactions) {
                     String txnNote = txn.getNote() != null ? txn.getNote() : "";
-                    txnNote += " | payos_code:" + payosCode + " | payos_desc:" + payosDesc;
+                    txnNote += " | payos_code:" + payosCode + " | payos_desc:" + payosDesc + " | payout_id:" + payoutId;
                     if (!payosTransactionId.isEmpty()) {
                         txnNote += " | payos_txn_id:" + payosTransactionId;
                     }
