@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 public class LoginRequest {
 
     @NotBlank(message = "Email is required")
-    @Schema(description = "Email associated with the account", example = "student@example.edu")
+    @Schema(description = "Email associated with the account", example = "vo.van.f@student.hcmut.edu.vn")
     private String email;
 
     @Pattern(regexp = "^(rider|driver)$", message = "Target profile must be either 'rider' or 'driver'")
@@ -25,6 +25,6 @@ public class LoginRequest {
     private String targetProfile = "rider";
 
     @NotBlank(message = "Password is required")
-    @Schema(description = "Account password")
+    @Schema(description = "Account password", example = "Password1!")
     private String password;
 }
