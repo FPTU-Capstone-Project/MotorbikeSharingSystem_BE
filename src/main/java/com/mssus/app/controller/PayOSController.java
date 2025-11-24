@@ -1,16 +1,19 @@
 package com.mssus.app.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mssus.app.dto.request.wallet.PayoutWebhookRequest;
-import com.mssus.app.dto.response.wallet.TopUpWebhookConfirmResponse;
+import com.mssus.app.dto.request.wallet.PayOSPayoutListRequest;
 import com.mssus.app.service.PayOSService;
 import com.mssus.app.service.PayoutWebhookService;
-import com.mssus.app.service.TopUpService;
+import com.mssus.app.service.impl.PayOSPayoutClient;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import vn.payos.type.CheckoutResponseData;
 
@@ -23,8 +26,8 @@ import java.math.BigDecimal;
 public class PayOSController {
 
     private final PayOSService payOSService;
-    private final TopUpService topUpService;
     private final PayoutWebhookService payoutWebhookService;
+    private final PayOSPayoutClient payOSPayoutClient;
     private final ObjectMapper objectMapper;
 
     @ApiResponses(value = {
@@ -103,6 +106,27 @@ public class PayOSController {
             log.error("Error processing payout webhook", e);
             return ResponseEntity.internalServerError().body("Failed: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/payouts")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<JsonNode> listPayoutOrders(@Valid @ModelAttribute PayOSPayoutListRequest request) {
+        JsonNode response = payOSPayoutClient.listPayoutOrders(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/payouts/{payoutId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<JsonNode> getPayoutOrder(@PathVariable String payoutId) {
+        JsonNode response = payOSPayoutClient.getPayoutOrder(payoutId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/payouts-account/balance")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<JsonNode> getPayoutAccountBalance() {
+        JsonNode response = payOSPayoutClient.getPayoutAccountBalance();
+        return ResponseEntity.ok(response);
     }
 }
 
