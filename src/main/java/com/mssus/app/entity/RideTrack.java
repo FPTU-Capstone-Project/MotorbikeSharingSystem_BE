@@ -38,6 +38,15 @@ public class RideTrack {
     @Column(name = "stopped_at")
     private LocalDateTime stoppedAt;
 
+    @Column(name = "rider_lat")
+    private Double riderLat;
+
+    @Column(name = "rider_lng")
+    private Double riderLng;
+
+    @Column(name = "rider_timestamp")
+    private LocalDateTime riderTimestamp;
+
 
     public void addGpsPoints(List<LocationPoint> points) {
     }

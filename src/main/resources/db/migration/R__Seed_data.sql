@@ -1219,6 +1219,7 @@ INTO transactions (type,
                    direction,
                    actor_kind,
                    actor_user_id,
+                   wallet_id,
                    amount,
                    currency,
                    status,
@@ -1236,6 +1237,9 @@ SELECT 'TOPUP',
        (SELECT user_id
         FROM users
         WHERE email = 'john.doe@example.com'), -- actor_user_id
+       (SELECT wallet_id
+        FROM wallets
+        WHERE user_id = (SELECT user_id FROM users WHERE email = 'john.doe@example.com')), -- wallet_id
        300000,
        'VND',
        'SUCCESS',
@@ -1312,6 +1316,7 @@ INTO transactions (type,
                    direction,
                    actor_kind,
                    actor_user_id,
+                   wallet_id,
                    amount,
                    currency,
                    status,
@@ -1329,6 +1334,9 @@ SELECT 'TOPUP',
        (SELECT user_id
         FROM users
         WHERE email = 'driver1@example.com'), -- actor_user_id
+       (SELECT wallet_id
+        FROM wallets
+        WHERE user_id = (SELECT user_id FROM users WHERE email = 'driver1@example.com')), -- wallet_id
        300000,
        'VND',
        'SUCCESS',
@@ -1405,6 +1413,7 @@ INTO transactions (type,
                    direction,
                    actor_kind,
                    actor_user_id,
+                   wallet_id,
                    amount,
                    currency,
                    status,
@@ -1422,6 +1431,9 @@ SELECT 'TOPUP',
        (SELECT user_id
         FROM users
         WHERE email = 'driver2@example.com'), -- actor_user_id
+       (SELECT wallet_id
+        FROM wallets
+        WHERE user_id = (SELECT user_id FROM users WHERE email = 'driver2@example.com')), -- wallet_id
        300000,
        'VND',
        'SUCCESS',

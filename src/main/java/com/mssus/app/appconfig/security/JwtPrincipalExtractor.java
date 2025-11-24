@@ -14,16 +14,18 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
 public class JwtPrincipalExtractor {
-    private final UserRepository userRepository;
-
     @Value("${security.jwt.secret-key}")
     private String jwtSecret;
+
+    private UserRepository userRepository;
 
     public UserDetails extractUserDetails(String token) {
         try {
@@ -33,13 +35,33 @@ public class JwtPrincipalExtractor {
                 .parseClaimsJws(token.replace("Bearer ", ""))
                 .getBody();
 
-            String email = claims.get("sub", String.class);
-            Integer userId = getUserIdByEmail(email);
-            List<GrantedAuthority> authorities = Collections.singletonList(
-                new SimpleGrantedAuthority("ROLE_RIDER")
-            );
+            Integer userId = claims.get("userId", Integer.class);
+            if (userId == null) {
+                // Fallback: parse from sub formatted as "user-<id>"
+                String sub = claims.getSubject();
+                if (sub != null && sub.startsWith("user-")) {
+                    try {
+                        userId = Integer.parseInt(sub.substring("user-".length()));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+            if (userId == null) {
+                throw new IllegalArgumentException("Missing userId in JWT");
+            }
 
-            return new User(String.valueOf(userId), "", authorities);
+            String activeProfile = claims.get("active_profile", String.class);
+            List<String> profiles = claims.get("profiles", List.class);
+
+            Set<GrantedAuthority> authorities = new HashSet<>();
+            if (profiles != null) {
+                profiles.forEach(p -> authorities.add(new SimpleGrantedAuthority("ROLE_" + p.toUpperCase())));
+            }
+            if (activeProfile != null) {
+                authorities.add(new SimpleGrantedAuthority("ROLE_" + activeProfile.toUpperCase()));
+            }
+
+            return new User(String.valueOf(userId), "", new ArrayList<>(authorities));
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid JWT: " + e.getMessage());
         }

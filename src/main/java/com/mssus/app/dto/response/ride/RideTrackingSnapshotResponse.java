@@ -10,6 +10,8 @@ public record RideTrackingSnapshotResponse(
     Integer rideId,
     Double driverLat,
     Double driverLng,
+    Double riderLat,
+    Double riderLng,
     String requestStatus,
     String rideStatus,
     String polyline,

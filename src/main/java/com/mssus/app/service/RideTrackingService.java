@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface RideTrackingService {
-    TrackingResponse appendGpsPoints(Integer rideId, List<LocationPoint> points, String username);
+    TrackingResponse appendGpsPoints(Integer rideId, List<LocationPoint> points, String username, String activeProfile);
 
     double computeDistanceFromPoints(JsonNode pointsNode);
 

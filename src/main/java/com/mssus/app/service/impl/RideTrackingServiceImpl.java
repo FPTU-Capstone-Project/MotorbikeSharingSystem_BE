@@ -65,81 +65,40 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     private static final double ROUTE_DEVIATION_THRESHOLD_METERS = 120d;
     @Override
     @Transactional
-    public TrackingResponse appendGpsPoints(Integer rideId, List<LocationPoint> points, String username) {
-        // Fetch and validate ride
+    public TrackingResponse appendGpsPoints(Integer rideId, List<LocationPoint> points, String username, String activeProfile) {
+        if (points == null || points.isEmpty()) {
+            throw BaseDomainException.of("tracking.invalid-points", "No points provided");
+        }
+
+        // Fetch ride and user
         SharedRide ride = rideRepository.findByIdForUpdate(rideId)
             .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
         User user = userRepository.findById(Integer.parseInt(username))
             .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
-        DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
-            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
 
-        if (!ride.getDriver().getDriverId().equals(driver.getDriverId())) {
-            throw BaseDomainException.of("ride.unauthorized.not-owner");
-        }
+        boolean isDriverProfile = "DRIVER".equalsIgnoreCase(activeProfile);
+        boolean isRiderProfile = "RIDER".equalsIgnoreCase(activeProfile);
 
-        if (ride.getStatus() != SharedRideStatus.ONGOING) {
-            throw BaseDomainException.of("ride.validation.invalid-state", "Ride not ongoing");
-        }
-
-        // Validate points: Non-empty, sequential timestamps, no jumps >100km/h equiv
-        if (points.isEmpty()) {
-            throw BaseDomainException.of("tracking.invalid-points", "No points provided");
-        }
-//        validatePoints(points);  // Custom method: Check speed, accuracy
-        publishDriverLocationUpdate(rideId, driver, points);
-
-        // Get or create track
-        RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
-            .orElseGet(() -> {
-                RideTrack newTrack = new RideTrack();
-                newTrack.setSharedRide(ride);
-                newTrack.setIsTracking(true);
-                return newTrack;
-            });
-
-        try {
-            ArrayNode existingPoints = track.getGpsPoints() != null && track.getGpsPoints().isArray()
-                                       ? (ArrayNode) track.getGpsPoints()
-                                       : JsonNodeFactory.instance.arrayNode();
-
-            ArrayNode newArray = objectMapper.createArrayNode();
-            for (LocationPoint p : points) {
-                ObjectNode pointNode = objectMapper.createObjectNode();
-                pointNode.put("lat", p.lat());
-                pointNode.put("lng", p.lng());
-                pointNode.put("timestamp", p.timestamp().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)); // Use ISO_OFFSET_DATE_TIME for ZonedDateTime
-                newArray.add(pointNode);
+        // Fallback: infer role if active_profile missing
+        if (!isDriverProfile && !isRiderProfile) {
+            if (ride.getDriver() != null && ride.getDriver().getUser() != null
+                && ride.getDriver().getUser().getUserId().equals(user.getUserId())) {
+                isDriverProfile = true;
+            } else if (ride.getSharedRideRequest() != null
+                && ride.getSharedRideRequest().getRider() != null
+                && ride.getSharedRideRequest().getRider().getUser() != null
+                && ride.getSharedRideRequest().getRider().getUser().getUserId().equals(user.getUserId())) {
+                isRiderProfile = true;
             }
-            existingPoints.addAll(newArray);
-            track.setGpsPoints(existingPoints);
-            track.setCreatedAt(LocalDateTime.now());
-            trackRepository.save(track);
-
-            log.debug("Appended {} points to track for ride {}", points.size(), rideId);
-
-        } catch (Exception e) {
-            log.error("Failed to append points for ride {}: {}", rideId, e.getMessage());
-            throw BaseDomainException.of("tracking.append-failed", "Could not save GPS points");
         }
 
-        TrackingPolylineResult result = determinePolyline(
-            ride,
-            ride.getSharedRideRequest(),
-            getLatestPosition(rideId, 5).orElse(null));
-
-        publishRealTimeTrackingUpdate(rideId, result);
-
-        double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
-        LatLng latest = getLatestPosition(rideId, 5).orElse(null);
-
-        return new TrackingResponse(
-            currentDistanceKm,
-            result.polyline(),
-            "OK",
-            latest != null ? latest.latitude() : null,
-            latest != null ? latest.longitude() : null,
-            result.detoured());
+        if (isDriverProfile) {
+            return handleDriverPoints(ride, user, points);
+        } else if (isRiderProfile) {
+            return handleRiderPoint(ride, user, points.get(points.size() - 1));
+        } else {
+            throw BaseDomainException.of("ride.unauthorized.not-owner", "Unknown or missing active profile");
+        }
     }
 
     private void validatePoints(List<LocationPoint> points) {
@@ -200,6 +159,10 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     // Get latest position from track (with staleness check)
     @Override
     public Optional<LatLng> getLatestPosition(Integer rideId, int maxStaleMinutes) {
+        return getLatestDriverPosition(rideId, maxStaleMinutes);
+    }
+
+    private Optional<LatLng> getLatestDriverPosition(Integer rideId, int maxStaleMinutes) {
         RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
             .orElse(null);
         if (track == null || track.getGpsPoints() == null || track.getGpsPoints().isEmpty()) {
@@ -221,6 +184,21 @@ public class RideTrackingServiceImpl implements RideTrackingService {
 
         log.debug("Latest pos for ride {}: ({}, {}) at {}", rideId, lat, lng, timestamp);
         return Optional.of(new LatLng(lat, lng));
+    }
+
+    private Optional<LatLng> getLatestRiderPosition(Integer rideId, int maxStaleMinutes) {
+        RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
+            .orElse(null);
+        if (track == null || track.getRiderLat() == null || track.getRiderLng() == null || track.getRiderTimestamp() == null) {
+            return Optional.empty();
+        }
+
+        if (Duration.between(track.getRiderTimestamp(), LocalDateTime.now()).toMinutes() > maxStaleMinutes) {
+            log.warn("Stale rider position for ride {}: {} min old", rideId,
+                Duration.between(track.getRiderTimestamp(), LocalDateTime.now()).toMinutes());
+            return Optional.empty();
+        }
+        return Optional.of(new LatLng(track.getRiderLat(), track.getRiderLng()));
     }
 
     @Override
@@ -297,13 +275,16 @@ public class RideTrackingServiceImpl implements RideTrackingService {
             throw BaseDomainException.of("ride.unauthorized.not-owner");
         }
 
-        LatLng latestPosition = getLatestPosition(rideId, 5).orElse(null);
-        TrackingPolylineResult polylineResult = determinePolyline(ride, request, latestPosition);
+        LatLng driverPos = getLatestDriverPosition(rideId, 5).orElse(null);
+        LatLng riderPos = getLatestRiderPosition(rideId, 5).orElse(null);
+        TrackingPolylineResult polylineResult = determinePolyline(ride, request, driverPos);
 
         return RideTrackingSnapshotResponse.builder()
             .rideId(rideId)
-            .driverLat(latestPosition != null ? latestPosition.latitude() : null)
-            .driverLng(latestPosition != null ? latestPosition.longitude() : null)
+            .driverLat(driverPos != null ? driverPos.latitude() : null)
+            .driverLng(driverPos != null ? driverPos.longitude() : null)
+            .riderLat(riderPos != null ? riderPos.latitude() : null)
+            .riderLng(riderPos != null ? riderPos.longitude() : null)
             .requestStatus(request.getStatus() != null ? request.getStatus().name() : null)
             .rideStatus(ride.getStatus() != null ? ride.getStatus().name() : null)
             .polyline(polylineResult.polyline())
@@ -339,12 +320,15 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         return polyline;
     }
 
-    private void publishRealTimeTrackingUpdate(Integer rideId, TrackingPolylineResult override) {
+    private void publishRealTimeTrackingUpdate(Integer rideId,
+                                               TrackingPolylineResult override,
+                                               LatLng riderPos,
+                                               String source) {
         try {
             RideTrack track = trackRepository.findBySharedRideSharedRideId(rideId)
                 .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
-            Optional<LatLng> latestPos = getLatestPosition(rideId, 3); // Get latest position, max 1 min stale
+            Optional<LatLng> latestPos = getLatestDriverPosition(rideId, 3); // driver pos
             double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
 
             RealTimeTrackingUpdateDto updateDto = RealTimeTrackingUpdateDto.builder()
@@ -352,8 +336,11 @@ public class RideTrackingServiceImpl implements RideTrackingService {
                 .polyline(override.polyline())
                 .currentLat(latestPos.map(LatLng::latitude).orElse(null))
                 .currentLng(latestPos.map(LatLng::longitude).orElse(null))
+                .riderLat(riderPos != null ? riderPos.latitude() : null)
+                .riderLng(riderPos != null ? riderPos.longitude() : null)
                 .currentDistanceKm(currentDistanceKm)
                 .detoured(override.detoured())
+                .source(source)
                 .build();
 
             messagingTemplate.convertAndSend("/topic/ride.tracking." + rideId, updateDto);
@@ -484,7 +471,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
                 .latitude(latest.lat())
                 .longitude(latest.lng())
                 .rideId(rideId)
-                .timestamp(latest.timestamp() != null ? 
+                .timestamp(latest.timestamp() != null ?
                     latest.timestamp().toInstant() : java.time.Instant.now())
                 .correlationId(java.util.UUID.randomUUID().toString())
                 .build();
@@ -494,4 +481,118 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         }
     }
 
+    private TrackingResponse handleDriverPoints(SharedRide ride, User user, List<LocationPoint> points) {
+        DriverProfile driver = driverRepository.findByUserUserId(user.getUserId())
+            .orElseThrow(() -> BaseDomainException.of("user.not-found.driver-profile"));
+
+        if (!ride.getDriver().getDriverId().equals(driver.getDriverId())) {
+            throw BaseDomainException.of("ride.unauthorized.not-owner");
+        }
+
+        if (ride.getStatus() != SharedRideStatus.ONGOING) {
+            throw BaseDomainException.of("ride.validation.invalid-state", "Ride not ongoing");
+        }
+
+        publishDriverLocationUpdate(ride.getSharedRideId(), driver, points);
+
+        RideTrack track = trackRepository.findBySharedRideSharedRideId(ride.getSharedRideId())
+            .orElseGet(() -> {
+                RideTrack newTrack = new RideTrack();
+                newTrack.setSharedRide(ride);
+                newTrack.setIsTracking(true);
+                return newTrack;
+            });
+
+        try {
+            ArrayNode existingPoints = track.getGpsPoints() != null && track.getGpsPoints().isArray()
+                                       ? (ArrayNode) track.getGpsPoints()
+                                       : JsonNodeFactory.instance.arrayNode();
+
+            ArrayNode newArray = objectMapper.createArrayNode();
+            for (LocationPoint p : points) {
+                ObjectNode pointNode = objectMapper.createObjectNode();
+                pointNode.put("lat", p.lat());
+                pointNode.put("lng", p.lng());
+                pointNode.put("timestamp", p.timestamp().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+                newArray.add(pointNode);
+            }
+            existingPoints.addAll(newArray);
+            track.setGpsPoints(existingPoints);
+            track.setCreatedAt(LocalDateTime.now());
+            trackRepository.save(track);
+
+            log.debug("Appended {} driver points to track for ride {}", points.size(), ride.getSharedRideId());
+
+        } catch (Exception e) {
+            log.error("Failed to append points for ride {}: {}", ride.getSharedRideId(), e.getMessage());
+            throw BaseDomainException.of("tracking.append-failed", "Could not save GPS points");
+        }
+
+        TrackingPolylineResult result = determinePolyline(
+            ride,
+            ride.getSharedRideRequest(),
+            getLatestDriverPosition(ride.getSharedRideId(), 5).orElse(null));
+
+        LatLng riderPos = getLatestRiderPosition(ride.getSharedRideId(), 5).orElse(null);
+        publishRealTimeTrackingUpdate(ride.getSharedRideId(), result, riderPos, "DRIVER");
+
+        double currentDistanceKm = computeDistanceFromPoints(track.getGpsPoints());
+        LatLng latest = getLatestDriverPosition(ride.getSharedRideId(), 5).orElse(null);
+
+        return new TrackingResponse(
+            currentDistanceKm,
+            result.polyline(),
+            "OK",
+            latest != null ? latest.latitude() : null,
+            latest != null ? latest.longitude() : null,
+            result.detoured());
+    }
+
+    private TrackingResponse handleRiderPoint(SharedRide ride, User user, LocationPoint point) {
+        SharedRideRequest request = ride.getSharedRideRequest();
+        if (request == null || request.getRider() == null || request.getRider().getUser() == null) {
+            throw BaseDomainException.of("ride.validation.request-invalid-state", "Ride is not linked to a rider");
+        }
+        if (!request.getRider().getUser().getUserId().equals(user.getUserId())) {
+            throw BaseDomainException.of("ride.unauthorized.not-owner");
+        }
+
+        if (ride.getStatus() != SharedRideStatus.ONGOING) {
+            throw BaseDomainException.of("ride.validation.invalid-state", "Ride not in tracking state");
+        }
+
+        RideTrack track = trackRepository.findBySharedRideSharedRideId(ride.getSharedRideId())
+            .orElseGet(() -> {
+                RideTrack newTrack = new RideTrack();
+                newTrack.setSharedRide(ride);
+                newTrack.setIsTracking(true);
+                return newTrack;
+            });
+
+        track.setRiderLat(point.lat());
+        track.setRiderLng(point.lng());
+        track.setRiderTimestamp(point.timestamp() != null
+            ? point.timestamp().toLocalDateTime()
+            : LocalDateTime.now());
+        trackRepository.save(track);
+
+        TrackingPolylineResult result = determinePolyline(
+            ride,
+            ride.getSharedRideRequest(),
+            getLatestDriverPosition(ride.getSharedRideId(), 5).orElse(null));
+
+        LatLng riderPos = new LatLng(point.lat(), point.lng());
+        publishRealTimeTrackingUpdate(ride.getSharedRideId(), result, riderPos, "RIDER");
+
+        double currentDistanceKm = track.getGpsPoints() != null ? computeDistanceFromPoints(track.getGpsPoints()) : 0.0;
+        LatLng latest = getLatestDriverPosition(ride.getSharedRideId(), 5).orElse(null);
+
+        return new TrackingResponse(
+            currentDistanceKm,
+            result.polyline(),
+            "OK",
+            latest != null ? latest.latitude() : null,
+            latest != null ? latest.longitude() : null,
+            result.detoured());
+    }
 }

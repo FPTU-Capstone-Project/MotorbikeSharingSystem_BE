@@ -12,6 +12,9 @@ public class RealTimeTrackingUpdateDto implements Serializable {
     private String polyline;
     private Double currentLat;
     private Double currentLng;
+    private Double riderLat;
+    private Double riderLng;
     private Double currentDistanceKm;
     private boolean detoured;
+    private String source; // DRIVER or RIDER, indicates who produced this update
 }
