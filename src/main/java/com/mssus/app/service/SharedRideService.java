@@ -42,5 +42,6 @@ public interface SharedRideService {
      */
     Page<SharedRideResponse> getMyCompletedRides(Pageable pageable, Authentication authentication);
     Page<SharedRideResponse> getOngoingRidesOfRider(Integer riderId, Pageable pageable);
-}
 
+    Page<com.mssus.app.dto.response.ride.RideListSummaryResponse> getAllRidesForAdmin(String status, Pageable pageable);
+}

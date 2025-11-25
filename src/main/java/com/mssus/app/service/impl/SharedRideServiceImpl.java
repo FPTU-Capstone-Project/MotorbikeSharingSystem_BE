@@ -1052,6 +1052,53 @@ public class SharedRideServiceImpl implements SharedRideService {
         return ridesPage.map(this::buildRideResponse);
     }
 
+    @Override
+    public Page<com.mssus.app.dto.response.ride.RideListSummaryResponse> getAllRidesForAdmin(String status, Pageable pageable) {
+        Page<SharedRide> rides;
+        if (status != null && !status.isBlank()) {
+            SharedRideStatus st;
+            try {
+                st = SharedRideStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw BaseDomainException.of("ride.validation.invalid-status", "Invalid status: " + status);
+            }
+            rides = rideRepository.findByStatus(st, pageable);
+        } else {
+            rides = rideRepository.findAll(pageable);
+        }
+
+        return rides.map(ride -> {
+            SharedRideRequest req = ride.getSharedRideRequest();
+            String riderName = req != null && req.getRider() != null && req.getRider().getUser() != null
+                ? req.getRider().getUser().getFullName()
+                : null;
+
+            String pickupAddress = req != null && req.getPickupLocation() != null
+                ? req.getPickupLocation().getName()
+                : ride.getStartLocation() != null ? ride.getStartLocation().getName() : null;
+
+            String dropoffAddress = req != null && req.getDropoffLocation() != null
+                ? req.getDropoffLocation().getName()
+                : ride.getEndLocation() != null ? ride.getEndLocation().getName() : null;
+
+            return new com.mssus.app.dto.response.ride.RideListSummaryResponse(
+                ride.getSharedRideId(),
+                ride.getStatus(),
+                req != null ? req.getStatus() : null,
+                req != null ? req.getRequestKind() : null,
+                ride.getDriver() != null && ride.getDriver().getUser() != null ? ride.getDriver().getUser().getFullName() : null,
+                riderName,
+                pickupAddress,
+                dropoffAddress,
+                ride.getScheduledTime(),
+                ride.getCreatedAt(),
+                ride.getEstimatedDistance(),
+                ride.getEstimatedDuration(),
+                req != null ? req.getTotalFare() : null
+            );
+        });
+    }
+
     private SharedRideResponse buildRideResponse(SharedRide ride/* , Location startLoc, Location endLoc */) {
 
         // if (startLoc != null) {

@@ -189,6 +189,36 @@ public class SharedRideController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Get all rides (Admin)",
+        description = "Retrieve all rides with optional status filter (ADMIN only)"
+    )
+    public ResponseEntity<PageResponse<com.mssus.app.dto.response.ride.RideListSummaryResponse>> getAllRidesAdmin(
+        @Parameter(description = "Status filter (SCHEDULED, ONGOING, COMPLETED, CANCELLED)")
+        @RequestParam(required = false) String status,
+        @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+        @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
+        @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        var pageData = sharedRideService.getAllRidesForAdmin(status, pageable);
+        PageResponse<com.mssus.app.dto.response.ride.RideListSummaryResponse> response = PageResponse.<com.mssus.app.dto.response.ride.RideListSummaryResponse>builder()
+            .data(pageData.getContent())
+            .pagination(PageResponse.PaginationInfo.builder()
+                .page(pageData.getNumber() + 1)
+                .pageSize(pageData.getSize())
+                .totalPages(pageData.getTotalPages())
+                .totalRecords(pageData.getTotalElements())
+                .build())
+            .build();
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{rideId}/start")
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(

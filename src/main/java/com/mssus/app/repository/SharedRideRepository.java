@@ -79,6 +79,8 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
             "ORDER BY r.scheduledTime DESC LIMIT 1")
     Optional<SharedRide> findLatestScheduledRideByDriverId(@Param("driverId") Integer driverId);
 
+    Page<SharedRide> findByStatus(SharedRideStatus status, Pageable pageable);
+
     @Query("SELECT r FROM SharedRide r " +
             "WHERE r.sharedRideRequest.rider.riderId = :riderId " +
             "AND r.status = 'ONGOING'")
