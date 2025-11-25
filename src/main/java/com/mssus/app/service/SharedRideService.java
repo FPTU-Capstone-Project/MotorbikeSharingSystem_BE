@@ -20,7 +20,14 @@ public interface SharedRideService {
 
     Page<SharedRideResponse> getRidesByDriver(String status, Pageable pageable, Authentication authentication);
 
-    Page<SharedRideResponse> browseAvailableRides(String startTime, String endTime, Pageable pageable);
+    Page<SharedRideResponse> browseAvailableRides(String startTime,
+                                                  String endTime,
+                                                  String startKeyword,
+                                                  String endKeyword,
+                                                  Double currentLat,
+                                                  Double currentLng,
+                                                  Double radiusKm,
+                                                  Pageable pageable);
 
     SharedRideResponse startRide(StartRideRequest request, Authentication authentication);
 

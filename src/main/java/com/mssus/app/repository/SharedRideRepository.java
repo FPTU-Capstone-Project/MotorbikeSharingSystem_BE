@@ -27,13 +27,32 @@ public interface SharedRideRepository extends JpaRepository<SharedRide, Integer>
     Long countByDriverDriverIdAndStatus(Integer driverId, SharedRideStatus status);
 
     @Query("SELECT r FROM SharedRide r " +
-            "WHERE r.status = 'SCHEDULED' OR r.status = 'ONGOING' " +
+            "WHERE (r.status = 'SCHEDULED' OR r.status = 'ONGOING') " +
             "AND r.sharedRideRequest IS NULL " +
             // "AND r.scheduledTime BETWEEN :startTime AND :endTime " +
             "ORDER BY r.scheduledTime ASC")
     Page<SharedRide> findAvailableRides(
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
+            Pageable pageable);
+
+    @Query("SELECT r FROM SharedRide r " +
+            "WHERE (r.status = 'SCHEDULED' OR r.status = 'ONGOING') " +
+            "AND r.sharedRideRequest IS NULL " +
+            // "AND r.scheduledTime BETWEEN :startTime AND :endTime " +
+            "AND (:startPattern IS NULL OR :startPattern = '' OR LOWER(r.startLocation.address) LIKE :startPattern OR LOWER(r.startLocation.name) LIKE :startPattern) "
+            +
+            "AND (:endPattern IS NULL OR :endPattern = '' OR LOWER(r.endLocation.address) LIKE :endPattern OR LOWER(r.endLocation.name) LIKE :endPattern) "
+            +
+            "ORDER BY r.scheduledTime ASC")
+    Page<SharedRide> findAvailableRidesWithFilters(
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("startPattern") String startPattern,
+            @Param("endPattern") String endPattern,
+            @Param("currentLat") Double currentLat,
+            @Param("currentLng") Double currentLng,
+            @Param("radiusKm") Double radiusKm,
             Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

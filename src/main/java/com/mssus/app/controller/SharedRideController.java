@@ -358,13 +358,25 @@ public class SharedRideController {
             @RequestParam(required = false) String startTime,
             @Parameter(description = "End time (ISO 8601)", example = "2025-10-05T10:00:00") 
             @RequestParam(required = false) String endTime,
+            @Parameter(description = "Keyword to match start location name/address") 
+            @RequestParam(required = false) String startLocation,
+            @Parameter(description = "Keyword to match end location name/address") 
+            @RequestParam(required = false) String endLocation,
+            @Parameter(description = "Current rider latitude for nearby search") 
+            @RequestParam(required = false) Double currentLat,
+            @Parameter(description = "Current rider longitude for nearby search") 
+            @RequestParam(required = false) Double currentLng,
+            @Parameter(description = "Search radius in km (defaults to 5km if currentLat/currentLng provided)") 
+            @RequestParam(required = false) Double radiusKm,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
         
-        log.info("Browsing available rides - startTime: {}, endTime: {}", startTime, endTime);
+        log.info("Browsing available rides - startTime: {}, endTime: {}, startLocation: {}, endLocation: {}, lat: {}, lng: {}, radiusKm: {}",
+                startTime, endTime, startLocation, endLocation, currentLat, currentLng, radiusKm);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "scheduledTime"));
         
-        var pageData = sharedRideService.browseAvailableRides(startTime, endTime, pageable);
+        var pageData = sharedRideService.browseAvailableRides(startTime, endTime, startLocation, endLocation,
+                currentLat, currentLng, radiusKm, pageable);
         PageResponse<SharedRideResponse> response = PageResponse.<SharedRideResponse>builder()
                 .data(pageData.getContent())
                 .pagination(PageResponse.PaginationInfo.builder()

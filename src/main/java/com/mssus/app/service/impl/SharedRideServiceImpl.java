@@ -267,20 +267,46 @@ public class SharedRideServiceImpl implements SharedRideService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<SharedRideResponse> browseAvailableRides(String startTime, String endTime, Pageable pageable) {
-        log.info("Browsing available rides - startTime: {}, endTime: {}", startTime, endTime);
+    public Page<SharedRideResponse> browseAvailableRides(String startTime,
+            String endTime,
+            String startKeyword,
+            String endKeyword,
+            Double currentLat,
+            Double currentLng,
+            Double radiusKm,
+            Pageable pageable) {
+        log.info("Browsing available rides - startTime: {}, endTime: {}, startKeyword: {}, endKeyword: {}, lat: {}, lng: {}, radiusKm: {}",
+                startTime, endTime, startKeyword, endKeyword, currentLat, currentLng, radiusKm);
 
         LocalDateTime start = startTime != null ? LocalDateTime.parse(startTime) : LocalDateTime.now();
         LocalDateTime end = endTime != null ? LocalDateTime.parse(endTime) : start.plusHours(2);
+        Double effectiveRadius = (currentLat != null && currentLng != null)
+                ? (radiusKm != null ? radiusKm : 5.0)
+                : null;
 
-        Page<SharedRide> ridePage = rideRepository.findAvailableRides(start, end, pageable);
+        String startPattern = buildPattern(startKeyword);
+        String endPattern = buildPattern(endKeyword);
 
-        // Location startLoc =
-        // locationRepository.findById(ride.getStartLocationId()).orElse(null);
-        // Location endLoc =
-        // locationRepository.findById(ride.getEndLocationId()).orElse(null);
-        // return buildRideResponse(ride, startLoc, endLoc);
+        Page<SharedRide> ridePage;
+        if ((startPattern == null || startPattern.isBlank()) &&
+                (endPattern == null || endPattern.isBlank()) &&
+                effectiveRadius == null) {
+            ridePage = rideRepository.findAvailableRides(start, end, pageable);
+        } else {
+            ridePage = rideRepository.findAvailableRidesWithFilters(start, end,
+                    startPattern,
+                    endPattern,
+                    currentLat, currentLng, effectiveRadius, pageable);
+        }
+
         return ridePage.map(this::buildRideResponse);
+    }
+
+    private String buildPattern(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return "%" + value.toLowerCase() + "%";
     }
 
     @Override
