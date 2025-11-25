@@ -290,10 +290,6 @@ public class RideTrackingServiceImpl implements RideTrackingService {
                 .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource", rideId));
 
         SharedRideRequest request = ride.getSharedRideRequest();
-        if (request == null) {
-            throw BaseDomainException.of("ride.validation.request-invalid-state",
-                    "Ride is not linked to a request");
-        }
 
         User currentUser = userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> BaseDomainException.of("user.not-found.by-username"));
@@ -301,7 +297,8 @@ public class RideTrackingServiceImpl implements RideTrackingService {
         boolean isDriver = ride.getDriver() != null
                 && ride.getDriver().getUser() != null
                 && ride.getDriver().getUser().getUserId().equals(currentUser.getUserId());
-        boolean isRider = request.getRider() != null
+        boolean isRider = request != null
+                && request.getRider() != null
                 && request.getRider().getUser() != null
                 && request.getRider().getUser().getUserId().equals(currentUser.getUserId());
         boolean isAdmin = authentication.getAuthorities().stream()
@@ -324,7 +321,7 @@ public class RideTrackingServiceImpl implements RideTrackingService {
                 .driverLng(driverPos != null ? driverPos.longitude() : null)
                 .riderLat(riderPos != null ? riderPos.latitude() : null)
                 .riderLng(riderPos != null ? riderPos.longitude() : null)
-                .requestStatus(request.getStatus() != null ? request.getStatus().name() : null)
+                .requestStatus(request != null && request.getStatus() != null ? request.getStatus().name() : null)
                 .rideStatus(ride.getStatus() != null ? ride.getStatus().name() : null)
                 .polyline(polylineResult.polyline())
                 .detoured(polylineResult.detoured())
@@ -392,21 +389,31 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     private TrackingPolylineResult determinePolyline(SharedRide ride,
             SharedRideRequest request,
             LatLng latestPosition) {
-        SharedRideRequestStatus status = request.getStatus();
+        SharedRideRequestStatus status = request != null ? request.getStatus() : null;
         boolean approachingPickup = status == SharedRideRequestStatus.CONFIRMED;
         boolean inTransit = status == SharedRideRequestStatus.ONGOING;
         Location target = null;
         String baseline = null;
 
-        if (approachingPickup) {
+        if (approachingPickup && request != null) {
             baseline = ride.getDriverApproachPolyline();
             target = request.getPickupLocation();
-        } else if (inTransit) {
+        } else if (inTransit && request != null) {
             baseline = ride.getRoute() != null ? ride.getRoute().getPolyline() : null;
             target = request.getDropoffLocation();
         } else if (ride.getRoute() != null) {
             baseline = ride.getRoute().getPolyline();
-            target = request.getDropoffLocation();
+            target = request != null ? request.getDropoffLocation() : ride.getEndLocation();
+        } else if (ride.getRoute() == null && ride.getStartLocation() != null && ride.getEndLocation() != null) {
+            // As a last resort, recompute a path between start and end if we have positions
+            if (latestPosition != null) {
+                RouteResponse recomputed = routingService.getRoute(
+                        latestPosition.latitude(),
+                        latestPosition.longitude(),
+                        ride.getEndLocation().getLat(),
+                        ride.getEndLocation().getLng());
+                return new TrackingPolylineResult(recomputed.polyline(), false);
+            }
         }
 
         if (baseline != null && latestPosition != null) {
@@ -434,6 +441,9 @@ public class RideTrackingServiceImpl implements RideTrackingService {
     }
 
     private LocalDateTime resolveEta(SharedRideRequest request) {
+        if (request == null || request.getStatus() == null) {
+            return null;
+        }
         if (request.getStatus() == SharedRideRequestStatus.CONFIRMED) {
             return request.getEstimatedPickupTime();
         }

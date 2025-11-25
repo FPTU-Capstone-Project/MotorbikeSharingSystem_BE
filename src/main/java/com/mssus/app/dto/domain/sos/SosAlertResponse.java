@@ -15,6 +15,9 @@ public class SosAlertResponse {
     Integer sharedRideId;
     Integer triggeredBy;
     String triggeredByName;
+    String triggeredByPhone;
+    String riderPhone;
+    String driverPhone;
     AlertType alertType;
     Double currentLat;
     Double currentLng;

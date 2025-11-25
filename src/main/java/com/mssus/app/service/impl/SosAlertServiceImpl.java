@@ -279,11 +279,30 @@ public class SosAlertServiceImpl implements SosAlertService {
     private SosAlertResponse toResponse(SosAlert alert, boolean includeTimeline) {
         List<SosAlertResponse.SosAlertEventDto> timeline = includeTimeline ? toTimelineDtos(alert) : List.of();
 
+        String triggeredByPhone = alert.getTriggeredBy() != null ? alert.getTriggeredBy().getPhone() : null;
+        String riderPhone = null;
+        String driverPhone = null;
+
+        SharedRide sharedRide = alert.getSharedRide();
+        if (sharedRide != null) {
+            if (sharedRide.getDriver() != null && sharedRide.getDriver().getUser() != null) {
+                driverPhone = sharedRide.getDriver().getUser().getPhone();
+            }
+            if (sharedRide.getSharedRideRequest() != null
+                    && sharedRide.getSharedRideRequest().getRider() != null
+                    && sharedRide.getSharedRideRequest().getRider().getUser() != null) {
+                riderPhone = sharedRide.getSharedRideRequest().getRider().getUser().getPhone();
+            }
+        }
+
         return SosAlertResponse.builder()
             .sosId(alert.getSosId())
             .sharedRideId(alert.getSharedRide() != null ? alert.getSharedRide().getSharedRideId() : null)
             .triggeredBy(alert.getTriggeredBy() != null ? alert.getTriggeredBy().getUserId() : null)
             .triggeredByName(alert.getTriggeredBy() != null ? alert.getTriggeredBy().getFullName() : null)
+            .triggeredByPhone(triggeredByPhone)
+            .riderPhone(riderPhone != null ? riderPhone : triggeredByPhone)
+            .driverPhone(driverPhone)
             .alertType(alert.getAlertType())
             .currentLat(alert.getCurrentLat())
             .currentLng(alert.getCurrentLng())
