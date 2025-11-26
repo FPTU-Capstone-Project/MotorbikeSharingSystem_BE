@@ -406,7 +406,7 @@ class SharedRideServiceImplTest {
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
         Page<SharedRideResponse> result = sharedRideService.browseAvailableRides(
-            start.toString(), end.toString(), pageable);
+            start.toString(), end.toString(), null, null, null, null, null, pageable);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
@@ -425,7 +425,8 @@ class SharedRideServiceImplTest {
         when(locationRepository.findById(2)).thenReturn(Optional.of(endLocation));
         when(rideMapper.toResponse(any(SharedRide.class))).thenReturn(new SharedRideResponse());
 
-        Page<SharedRideResponse> result = sharedRideService.browseAvailableRides(null, null, pageable);
+        Page<SharedRideResponse> result = sharedRideService.browseAvailableRides(
+            null, null, null, null, null, null, null, pageable);
 
         assertNotNull(result);
         verify(rideRepository).findAvailableRides(any(LocalDateTime.class),
