@@ -56,7 +56,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .capacity(request.getCapacity())
                 .insuranceExpiry(request.getInsuranceExpiry())
                 .lastMaintenance(request.getLastMaintenance())
-                .fuelType(FuelType.valueOf(request.getFuelType()))
+                .fuelType(resolveFuelType(request.getFuelType()))
                 .status(resolveVehicleStatus(request.getStatus()))
                 .build();
 
@@ -183,11 +183,19 @@ public class VehicleServiceImpl implements VehicleService {
             vehicle.setLastMaintenance(request.getLastMaintenance());
         }
         if (request.getFuelType() != null) {
-            vehicle.setFuelType(FuelType.valueOf(request.getFuelType()));
+            vehicle.setFuelType(resolveFuelType(request.getFuelType()));
         }
         if (request.getStatus() != null) {
             vehicle.setStatus(resolveVehicleStatus(request.getStatus()));
         }
+    }
+
+    private FuelType resolveFuelType(String rawFuelType) {
+        if (rawFuelType == null || rawFuelType.trim().isEmpty()) {
+            throw new IllegalArgumentException("Fuel type cannot be null or empty");
+        }
+        String candidate = rawFuelType.trim().toUpperCase(Locale.ROOT);
+        return FuelType.valueOf(candidate);
     }
 
     private VehicleStatus resolveVehicleStatus(String rawStatus) {

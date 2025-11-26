@@ -105,7 +105,11 @@ public class SecurityConfig {
                 "/api/v1/refunds/requests/user/*",
                 // Profile management (admin view)
                 "/api/v1/me/all",
-                "/api/v1/vehicles/**",
+                // Vehicle management - Admin can view all vehicles (GET only, not POST/PUT/DELETE)
+                // Note: POST /api/v1/vehicles, PUT /api/v1/vehicles/*, DELETE /api/v1/vehicles/* are in DRIVER_PATHS
+                // GET /api/v1/vehicles/driver and GET /api/v1/vehicles/status/* are in DRIVER_PATHS
+                // Admin can only GET all vehicles or GET by ID (for viewing/managing)
+                // Use HttpMethod.GET to be more specific
                 // User reports - Admin-only endpoints (specific paths, not wildcard)
                 // Note: POST /api/v1/user-reports, GET /my-reports, POST /{reportId}/driver-response 
                 // are in AUTHENTICATED_PATHS for regular users
@@ -159,11 +163,10 @@ public class SecurityConfig {
                 "/api/v1/ride-requests/*/reject",
                 "/api/v1/ride-requests/*/broadcast/accept",
                 "/api/v1/ride-requests/rides/*",
-                // Vehicle management
-                "/api/v1/vehicles",
-                "/api/v1/vehicles/*",
-                "/api/v1/vehicles/driver",
-                "/api/v1/vehicles/status/*",
+                // Vehicle management (POST/PUT/DELETE only, GET is handled separately)
+                "/api/v1/vehicles/*",  // PUT, DELETE operations
+                "/api/v1/vehicles/driver",  // GET driver's vehicles
+                "/api/v1/vehicles/status/*",  // GET by status
                 // Driver status
                 "/api/v1/me/driver-status",
                 // Driver earnings
@@ -284,17 +287,33 @@ public class SecurityConfig {
                         // SOS trigger endpoint (drivers & riders)
                         .requestMatchers(HttpMethod.POST, "/api/v1/sos/alerts").hasAnyRole("DRIVER", "RIDER")
 
-                        // Admin-only endpoints
-                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
-
-                        // Admin or Staff endpoints
-                        .requestMatchers(SecurityEndpoints.ADMIN_STAFF_PATHS).hasAnyRole("ADMIN", "STAFF")
+                        // Vehicle endpoints - specific rules first (most specific first)
+                        // GET /api/v1/vehicles/driver - Driver views their own vehicles
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicles/driver").hasRole("DRIVER")
+                        // GET /api/v1/vehicles/status/* - Admin or Driver can filter by status
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicles/status/*").hasAnyRole("ADMIN", "DRIVER")
+                        // GET /api/v1/vehicles/{id} - Admin or Driver views specific vehicle
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicles/*").hasAnyRole("ADMIN", "DRIVER")
+                        // GET /api/v1/vehicles (with query params) - Admin views all vehicles
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicles").hasRole("ADMIN")
+                        // POST /api/v1/vehicles - Driver creates vehicle
+                        .requestMatchers(HttpMethod.POST, "/api/v1/vehicles").hasRole("DRIVER")
+                        // PUT /api/v1/vehicles/{id} - Driver updates their vehicle
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/vehicles/*").hasRole("DRIVER")
+                        // DELETE /api/v1/vehicles/{id} - Driver deletes their vehicle
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/vehicles/*").hasRole("DRIVER")
+                        
+                        // Driver-specific endpoints (check AFTER vehicle-specific rules)
+                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
 
                         // Rider-specific endpoints
                         .requestMatchers(SecurityEndpoints.RIDER_PATHS).hasRole("RIDER")
 
-                        // Driver-specific endpoints
-                        .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
+                        // Admin-only endpoints (other)
+                        .requestMatchers(SecurityEndpoints.ADMIN_PATHS).hasRole("ADMIN")
+
+                        // Admin or Staff endpoints
+                        .requestMatchers(SecurityEndpoints.ADMIN_STAFF_PATHS).hasAnyRole("ADMIN", "STAFF")
 
                         // Authenticated endpoints (any authenticated user)
                         .requestMatchers(SecurityEndpoints.AUTHENTICATED_PATHS).authenticated()
