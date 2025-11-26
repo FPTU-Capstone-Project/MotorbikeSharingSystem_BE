@@ -293,10 +293,16 @@ public class SharedRideServiceImpl implements SharedRideService {
                 effectiveRadius == null) {
             ridePage = rideRepository.findAvailableRides(start, end, pageable);
         } else {
-            ridePage = rideRepository.findAvailableRidesWithFilters(start, end,
-                    startPattern,
-                    endPattern,
-                    currentLat, currentLng, effectiveRadius, pageable);
+            // Fix: Ensure non-null values for repository method to prevent compilation errors
+            ridePage = rideRepository.findAvailableRidesWithFilters(
+                    start, 
+                    end,
+                    startPattern != null ? startPattern : "",
+                    endPattern != null ? endPattern : "",
+                    currentLat != null ? currentLat : 0.0,
+                    currentLng != null ? currentLng : 0.0,
+                    effectiveRadius != null ? effectiveRadius : 0.0,
+                    pageable);
         }
 
         return ridePage.map(this::buildRideResponse);
