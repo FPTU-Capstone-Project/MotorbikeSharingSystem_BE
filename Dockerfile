@@ -5,7 +5,7 @@ COPY pom.xml .
 COPY src ./src
 
 # Build with options to handle compiler warnings and issues
-RUN mvn clean package -DskipTests \
+RUN mvn clean package -DskipTests -X \
     -Dmaven.compiler.failOnWarning=false \
     -Dmaven.compiler.showWarnings=false \
     -Dmapstruct.unmappedTargetPolicy=IGNORE
