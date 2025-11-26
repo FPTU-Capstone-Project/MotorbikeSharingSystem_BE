@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -27,9 +28,10 @@ public class DashboardStatisticsController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get dashboard statistics", 
                description = "Returns comprehensive dashboard statistics including users, trips, revenue, and charts data")
-    public ResponseEntity<DashboardStatsResponse> getDashboardStats() {
-        DashboardStatsResponse stats = dashboardStatisticsService.getDashboardStatistics();
+    public ResponseEntity<DashboardStatsResponse> getDashboardStats(
+            @RequestParam(required = false) java.time.LocalDate startDate,
+            @RequestParam(required = false) java.time.LocalDate endDate) {
+        DashboardStatsResponse stats = dashboardStatisticsService.getDashboardStatistics(startDate, endDate);
         return ResponseEntity.ok(stats);
     }
 }
-

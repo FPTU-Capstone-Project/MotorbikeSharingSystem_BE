@@ -1,8 +1,6 @@
 package com.mssus.app.service.impl;
 
-import com.mssus.app.common.enums.SharedRideStatus;
-import com.mssus.app.common.enums.TransactionStatus;
-import com.mssus.app.common.enums.TransactionType;
+import com.mssus.app.common.enums.*;
 import com.mssus.app.dto.response.DashboardStatsResponse;
 import com.mssus.app.entity.SharedRide;
 import com.mssus.app.entity.Transaction;
@@ -24,6 +22,7 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,161 +35,221 @@ public class DashboardStatisticsServiceImpl implements DashboardStatisticsServic
     private final TransactionRepository transactionRepository;
     private final SosAlertRepository sosAlertRepository;
 
+    private boolean isRiderFareDebit(Transaction t) {
+        return t.getStatus() == TransactionStatus.SUCCESS
+                && t.getType() == TransactionType.CAPTURE_FARE
+                && t.getDirection() == TransactionDirection.OUT
+                && t.getActorKind() == ActorKind.USER
+                && t.getAmount() != null
+                && t.getAmount().compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean withinRange(LocalDateTime ts, LocalDateTime start, LocalDateTime end) {
+        if (ts == null) return false;
+        if (start != null && ts.isBefore(start)) return false;
+        if (end != null && !ts.isBefore(end)) return false; // end exclusive
+        return true;
+    }
+
     @Override
     @Transactional(readOnly = true)
-    public DashboardStatsResponse getDashboardStatistics() {
-        // Total Users
+    public DashboardStatsResponse getDashboardStatistics(LocalDate startDate, LocalDate endDate) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = now.toLocalDate();
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime end = endDate != null ? endDate.plusDays(1).atStartOfDay() : null;
+        LocalDate weekAgoDate = today.minusWeeks(1);
+        LocalDate twoWeeksAgoDate = today.minusWeeks(2);
+        LocalDateTime weekAgo = weekAgoDate.atStartOfDay();
+        LocalDateTime twoWeeksAgo = twoWeeksAgoDate.atStartOfDay();
+
         long totalUsers = userRepository.count();
-        
-        // Active Trips (ONGOING status)
-        long activeTrips = sharedRideRepository.countByDriverDriverIdAndStatus(null, SharedRideStatus.ONGOING);
-        // Also count rides with SCHEDULED status as active
-        long scheduledTrips = sharedRideRepository.findAll().stream()
-            .filter(r -> r.getStatus() == SharedRideStatus.SCHEDULED)
-            .count();
-        activeTrips += scheduledTrips;
-        
-        // Total Revenue (sum of all SUCCESS transactions of type CAPTURE_FARE)
+
+        long activeTrips = sharedRideRepository.countByStatus(SharedRideStatus.ONGOING)
+                + sharedRideRepository.countByStatus(SharedRideStatus.SCHEDULED);
+
         BigDecimal totalRevenue = transactionRepository.findAll().stream()
-            .filter(t -> t.getStatus() == TransactionStatus.SUCCESS)
-            .filter(t -> t.getType() == TransactionType.CAPTURE_FARE || 
-                        t.getType() == TransactionType.TOPUP) // Include topups as revenue
-            .map(Transaction::getAmount)
-            .filter(amount -> amount != null && amount.compareTo(BigDecimal.ZERO) > 0)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        // Average Response Time (from SOS alerts)
+                .filter(this::isRiderFareDebit)
+                .filter(t -> start == null && end == null || withinRange(t.getCreatedAt(), start, end))
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Average response time from resolved SOS
         List<com.mssus.app.entity.SosAlert> resolvedAlerts = sosAlertRepository.findAll().stream()
-            .filter(alert -> alert.getResolvedAt() != null && alert.getCreatedAt() != null)
-            .collect(Collectors.toList());
-        
+                .filter(alert -> alert.getResolvedAt() != null && alert.getCreatedAt() != null)
+                .toList();
         BigDecimal averageResponseTimeMinutes = BigDecimal.ZERO;
         if (!resolvedAlerts.isEmpty()) {
             long totalMinutes = resolvedAlerts.stream()
-                .mapToLong(alert -> {
-                    LocalDateTime createdAt = alert.getCreatedAt();
-                    LocalDateTime resolvedAt = alert.getResolvedAt();
-                    if (createdAt != null && resolvedAt != null) {
-                        return ChronoUnit.MINUTES.between(createdAt, resolvedAt);
-                    }
-                    return 0;
-                })
-                .sum();
-            
+                    .mapToLong(alert -> ChronoUnit.MINUTES.between(alert.getCreatedAt(), alert.getResolvedAt()))
+                    .sum();
             averageResponseTimeMinutes = BigDecimal.valueOf(totalMinutes)
-                .divide(BigDecimal.valueOf(resolvedAlerts.size()), 1, RoundingMode.HALF_UP);
+                    .divide(BigDecimal.valueOf(resolvedAlerts.size()), 1, RoundingMode.HALF_UP);
         }
-        
-        // Growth calculations (simplified - compare last week vs previous week)
-        LocalDate now = LocalDate.now();
-        LocalDate weekAgo = now.minusWeeks(1);
-        LocalDate twoWeeksAgo = now.minusWeeks(2);
-        
+
         long usersThisWeek = userRepository.findAll().stream()
-            .filter(u -> u.getCreatedAt() != null && 
-                        u.getCreatedAt().toLocalDate().isAfter(weekAgo))
-            .count();
-        
+                .filter(u -> u.getCreatedAt() != null && !u.getCreatedAt().toLocalDate().isBefore(weekAgoDate))
+                .count();
         long usersLastWeek = userRepository.findAll().stream()
-            .filter(u -> u.getCreatedAt() != null && 
-                        u.getCreatedAt().toLocalDate().isAfter(twoWeeksAgo) &&
-                        u.getCreatedAt().toLocalDate().isBefore(weekAgo))
-            .count();
-        
+                .filter(u -> u.getCreatedAt() != null &&
+                        !u.getCreatedAt().toLocalDate().isBefore(twoWeeksAgoDate) &&
+                        u.getCreatedAt().toLocalDate().isBefore(weekAgoDate))
+                .count();
         BigDecimal userGrowthPercentage = usersLastWeek > 0
-            ? BigDecimal.valueOf(usersThisWeek - usersLastWeek)
+                ? BigDecimal.valueOf(usersThisWeek - usersLastWeek)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(usersLastWeek), 1, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO;
-        
-        // Shared trips count
+                : BigDecimal.ZERO;
+
+        long ridesThisWeek = sharedRideRepository.findAll().stream()
+                .filter(r -> r.getCreatedAt() != null && !r.getCreatedAt().toLocalDate().isBefore(weekAgoDate))
+                .count();
+        long ridesLastWeek = sharedRideRepository.findAll().stream()
+                .filter(r -> r.getCreatedAt() != null &&
+                        !r.getCreatedAt().toLocalDate().isBefore(twoWeeksAgoDate) &&
+                        r.getCreatedAt().toLocalDate().isBefore(weekAgoDate))
+                .count();
+        BigDecimal tripGrowthPercentage = ridesLastWeek > 0
+                ? BigDecimal.valueOf(ridesThisWeek - ridesLastWeek)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(ridesLastWeek), 1, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        // Response time change vs previous period
+        BigDecimal responseTimeChangeSeconds = BigDecimal.ZERO;
+
         long sharedTripsCount = sharedRideRepository.findAll().stream()
-            .filter(r -> r.getSharedRideRequest() != null)
-            .count();
-        
-        // Revenue this week
-        BigDecimal revenueThisWeek = transactionRepository.findAll().stream()
-            .filter(t -> t.getStatus() == TransactionStatus.SUCCESS)
-            .filter(t -> t.getType() == TransactionType.CAPTURE_FARE || 
-                        t.getType() == TransactionType.TOPUP)
-            .filter(t -> t.getCreatedAt() != null && 
-                        t.getCreatedAt().toLocalDate().isAfter(weekAgo))
-            .map(Transaction::getAmount)
-            .filter(amount -> amount != null && amount.compareTo(BigDecimal.ZERO) > 0)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        // Simplified growth calculations for trips and revenue
-        BigDecimal tripGrowthPercentage = BigDecimal.valueOf(8.2); // Placeholder
-        BigDecimal revenueGrowthPercentage = BigDecimal.valueOf(23.1); // Placeholder
-        BigDecimal responseTimeChangeSeconds = BigDecimal.valueOf(-15); // Placeholder
-        
-        // Monthly Revenue Data (last 8 months)
-        List<DashboardStatsResponse.MonthlyRevenueData> monthlyData = generateMonthlyRevenueData();
-        
-        // Ride Status Distribution
-        List<DashboardStatsResponse.RideStatusDistribution> rideStatusData = generateRideStatusDistribution();
-        
-        // Hourly Performance Data
-        List<DashboardStatsResponse.HourlyPerformanceData> hourlyData = generateHourlyPerformanceData();
-        
-        // Recent Activity (simplified - get recent transactions and rides)
-        List<DashboardStatsResponse.RecentActivityItem> recentActivity = generateRecentActivity();
-        
+                .filter(r -> r.getSharedRideRequest() != null)
+                .filter(r -> start == null && end == null || withinRange(r.getCreatedAt(), start, end))
+                .count();
+
+        BigDecimal revenueThisWeek;
+        BigDecimal revenueLastWeek;
+        BigDecimal revenueGrowthPercentage;
+        if (start != null || end != null) {
+            revenueThisWeek = totalRevenue;
+            revenueLastWeek = BigDecimal.ZERO;
+            revenueGrowthPercentage = BigDecimal.ZERO;
+        } else {
+            revenueThisWeek = transactionRepository.findAll().stream()
+                    .filter(this::isRiderFareDebit)
+                    .filter(t -> t.getCreatedAt() != null && !t.getCreatedAt().toLocalDate().isBefore(weekAgoDate))
+                    .map(Transaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            revenueLastWeek = transactionRepository.findAll().stream()
+                    .filter(this::isRiderFareDebit)
+                    .filter(t -> t.getCreatedAt() != null &&
+                            !t.getCreatedAt().toLocalDate().isBefore(twoWeeksAgoDate) &&
+                            t.getCreatedAt().toLocalDate().isBefore(weekAgoDate))
+                    .map(Transaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            revenueGrowthPercentage = revenueLastWeek.compareTo(BigDecimal.ZERO) > 0
+                    ? revenueThisWeek.subtract(revenueLastWeek)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(revenueLastWeek, 1, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+        }
+
+        List<DashboardStatsResponse.MonthlyRevenueData> monthlyData = generateMonthlyRevenueData(start, end);
+        List<DashboardStatsResponse.RideStatusDistribution> rideStatusData = generateRideStatusDistribution(start, end);
+        List<DashboardStatsResponse.HourlyPerformanceData> hourlyData = generateHourlyPerformanceData(start, end);
+        List<DashboardStatsResponse.RecentActivityItem> recentActivity = generateRecentActivity(start, end);
+
         return DashboardStatsResponse.builder()
-            .totalUsers(totalUsers)
-            .activeTrips(activeTrips)
-            .totalRevenue(totalRevenue)
-            .averageResponseTimeMinutes(averageResponseTimeMinutes)
-            .userGrowthPercentage(userGrowthPercentage)
-            .tripGrowthPercentage(tripGrowthPercentage)
-            .revenueGrowthPercentage(revenueGrowthPercentage)
-            .responseTimeChangeSeconds(responseTimeChangeSeconds)
-            .newUsersThisWeek(usersThisWeek)
-            .sharedTripsCount(sharedTripsCount)
-            .revenueThisWeek(revenueThisWeek)
-            .responseTimeDescription("Hỗ trợ khẩn cấp")
-            .monthlyRevenueData(monthlyData)
-            .rideStatusDistribution(rideStatusData)
-            .hourlyPerformanceData(hourlyData)
-            .recentActivity(recentActivity)
-            .build();
+                .totalUsers(totalUsers)
+                .activeTrips(activeTrips)
+                .totalRevenue(totalRevenue)
+                .averageResponseTimeMinutes(averageResponseTimeMinutes)
+                .userGrowthPercentage(userGrowthPercentage)
+                .tripGrowthPercentage(tripGrowthPercentage)
+                .revenueGrowthPercentage(revenueGrowthPercentage)
+                .responseTimeChangeSeconds(responseTimeChangeSeconds)
+                .newUsersThisWeek(usersThisWeek)
+                .sharedTripsCount(sharedTripsCount)
+                .revenueThisWeek(revenueThisWeek)
+                .responseTimeDescription("Hỗ trợ khẩn cấp")
+                .monthlyRevenueData(monthlyData)
+                .rideStatusDistribution(rideStatusData)
+                .hourlyPerformanceData(hourlyData)
+                .recentActivity(recentActivity)
+                .build();
     }
     
-    private List<DashboardStatsResponse.MonthlyRevenueData> generateMonthlyRevenueData() {
+    private List<DashboardStatsResponse.MonthlyRevenueData> generateMonthlyRevenueData(LocalDateTime start, LocalDateTime end) {
         List<DashboardStatsResponse.MonthlyRevenueData> data = new ArrayList<>();
         String[] monthNames = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-        
-        // Get transactions grouped by month
-        List<Transaction> allTransactions = transactionRepository.findAll().stream()
-            .filter(t -> t.getStatus() == TransactionStatus.SUCCESS)
-            .filter(t -> t.getType() == TransactionType.CAPTURE_FARE || 
-                        t.getType() == TransactionType.TOPUP)
+
+        // Fare capture transactions (rider debits only)
+        List<Transaction> fareTransactions = transactionRepository.findAll().stream()
+            .filter(this::isRiderFareDebit)
+            .filter(t -> start == null && end == null || withinRange(t.getCreatedAt(), start, end))
             .collect(Collectors.toList());
-        
-        // Get last 8 months from current date
+
+        // If a date range is provided and within ~1 month, return daily buckets
+        if (start != null && end != null) {
+            final LocalDate startDate = start.toLocalDate();
+            final LocalDate endDate = end.minusSeconds(1).toLocalDate(); // end exclusive
+            long days = ChronoUnit.DAYS.between(startDate, endDate) + 1;
+            if (days > 0 && days <= 35) {
+                LocalDate cursor = startDate;
+                while (!cursor.isAfter(endDate)) {
+                    final LocalDate current = cursor;
+                    BigDecimal dayRevenue = fareTransactions.stream()
+                        .filter(t -> t.getCreatedAt() != null)
+                        .filter(t -> t.getCreatedAt().toLocalDate().isEqual(current))
+                        .map(Transaction::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    long dayRides = sharedRideRepository.findAll().stream()
+                        .filter(r -> r.getCreatedAt() != null)
+                        .filter(r -> r.getCreatedAt().toLocalDate().isEqual(current))
+                        .count();
+                    long dayUsers = userRepository.findAll().stream()
+                        .filter(u -> u.getCreatedAt() != null)
+                        .filter(u -> u.getCreatedAt().toLocalDate().isEqual(current))
+                        .count();
+                    data.add(DashboardStatsResponse.MonthlyRevenueData.builder()
+                        .month(current.toString()) // date label
+                        .revenue(dayRevenue)
+                        .rides(dayRides)
+                        .users(dayUsers)
+                        .build());
+                    cursor = cursor.plusDays(1);
+                }
+                return data;
+            }
+        }
+
+        // Default: last 8 months aggregated monthly
         LocalDate now = LocalDate.now();
-        
-        for (int i = 0; i < 8; i++) {
-            // Calculate month index (going back from current month)
-            int monthsBack = 7 - i;
+        int months = 8;
+        for (int i = 0; i < months; i++) {
+            int monthsBack = months - 1 - i;
             LocalDate targetDate = now.minusMonths(monthsBack);
             int monthIndex = targetDate.getMonthValue();
             int year = targetDate.getYear();
             String monthName = monthNames[monthIndex - 1];
-            
+
             LocalDate monthStart = LocalDate.of(year, monthIndex, 1);
             LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
-            
-            BigDecimal monthRevenue = allTransactions.stream()
+
+            if (start != null && monthEnd.atStartOfDay().isBefore(start)) {
+                continue;
+            }
+            if (end != null && monthStart.atStartOfDay().isAfter(end.minusDays(1))) {
+                continue;
+            }
+
+            BigDecimal monthRevenue = fareTransactions.stream()
                 .filter(t -> t.getCreatedAt() != null)
                 .filter(t -> {
                     LocalDate transDate = t.getCreatedAt().toLocalDate();
                     return !transDate.isBefore(monthStart) && !transDate.isAfter(monthEnd);
                 })
                 .map(Transaction::getAmount)
-                .filter(amount -> amount != null && amount.compareTo(BigDecimal.ZERO) > 0)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-            
+
             long monthRides = sharedRideRepository.findAll().stream()
                 .filter(r -> r.getCreatedAt() != null)
                 .filter(r -> {
@@ -198,7 +257,7 @@ public class DashboardStatisticsServiceImpl implements DashboardStatisticsServic
                     return !rideDate.isBefore(monthStart) && !rideDate.isAfter(monthEnd);
                 })
                 .count();
-            
+
             long monthUsers = userRepository.findAll().stream()
                 .filter(u -> u.getCreatedAt() != null)
                 .filter(u -> {
@@ -206,7 +265,7 @@ public class DashboardStatisticsServiceImpl implements DashboardStatisticsServic
                     return !userDate.isBefore(monthStart) && !userDate.isAfter(monthEnd);
                 })
                 .count();
-            
+
             data.add(DashboardStatsResponse.MonthlyRevenueData.builder()
                 .month(monthName)
                 .revenue(monthRevenue)
@@ -214,89 +273,82 @@ public class DashboardStatisticsServiceImpl implements DashboardStatisticsServic
                 .users(monthUsers)
                 .build());
         }
-        
+
         return data;
     }
     
-    private List<DashboardStatsResponse.RideStatusDistribution> generateRideStatusDistribution() {
-        List<SharedRide> allRides = sharedRideRepository.findAll();
-        long totalRides = allRides.size();
-        
+    private List<DashboardStatsResponse.RideStatusDistribution> generateRideStatusDistribution(LocalDateTime start, LocalDateTime end) {
+        long completed;
+        long ongoing;
+        long scheduled;
+        long cancelled;
+
+        if (start == null && end == null) {
+            completed = sharedRideRepository.countByStatus(SharedRideStatus.COMPLETED);
+            ongoing = sharedRideRepository.countByStatus(SharedRideStatus.ONGOING);
+            scheduled = sharedRideRepository.countByStatus(SharedRideStatus.SCHEDULED);
+            cancelled = sharedRideRepository.countByStatus(SharedRideStatus.CANCELLED);
+        } else {
+            List<SharedRide> rides = sharedRideRepository.findAll().stream()
+                    .filter(r -> withinRange(r.getCreatedAt(), start, end))
+                    .toList();
+            completed = rides.stream().filter(r -> r.getStatus() == SharedRideStatus.COMPLETED).count();
+            ongoing = rides.stream().filter(r -> r.getStatus() == SharedRideStatus.ONGOING).count();
+            scheduled = rides.stream().filter(r -> r.getStatus() == SharedRideStatus.SCHEDULED).count();
+            cancelled = rides.stream().filter(r -> r.getStatus() == SharedRideStatus.CANCELLED).count();
+        }
+
+        long totalRides = completed + ongoing + scheduled + cancelled;
         if (totalRides == 0) {
             return List.of();
         }
-        
-        long completed = allRides.stream()
-            .filter(r -> r.getStatus() == SharedRideStatus.COMPLETED)
-            .count();
-        
-        long ongoing = allRides.stream()
-            .filter(r -> r.getStatus() == SharedRideStatus.ONGOING || 
-                        r.getStatus() == SharedRideStatus.SCHEDULED)
-            .count();
-        
-        long cancelled = allRides.stream()
-            .filter(r -> r.getStatus() == SharedRideStatus.CANCELLED)
-            .count();
-        
-        long shared = allRides.stream()
-            .filter(r -> r.getSharedRideRequest() != null)
-            .count();
-        
+
         List<DashboardStatsResponse.RideStatusDistribution> distribution = new ArrayList<>();
-        
-        if (completed > 0) {
-            distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
-                .status("COMPLETED")
-                .statusLabel("Đã hoàn thành")
-                .count(completed)
-                .percentage(BigDecimal.valueOf(completed)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
-                .color("#059669")
-                .build());
-        }
-        
-        if (ongoing > 0) {
-            distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
-                .status("ONGOING")
-                .statusLabel("Đang thực hiện")
-                .count(ongoing)
-                .percentage(BigDecimal.valueOf(ongoing)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
-                .color("#2563EB")
-                .build());
-        }
-        
-        if (cancelled > 0) {
-            distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
-                .status("CANCELLED")
-                .statusLabel("Đã hủy")
-                .count(cancelled)
-                .percentage(BigDecimal.valueOf(cancelled)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
-                .color("#DC2626")
-                .build());
-        }
-        
-        if (shared > 0) {
-            distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
-                .status("SHARED")
-                .statusLabel("Đi chung")
-                .count(shared)
-                .percentage(BigDecimal.valueOf(shared)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
-                .color("#7C3AED")
-                .build());
-        }
-        
+
+        distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
+            .status("SCHEDULED")
+            .statusLabel("Đã lên lịch")
+            .count(scheduled)
+            .percentage(BigDecimal.valueOf(scheduled)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
+            .color("#F59E0B")
+            .build());
+
+        distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
+            .status("ONGOING")
+            .statusLabel("Đang thực hiện")
+            .count(ongoing)
+            .percentage(BigDecimal.valueOf(ongoing)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
+            .color("#2563EB")
+            .build());
+
+        distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
+            .status("COMPLETED")
+            .statusLabel("Đã hoàn thành")
+            .count(completed)
+            .percentage(BigDecimal.valueOf(completed)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
+            .color("#059669")
+            .build());
+
+        distribution.add(DashboardStatsResponse.RideStatusDistribution.builder()
+            .status("CANCELLED")
+            .statusLabel("Đã hủy")
+            .count(cancelled)
+            .percentage(BigDecimal.valueOf(cancelled)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalRides), 1, RoundingMode.HALF_UP))
+            .color("#DC2626")
+            .build());
+
         return distribution;
     }
     
-    private List<DashboardStatsResponse.HourlyPerformanceData> generateHourlyPerformanceData() {
+    private List<DashboardStatsResponse.HourlyPerformanceData> generateHourlyPerformanceData(LocalDateTime start, LocalDateTime end) {
         List<DashboardStatsResponse.HourlyPerformanceData> data = new ArrayList<>();
         
         for (int hour = 6; hour <= 23; hour++) {
@@ -305,6 +357,7 @@ public class DashboardStatisticsServiceImpl implements DashboardStatisticsServic
             
             long rides = sharedRideRepository.findAll().stream()
                 .filter(r -> r.getCreatedAt() != null)
+                .filter(r -> start == null && end == null || withinRange(r.getCreatedAt(), start, end))
                 .filter(r -> {
                     LocalTime rideTime = r.getCreatedAt().toLocalTime();
                     return !rideTime.isBefore(hourStart) && !rideTime.isAfter(hourEnd);
@@ -312,16 +365,14 @@ public class DashboardStatisticsServiceImpl implements DashboardStatisticsServic
                 .count();
             
             BigDecimal revenue = transactionRepository.findAll().stream()
-                .filter(t -> t.getStatus() == TransactionStatus.SUCCESS)
-                .filter(t -> t.getType() == TransactionType.CAPTURE_FARE || 
-                            t.getType() == TransactionType.TOPUP)
+                .filter(this::isRiderFareDebit)
                 .filter(t -> t.getCreatedAt() != null)
+                .filter(t -> start == null && end == null || withinRange(t.getCreatedAt(), start, end))
                 .filter(t -> {
                     LocalTime transTime = t.getCreatedAt().toLocalTime();
                     return !transTime.isBefore(hourStart) && !transTime.isAfter(hourEnd);
                 })
                 .map(Transaction::getAmount)
-                .filter(amount -> amount != null && amount.compareTo(BigDecimal.ZERO) > 0)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             
             data.add(DashboardStatsResponse.HourlyPerformanceData.builder()
@@ -334,9 +385,10 @@ public class DashboardStatisticsServiceImpl implements DashboardStatisticsServic
         return data;
     }
     
-    private List<DashboardStatsResponse.RecentActivityItem> generateRecentActivity() {
+    private List<DashboardStatsResponse.RecentActivityItem> generateRecentActivity(LocalDateTime start, LocalDateTime end) {
         // Get recent transactions and rides
         List<Transaction> recentTransactions = transactionRepository.findAll().stream()
+            .filter(t -> start == null && end == null || withinRange(t.getCreatedAt(), start, end))
             .sorted((a, b) -> {
                 if (a.getCreatedAt() == null || b.getCreatedAt() == null) return 0;
                 return b.getCreatedAt().compareTo(a.getCreatedAt());

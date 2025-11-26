@@ -19,6 +19,8 @@ import java.util.Optional;
 
 @Repository
 public interface SharedRideRepository extends JpaRepository<SharedRide, Integer> {
+    long countByStatus(SharedRideStatus status);
+
     Page<SharedRide> findByDriverDriverIdOrderByScheduledTimeDesc(Integer driverId, Pageable pageable);
 
     Page<SharedRide> findByDriverDriverIdAndStatusOrderByScheduledTimeDesc(
