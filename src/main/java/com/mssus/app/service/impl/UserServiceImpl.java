@@ -9,9 +9,11 @@ import com.mssus.app.dto.request.UpdateUserRequest;
 import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.UserResponse;
 import com.mssus.app.entity.User;
+import com.mssus.app.dto.response.notification.EmailPriority;
 import com.mssus.app.repository.DriverProfileRepository;
 import com.mssus.app.repository.RiderProfileRepository;
 import com.mssus.app.repository.UserRepository;
+import com.mssus.app.service.EmailService;
 import com.mssus.app.service.UserService;
 import com.mssus.app.service.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -22,9 +24,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,6 +43,15 @@ public class UserServiceImpl implements UserService {
     private final DriverProfileRepository driverProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final WalletService walletService;
+    private final EmailService emailService;
+
+    private static final String UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final String LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
+    private static final String DIGITS = "0123456789";
+    private static final String SPECIAL = "!@#$%^&*()-_=+[]{}|;:,.<>?";
+    private static final String ALL_ALLOWED = UPPERCASE + LOWERCASE + DIGITS + SPECIAL;
+    private static final int GENERATED_PASSWORD_LENGTH = 12;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Override
     @Transactional
@@ -46,47 +61,30 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("Email đã tồn tại: " + request.getEmail());
         }
 
-        // Check if phone already exists
-        if (userRepository.existsByPhone(request.getPhone())) {
-            throw new IllegalArgumentException("Số điện thoại đã tồn tại: " + request.getPhone());
-        }
-
-        // Check if student ID already exists (if provided)
-        if (request.getStudentId() != null && !request.getStudentId().trim().isEmpty()) {
-            if (userRepository.existsByStudentId(request.getStudentId())) {
-                throw new IllegalArgumentException("Mã sinh viên đã tồn tại: " + request.getStudentId());
-            }
-        }
+        String requestedType = request.getUserType() != null
+                ? request.getUserType().trim().toUpperCase()
+                : UserType.USER.name();
+        UserType userType = UserType.valueOf(requestedType);
+        String generatedPassword = generateStrongPassword();
+        String placeholderName = generatePlaceholderName();
 
         // Build user entity
         User.UserBuilder userBuilder = User.builder()
                 .email(request.getEmail())
-                .phone(request.getPhone())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(request.getFullName())
-                .userType(UserType.valueOf(request.getUserType()))
+                .passwordHash(passwordEncoder.encode(generatedPassword))
+                .fullName(placeholderName)
+                .userType(userType)
                 .status(UserStatus.ACTIVE)
-                .emailVerified(false)
+                .emailVerified(true)
                 .phoneVerified(false);
-
-        // Set optional fields
-        if (request.getStudentId() != null && !request.getStudentId().trim().isEmpty()) {
-            userBuilder.studentId(request.getStudentId());
-        }
-
-        if (request.getDateOfBirth() != null && !request.getDateOfBirth().trim().isEmpty()) {
-            userBuilder.dateOfBirth(LocalDate.parse(request.getDateOfBirth(), DateTimeFormatter.ISO_LOCAL_DATE));
-        }
-
-        if (request.getGender() != null && !request.getGender().trim().isEmpty()) {
-            userBuilder.gender(request.getGender());
-        }
 
         User user = userBuilder.build();
         user = userRepository.save(user);
 
         // Create wallet for the user
         walletService.createWalletForUser(user.getUserId());
+
+        sendAccountCreationEmail(user, generatedPassword);
 
         log.info("Created user with ID: {} and email: {}", user.getUserId(), user.getEmail());
         return mapToUserResponse(user);
@@ -255,6 +253,63 @@ public class UserServiceImpl implements UserService {
         return mapToUserResponse(user);
     }
 
+    private String generateStrongPassword() {
+        List<Character> passwordChars = new ArrayList<>();
+        passwordChars.add(randomChar(UPPERCASE));
+        passwordChars.add(randomChar(LOWERCASE));
+        passwordChars.add(randomChar(DIGITS));
+        passwordChars.add(randomChar(SPECIAL));
+
+        for (int i = passwordChars.size(); i < GENERATED_PASSWORD_LENGTH; i++) {
+            passwordChars.add(randomChar(ALL_ALLOWED));
+        }
+
+        Collections.shuffle(passwordChars, SECURE_RANDOM);
+
+        StringBuilder passwordBuilder = new StringBuilder();
+        passwordChars.forEach(passwordBuilder::append);
+        return passwordBuilder.toString();
+    }
+
+    private String generatePlaceholderName() {
+        String pool = UPPERCASE + DIGITS;
+        StringBuilder suffix = new StringBuilder();
+        for (int i = 0; i < 6; i++) {
+            suffix.append(randomChar(pool));
+        }
+        return "User@" + suffix;
+    }
+
+    private char randomChar(String source) {
+        return source.charAt(SECURE_RANDOM.nextInt(source.length()));
+    }
+
+    private void sendAccountCreationEmail(User user, String plainPassword) {
+        Map<String, Object> templateData = Map.of(
+                "fullName", user.getFullName(),
+                "email", user.getEmail(),
+                "password", plainPassword
+        );
+
+        emailService.sendEmail(
+                        user.getEmail(),
+                        "[Motorbike Sharing] Your admin-created account credentials",
+                        "emails/admin-user-created",
+                        templateData,
+                        EmailPriority.HIGH,
+                        user.getUserId() != null ? user.getUserId().longValue() : null,
+                        "ADMIN_USER_CREATED")
+                .thenAccept(result -> {
+                    if (!result.isSuccess()) {
+                        log.warn("Account creation email failed for user {}: {}", user.getUserId(), result.getErrorMessage());
+                    }
+                })
+                .exceptionally(ex -> {
+                    log.error("Failed to send account creation email to {}: {}", user.getEmail(), ex.getMessage());
+                    return null;
+                });
+    }
+
     private UserResponse mapToUserResponse(User user) {
         return UserResponse.builder()
                 .userId(user.getUserId())
@@ -269,6 +324,46 @@ public class UserServiceImpl implements UserService {
                 .status(user.getStatus() != null ? user.getStatus().name() : null)
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .riderProfile(mapRiderProfile(user))
+                .driverProfile(mapDriverProfile(user))
+                .build();
+    }
+
+    private UserResponse.RiderProfileInfo mapRiderProfile(User user) {
+        if (user.getRiderProfile() == null) {
+            return null;
+        }
+        var rp = user.getRiderProfile();
+        return UserResponse.RiderProfileInfo.builder()
+                .riderId(rp.getRiderId())
+                .totalRides(rp.getTotalRides())
+                .totalSpent(rp.getTotalSpent())
+                .status(rp.getStatus() != null ? rp.getStatus().name() : null)
+                .preferredPaymentMethod(rp.getPreferredPaymentMethod() != null ? rp.getPreferredPaymentMethod().name() : null)
+                .createdAt(rp.getCreatedAt())
+                .suspendedAt(rp.getSuspendedAt())
+                .activatedAt(rp.getActivatedAt())
+                .build();
+    }
+
+    private UserResponse.DriverProfileInfo mapDriverProfile(User user) {
+        if (user.getDriverProfile() == null) {
+            return null;
+        }
+        var dp = user.getDriverProfile();
+        return UserResponse.DriverProfileInfo.builder()
+                .driverId(dp.getDriverId())
+                .licenseNumber(dp.getLicenseNumber())
+                .licenseVerifiedAt(dp.getLicenseVerifiedAt())
+                .status(dp.getStatus() != null ? dp.getStatus().name() : null)
+                .ratingAvg(dp.getRatingAvg())
+                .totalSharedRides(dp.getTotalSharedRides())
+                .totalEarned(dp.getTotalEarned())
+                .isAvailable(dp.getIsAvailable())
+                .maxPassengers(dp.getMaxPassengers())
+                .createdAt(dp.getCreatedAt())
+                .suspendedAt(dp.getSuspendedAt())
+                .activatedAt(dp.getActivatedAt())
                 .build();
     }
 

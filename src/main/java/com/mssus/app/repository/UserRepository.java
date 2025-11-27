@@ -6,6 +6,7 @@ import com.mssus.app.entity.User;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -43,9 +44,16 @@ public interface UserRepository extends JpaRepository<User, Integer> {
            "LEFT JOIN FETCH u.wallet WHERE u.email = :email")
     Optional<User> findByEmailWithProfiles(@Param("email") String email);
 
+    @EntityGraph(attributePaths = {"riderProfile", "driverProfile"})
+    Optional<User> findById(Integer userId);
 
+    @EntityGraph(attributePaths = {"riderProfile", "driverProfile"})
+    Page<User> findAll(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"riderProfile", "driverProfile"})
     Page<User> findByUserType(UserType userType, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"riderProfile", "driverProfile"})
     Page<User> findByStatus(UserStatus status, Pageable pageable);
 
 
