@@ -36,8 +36,8 @@ public class RegisterRequest {
 
     @NotBlank(message = "Password is required")
     @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
-    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$", 
-             message = "Password must contain at least one uppercase letter, one lowercase letter, and one digit")
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*(),.?\":{}|<>]).*$", 
+             message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character")
     @Schema(description = "Plaintext password; will be hashed before storage")
     private String password;
 
