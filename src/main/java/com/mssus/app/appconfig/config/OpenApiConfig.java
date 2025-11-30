@@ -22,10 +22,15 @@ public class OpenApiConfig {
 
     @Bean
     public OpenAPI customOpenAPI() {
-        // Production server
+        // Production server aws 
         Server productionServer = new Server();
         productionServer.setUrl("http://13.215.143.121");
         productionServer.setDescription("Production Server (AWS EC2)");
+
+        //http://34.142.227.237/
+        Server productionServerGCP = new Server();
+        productionServerGCP.setUrl("http://34.142.227.237");
+        productionServerGCP.setDescription("Production Server (GCP VM)");
         
         // Local development server
         Server localServer = new Server();
