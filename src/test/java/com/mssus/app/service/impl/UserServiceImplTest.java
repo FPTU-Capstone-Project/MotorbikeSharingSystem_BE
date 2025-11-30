@@ -677,14 +677,8 @@ class UserServiceImplTest {
 
     private CreateUserRequest createTestCreateUserRequest() {
         return CreateUserRequest.builder()
-            .fullName("Test User")
             .email("test@example.com")
-            .phone("0901234567")
-            .password("Password123")
             .userType("USER")
-            .studentId("SE123456")
-            .dateOfBirth("2000-01-01")
-            .gender("MALE")
             .build();
     }
 
