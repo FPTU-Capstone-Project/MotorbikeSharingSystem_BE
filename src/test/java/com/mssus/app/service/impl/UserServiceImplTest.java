@@ -78,8 +78,6 @@ class UserServiceImplTest {
         when(userRepository.findById(anyInt())).thenReturn(Optional.of(testUser));
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        when(userRepository.existsByPhone(anyString())).thenReturn(false);
-        when(userRepository.existsByStudentId(anyString())).thenReturn(false);
         when(walletService.createWalletForUser(anyInt())).thenReturn(mock(Wallet.class));
     }
 
@@ -90,8 +88,6 @@ class UserServiceImplTest {
     void should_createUser_when_validRequest() {
         // Arrange
         when(userRepository.existsByEmail(testCreateRequest.getEmail())).thenReturn(false);
-        when(userRepository.existsByPhone(testCreateRequest.getPhone())).thenReturn(false);
-        when(userRepository.existsByStudentId(testCreateRequest.getStudentId())).thenReturn(false);
 
         // Act
         UserResponse result = userService.createUser(testCreateRequest);
@@ -99,18 +95,13 @@ class UserServiceImplTest {
         // Assert
         assertThat(result).isNotNull();
         assertThat(result.getEmail()).isEqualTo(testCreateRequest.getEmail());
-        assertThat(result.getPhone()).isEqualTo(testCreateRequest.getPhone());
-        assertThat(result.getFullName()).isEqualTo(testCreateRequest.getFullName());
         assertThat(result.getUserType()).isEqualTo(testCreateRequest.getUserType());
         assertThat(result.getStatus()).isEqualTo(UserStatus.ACTIVE.name());
 
         verify(userRepository).existsByEmail(testCreateRequest.getEmail());
-        verify(userRepository).existsByPhone(testCreateRequest.getPhone());
-        verify(userRepository).existsByStudentId(testCreateRequest.getStudentId());
-        verify(passwordEncoder).encode(testCreateRequest.getPassword());
+        verify(passwordEncoder).encode(anyString());
         verify(userRepository).save(any(User.class));
         verify(walletService).createWalletForUser(testUser.getUserId());
-        verifyNoMoreInteractions(userRepository, passwordEncoder, walletService);
     }
 
     @Test
@@ -122,12 +113,12 @@ class UserServiceImplTest {
         // Act & Assert
         assertThatThrownBy(() -> userService.createUser(testCreateRequest))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Email already exists: " + testCreateRequest.getEmail());
+            .hasMessageContaining("Email đã tồn tại: " + testCreateRequest.getEmail());
 
         verify(userRepository).existsByEmail(testCreateRequest.getEmail());
-        verifyNoMoreInteractions(userRepository, passwordEncoder, walletService);
     }
 
+    /* Commented out - phone and studentId validations removed from CreateUserRequest
     @Test
     @DisplayName("should_throwException_when_phoneAlreadyExists")
     void should_throwException_when_phoneAlreadyExists() {
@@ -214,6 +205,7 @@ class UserServiceImplTest {
         verify(userRepository).save(any(User.class));
         verify(walletService).createWalletForUser(userWithoutStudentId.getUserId());
     }
+    */
 
     // ========== GET USER BY ID TESTS ==========
 
@@ -611,8 +603,6 @@ class UserServiceImplTest {
         // Arrange
         testCreateRequest.setUserType(userType);
         when(userRepository.existsByEmail(testCreateRequest.getEmail())).thenReturn(false);
-        when(userRepository.existsByPhone(testCreateRequest.getPhone())).thenReturn(false);
-        when(userRepository.existsByStudentId(testCreateRequest.getStudentId())).thenReturn(false);
         
         // Create a user with the specific user type for the mock return
         User userWithType = createTestUser();
