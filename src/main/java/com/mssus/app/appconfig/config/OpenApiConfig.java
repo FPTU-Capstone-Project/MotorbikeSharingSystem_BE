@@ -38,7 +38,7 @@ public class OpenApiConfig {
         localServer.setDescription("Local Development Server");
         
         return new OpenAPI()
-                .servers(List.of(productionServer, localServer))
+                .servers(List.of(productionServer, productionServerGCP, localServer))
                 .info(new Info()
                         .title("MSSUS Account Service API")
                         .version(appVersion)
