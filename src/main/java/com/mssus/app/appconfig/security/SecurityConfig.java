@@ -76,7 +76,8 @@ public class SecurityConfig {
                 "/ws",
                 "/ws/**",
                 "/ws-native",
-                "/ws-native/**"
+                "/ws-native/**",
+                "/api/v1/banks/**"
         };
 
         // Endpoints requiring ADMIN role
@@ -114,10 +115,10 @@ public class SecurityConfig {
                 // Note: POST /api/v1/user-reports, GET /my-reports, POST /{reportId}/driver-response 
                 // are in AUTHENTICATED_PATHS for regular users
                 "/api/v1/user-reports/analytics",
-                "/api/v1/user-reports/*/start-chat",
+                "/api/v1/user-reports/*/start-chat"
                 // GET /api/v1/user-reports, GET /{reportId}, POST /{reportId}/resolve, PATCH /{reportId}
                 // are protected by @PreAuthorize("hasRole('ADMIN')") in controller
-                "/api/v1/banks/**"
+
         };
 
         // Endpoints requiring ADMIN or STAFF role
