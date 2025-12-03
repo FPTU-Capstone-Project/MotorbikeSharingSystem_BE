@@ -31,4 +31,6 @@ public interface ProfileService {
     PageResponse<UserResponse> getAllUsers(Pageable pageable);
 
     void setDriverStatus(String username, boolean isActive);
+
+    List<VerificationResponse> getMyVerificationHistory(String username);
 }

@@ -278,5 +278,22 @@ public class ProfileController {
             .build());
     }
 
+    @Operation(summary = "Get My Verification History",
+        description = "Get all verification submissions for the authenticated user",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Verification history retrieved successfully",
+            content = @Content(schema = @Schema(implementation = VerificationResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/verification-history")
+    public ResponseEntity<List<VerificationResponse>> getMyVerificationHistory(
+        Authentication authentication) {
+        String username = authentication.getName();
+        List<VerificationResponse> response = profileService.getMyVerificationHistory(username);
+        return ResponseEntity.ok(response);
+    }
+
 
 }

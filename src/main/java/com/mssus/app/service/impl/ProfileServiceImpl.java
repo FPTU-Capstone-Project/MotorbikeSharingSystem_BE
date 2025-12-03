@@ -33,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -546,6 +547,26 @@ public class ProfileServiceImpl implements ProfileService {
             log.info("Driver status updated for user {} from {} to {}",
                 user.getUserId(), currentStatus, newStatus);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VerificationResponse> getMyVerificationHistory(String username) {
+        User user = userRepository.findByEmailWithProfiles(username)
+                .orElseThrow(() -> NotFoundException.userNotFound(username));
+
+        List<Verification> verifications = verificationRepository.findByListUserId(user.getUserId());
+        
+        // Sort by created_at descending (newest first)
+        verifications.sort((v1, v2) -> {
+            LocalDateTime date1 = v1.getCreatedAt() != null ? v1.getCreatedAt() : LocalDateTime.MIN;
+            LocalDateTime date2 = v2.getCreatedAt() != null ? v2.getCreatedAt() : LocalDateTime.MIN;
+            return date2.compareTo(date1);
+        });
+
+        return verifications.stream()
+                .map(verificationMapper::mapToVerificationResponse)
+                .collect(Collectors.toList());
     }
 
 }
