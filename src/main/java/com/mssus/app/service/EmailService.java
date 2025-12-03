@@ -12,10 +12,18 @@ import java.util.concurrent.CompletableFuture;
 
 public interface EmailService {
     CompletableFuture<EmailResult> sendEmail(String email, String subject, String templateName,
-                                             Map<String, Object> templateVars, EmailPriority priority,
-                                             Long userId, String emailType);
-    CompletableFuture<EmailResult> sendTopUpSuccessEmail(String email, String fullName, BigDecimal amount, String transactionId, BigDecimal newBalance);
-    CompletableFuture<EmailResult> sendPaymentFailedEmail(String email, String fullName, BigDecimal amount, String transactionId, String reason);
+            Map<String, Object> templateVars, EmailPriority priority,
+            Long userId, String emailType);
+
+    CompletableFuture<EmailResult> sendTopUpSuccessEmail(String email, String fullName, BigDecimal amount,
+            String transactionId, BigDecimal newBalance);
+
+    CompletableFuture<EmailResult> sendPaymentFailedEmail(String email, String fullName, BigDecimal amount,
+            String transactionId, String reason);
+
     CompletableFuture<EmailResult> notifyUserActivated(User user);
+
+    CompletableFuture<EmailResult> notifyRiderActivated(User user);
+
     CompletableFuture<EmailResult> notifyUserRejected(User user, VerificationType type, String reason);
 }

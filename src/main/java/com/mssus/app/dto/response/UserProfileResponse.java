@@ -47,6 +47,10 @@ public class UserProfileResponse {
     @Schema(description = "Configured emergency contacts for the user")
     private List<EmergencyContactResponse> emergencyContacts;
 
+    @JsonProperty("verification")
+    @Schema(description = "Verification summary for campus/driver eligibility")
+    private VerificationSummary verification;
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -154,5 +158,45 @@ public class UserProfileResponse {
 
         @JsonProperty("is_active")
         private Boolean isActive;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "Verification summary")
+    public static class VerificationSummary {
+        @JsonProperty("student")
+        private StudentVerification student;
+
+        @JsonProperty("rider_profile_status")
+        private String riderProfileStatus;
+
+        @JsonProperty("driver_profile_status")
+        private String driverProfileStatus;
+
+        @JsonProperty("is_campus_verified")
+        private Boolean campusVerified;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "Latest student verification info")
+    public static class StudentVerification {
+        private String status;
+
+        @JsonProperty("rejection_reason")
+        private String rejectionReason;
+
+        @JsonProperty("document_url")
+        private String documentUrl;
+
+        @JsonProperty("submitted_at")
+        private java.time.LocalDateTime submittedAt;
+
+        @JsonProperty("verified_at")
+        private java.time.LocalDateTime verifiedAt;
     }
 }

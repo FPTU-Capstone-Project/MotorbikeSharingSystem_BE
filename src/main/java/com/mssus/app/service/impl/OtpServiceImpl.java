@@ -1,7 +1,6 @@
 package com.mssus.app.service.impl;
 
 import com.mssus.app.common.enums.OtpFor;
-import com.mssus.app.common.enums.PaymentMethod;
 import com.mssus.app.common.enums.UserStatus;
 import com.mssus.app.common.exception.BaseDomainException;
 import com.mssus.app.appconfig.config.properties.SosConfigurationProperties;
@@ -36,7 +35,6 @@ public class OtpServiceImpl implements OtpService {
     private final EmailService emailService;
     private final EmergencyContactService emergencyContactService;
     private final SosConfigurationProperties sosConfig;
-    private final WalletService walletService;
 
     @Override
     public OtpResponse requestOtp(GetOtpRequest request) {
@@ -138,35 +136,8 @@ public class OtpServiceImpl implements OtpService {
         if (userRepository.existsByEmailAndStatus(user.getEmail(), UserStatus.EMAIL_VERIFYING)) {
             user.setStatus(UserStatus.PENDING);
             user.setEmailVerified(true);
-
-            if (Boolean.TRUE.equals(user.getPhoneVerified())) {
-                user.setStatus(UserStatus.ACTIVE);
-                user.setTokenVersion(user.getTokenVersion() + 1);
-                try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send user activation email: {}", e.getMessage()); }
-            }
             userRepository.save(user);
             log.info("User email verified and status updated to PENDING: {}", user.getEmail());
-
-
-            if (Boolean.TRUE.equals(user.getPhoneVerified())) {
-                
-                riderProfileRepository.findByUserUserId(user.getUserId())
-                    .orElseGet(() -> {
-                        RiderProfile rp = RiderProfile.builder()
-                            .user(user)
-                            .status(RiderProfileStatus.PENDING)
-                            .totalRides(0)
-                            .totalSpent(java.math.BigDecimal.ZERO)
-                            .preferredPaymentMethod(PaymentMethod.WALLET)
-                            .createdAt(java.time.LocalDateTime.now())
-                            .build();
-                        riderProfileRepository.save(rp);
-                        log.info("Rider profile created in PENDING for userId={}", user.getUserId());
-                        return rp;
-                    });
-                walletService.createWalletForUser(user.getUserId());
-                ensureFallbackContact(user);
-            }
         } else {
             log.warn("User email verification attempted but user not in EMAIL_VERIFYING state: {}", user.getEmail());
             try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send user activation email: {}", e.getMessage()); }
@@ -175,33 +146,9 @@ public class OtpServiceImpl implements OtpService {
 
     private void processPhoneVerification(User user) {
         user.setPhoneVerified(true);
-
-        if (Boolean.TRUE.equals(user.getEmailVerified())) {
-            user.setStatus(UserStatus.ACTIVE);
-            user.setTokenVersion(user.getTokenVersion() + 1);
-        }
+        // Keep status as-is; activation and profile creation handled at verification approval
         userRepository.save(user);
         log.info("User phone verified: {}", user.getPhone());
-
-        
-        if (Boolean.TRUE.equals(user.getEmailVerified())) {
-            riderProfileRepository.findByUserUserId(user.getUserId())
-                .orElseGet(() -> {
-                    RiderProfile rp = RiderProfile.builder()
-                        .user(user)
-                        .status(RiderProfileStatus.PENDING)
-                        .totalRides(0)
-                        .totalSpent(java.math.BigDecimal.ZERO)
-                        .preferredPaymentMethod(PaymentMethod.WALLET)
-                        .createdAt(java.time.LocalDateTime.now())
-                        .build();
-                    riderProfileRepository.save(rp);
-                    log.info("Rider profile created in PENDING for userId={}", user.getUserId());
-                    return rp;
-                });
-            walletService.createWalletForUser(user.getUserId());
-            ensureFallbackContact(user);
-        }
     }
 
     private void ensureFallbackContact(User user) {

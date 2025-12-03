@@ -87,6 +87,34 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public CompletableFuture<EmailResult> notifyRiderActivated(User user) {
+        try{
+            Context context = new Context();
+            context.setVariable("fullName", user.getFullName());
+            context.setVariable("supportEmail", fromAddress);
+            context.setVariable("email", user.getEmail());
+            context.setVariable("approvalDate", LocalDateTime.now().format(DATE_FORMATTER));
+            context.setVariable("frontendUrl", frontendBaseUrl);
+
+            String htmlContent = templateEngine.process("emails/rider-verification-approved", context);
+
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(user.getEmail());
+            helper.setSubject("[Motorbike Sharing] Tài khoản hành khách đã được kích hoạt");
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(message);
+
+            return CompletableFuture.completedFuture(EmailResult.success("Rider activated email sent successfully"));
+        }catch (Exception e){
+            log.error("Failed to send rider activated email to: {}", user.getEmail(), e);
+            return CompletableFuture.completedFuture(EmailResult.failure("Failed to send rider activated email: " + e.getMessage()));
+        }
+    }
+
+    @Override
     @Async
     public CompletableFuture<EmailResult> sendPaymentFailedEmail(String email, String fullName, BigDecimal amount, String transactionId, String reason) {
         try {

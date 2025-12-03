@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rider Verification Approved</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb; color: #111827; margin: 0; padding: 0; }
+        .container { max-width: 640px; margin: 24px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); color: #fff; padding: 28px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .content { padding: 28px; }
+        .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; margin-top: 16px; }
+        .card h3 { margin: 0 0 8px 0; color: #065f46; }
+        .card p { margin: 4px 0; color: #374151; }
+        .footer { padding: 20px; text-align: center; color: #6b7280; font-size: 12px; }
+        .check { font-size: 42px; margin: 0; }
+        .btn { display: inline-block; margin-top: 12px; padding: 10px 18px; background: #10b981; color: #fff !important; border-radius: 8px; text-decoration: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p class="check">✅</p>
+            <h1>Xác minh hành khách được chấp thuận</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong th:text="${fullName}">Bạn</strong>,</p>
+            <p>Hồ sơ xác minh sinh viên của bạn đã được phê duyệt thành công. Bạn có thể bắt đầu sử dụng ứng dụng với đầy đủ tính năng dành cho hành khách.</p>
+            <div class="card">
+                <h3>Thông tin xác minh</h3>
+                <p><strong>Họ và tên:</strong> <span th:text="${fullName}">Tên</span></p>
+                <p><strong>Email:</strong> <span th:text="${email}">email@example.com</span></p>
+                <p><strong>Ngày phê duyệt:</strong> <span th:text="${approvalDate}">2025-01-01</span></p>
+                <p><strong>Trạng thái:</strong> ✅ Đã phê duyệt</p>
+            </div>
+            <a class="btn" th:href="${frontendUrl}">Mở ứng dụng</a>
+        </div>
+        <div class="footer">
+            Nếu bạn có thắc mắc, hãy liên hệ chúng tôi tại <span th:text="${supportEmail}">support@example.com</span>.
+        </div>
+    </div>
+</body>
+</html>

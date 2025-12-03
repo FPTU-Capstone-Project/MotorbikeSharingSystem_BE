@@ -40,7 +40,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private final RoutingService routingService;
     private final RideTrackingService rideTrackingService;
     private final AiConfigurationProperties aiConfig;
-    
+
     @Autowired(required = false)
     private AiMatchingService aiMatchingService;
 
@@ -48,7 +48,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     @Transactional(readOnly = true)
     public List<RideMatchProposalResponse> findMatches(SharedRideRequest request) {
         log.info(">> findMatches(request={})", request);
-        
+
         // Step 1: Extract and validate locations
         LocationPair requestLocations = extractRequestLocations(request);
         log.debug("Request locations: {}", requestLocations);
@@ -64,7 +64,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         // Step 3: Score and filter candidates using BASE algorithm
         List<RideMatchProposalResponse> proposals = evaluateCandidates(
-            candidateRides, requestLocations, request);
+                candidateRides, requestLocations, request);
         log.debug("Base algorithm evaluated candidates, found {} proposals.", proposals.size());
 
         if (proposals.isEmpty()) {
@@ -74,17 +74,17 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         // Step 4: Sort by base algorithm scores
         List<RideMatchProposalResponse> sortedProposals = selectTopProposals(proposals);
-        
-        // Step 5: AI MAKES FINAL RANKING DECISION (replaces weighted-sum as primary algorithm)
+
+        // Step 5: AI MAKES FINAL RANKING DECISION
         if (aiConfig.isEnabled() && aiMatchingService != null && aiMatchingService.isAvailable()) {
             try {
                 log.info("Invoking AI matching algorithm for final ranking decision");
-                List<RideMatchProposalResponse> aiRankedProposals = 
-                    aiMatchingService.aiRankMatches(request, sortedProposals);
-                
+                List<RideMatchProposalResponse> aiRankedProposals = aiMatchingService.aiRankMatches(request,
+                        sortedProposals);
+
                 log.info("<< findMatches(): {} proposals (AI-ranked successfully)", aiRankedProposals.size());
                 return aiRankedProposals;
-                
+
             } catch (Exception e) {
                 log.error("AI matching failed: {}", e.getMessage());
                 if (aiConfig.isFallbackToBaseAlgorithm()) {
@@ -105,20 +105,20 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private LocationPair extractRequestLocations(SharedRideRequest request) {
         log.debug(">> extractRequestLocations(request={})", request);
         Location pickup = request.getPickupLocation();
-//        Location pickup = resolveLocation(
-//            request.getPickupLocationId(),
-//            request.getPickupLat(),
-//            request.getPickupLng(),
-//            "Pickup Location"
-//        );
+        // Location pickup = resolveLocation(
+        // request.getPickupLocationId(),
+        // request.getPickupLat(),
+        // request.getPickupLng(),
+        // "Pickup Location"
+        // );
         Location dropoff = request.getDropoffLocation();
 
-//        Location dropoff = resolveLocation(
-//            request.getDropoffLocationId(),
-//            request.getDropoffLat(),
-//            request.getDropoffLng(),
-//            "Dropoff Location"
-//        );
+        // Location dropoff = resolveLocation(
+        // request.getDropoffLocationId(),
+        // request.getDropoffLat(),
+        // request.getDropoffLng(),
+        // "Dropoff Location"
+        // );
 
         LocationPair result = new LocationPair(pickup, dropoff);
         log.debug("<< extractRequestLocations(): {}", result);
@@ -126,13 +126,14 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     private Location resolveLocation(Integer locationId, Double lat, Double lng, String defaultName) {
-        log.debug(">> resolveLocation(locationId={}, lat={}, lng={}, defaultName={})", locationId, lat, lng, defaultName);
+        log.debug(">> resolveLocation(locationId={}, lat={}, lng={}, defaultName={})", locationId, lat, lng,
+                defaultName);
         if (locationId != null) {
             log.debug("Resolving location by ID: {}", locationId);
             Location location = locationRepository.findById(locationId)
-                .orElseThrow(() -> BaseDomainException.formatted(
-                    "ride.validation.invalid-location",
-                    defaultName + " not found: " + locationId));
+                    .orElseThrow(() -> BaseDomainException.formatted(
+                            "ride.validation.invalid-location",
+                            defaultName + " not found: " + locationId));
             log.debug("<< resolveLocation(): {}", location);
             return location;
         }
@@ -149,8 +150,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         log.error("Neither location ID nor coordinates provided for {}", defaultName);
         throw BaseDomainException.formatted(
-            "ride.validation.invalid-location",
-            "Neither location ID nor coordinates provided for " + defaultName);
+                "ride.validation.invalid-location",
+                "Neither location ID nor coordinates provided for " + defaultName);
     }
 
     private List<SharedRide> findCandidateRides(LocalDateTime requestTime) {
@@ -169,10 +170,11 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     private List<RideMatchProposalResponse> evaluateCandidates(
-        List<SharedRide> candidateRides,
-        LocationPair requestLocations,
-        SharedRideRequest request) {
-        log.info(">> evaluateCandidates({} candidates, requestLocations={}, request={})", candidateRides.size(), requestLocations, request);
+            List<SharedRide> candidateRides,
+            LocationPair requestLocations,
+            SharedRideRequest request) {
+        log.info(">> evaluateCandidates({} candidates, requestLocations={}, request={})", candidateRides.size(),
+                requestLocations, request);
 
         List<RideMatchProposalResponse> proposals = new ArrayList<>();
         MatchingMetrics metrics = new MatchingMetrics();
@@ -195,11 +197,11 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     private void evaluateSingleCandidate(
-        SharedRide ride,
-        LocationPair requestLocations,
-        SharedRideRequest request,
-        List<RideMatchProposalResponse> proposals,
-        MatchingMetrics metrics) {
+            SharedRide ride,
+            LocationPair requestLocations,
+            SharedRideRequest request,
+            List<RideMatchProposalResponse> proposals,
+            MatchingMetrics metrics) {
         log.debug(">> evaluateSingleCandidate(rideId={}, ...)", ride.getSharedRideId());
 
         // Extract ride locations
@@ -230,20 +232,18 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         // Calculate match score
         float matchScore = calculateMatchScore(
-            ride,
-            proximityCheck.pickupDistance(),
-            proximityCheck.dropoffDistance(),
-            request.getPickupTime(),
-            detour.distanceKm()
-        );
+                ride,
+                proximityCheck.pickupDistance(),
+                proximityCheck.dropoffDistance(),
+                request.getPickupTime(),
+                detour.distanceKm());
         log.debug("Calculated match score: {}", matchScore);
 
         // Extract features and generate explanation
         MatchFeatures features = extractMatchFeatures(
-            ride, requestLocations, request,
-            proximityCheck.pickupDistance(), proximityCheck.dropoffDistance(),
-            detour, matchScore
-        );
+                ride, requestLocations, request,
+                proximityCheck.pickupDistance(), proximityCheck.dropoffDistance(),
+                detour, matchScore);
         log.debug("Extracted match features: {}", features);
 
         String explanation = explainMatch(features);
@@ -251,12 +251,11 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         // Build and add proposal
         RideMatchProposalResponse proposal = buildProposal(
-            ride,
-            detour.distanceKm(),
-            detour.durationMinutes(),
-            matchScore,
-            request
-        );
+                ride,
+                detour.distanceKm(),
+                detour.durationMinutes(),
+                matchScore,
+                request);
         log.debug("Built proposal: {}", proposal);
 
         proposals.add(proposal);
@@ -267,19 +266,19 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         log.debug(">> extractRideLocations(rideId={})", ride.getSharedRideId());
         Location start = ride.getStartLocation();
         Location end = ride.getEndLocation();
-//        Location start = resolveRideLocation(
-//            ride.getStartLocationId(),
-//            ride.getStartLat(),
-//            ride.getStartLng(),
-//            "Ride Start Location"
-//        );
-//
-//        Location end = resolveRideLocation(
-//            ride.getEndLocationId(),
-//            ride.getEndLat(),
-//            ride.getEndLng(),
-//            "Ride End Location"
-//        );
+        // Location start = resolveRideLocation(
+        // ride.getStartLocationId(),
+        // ride.getStartLat(),
+        // ride.getStartLng(),
+        // "Ride Start Location"
+        // );
+        //
+        // Location end = resolveRideLocation(
+        // ride.getEndLocationId(),
+        // ride.getEndLat(),
+        // ride.getEndLng(),
+        // "Ride End Location"
+        // );
 
         LocationPair result = new LocationPair(start, end);
         log.debug("<< extractRideLocations(): {}", result);
@@ -287,14 +286,15 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     private Location resolveRideLocation(Integer locationId, Double lat, Double lng, String defaultName) {
-        log.debug(">> resolveRideLocation(locationId={}, lat={}, lng={}, defaultName={})", locationId, lat, lng, defaultName);
+        log.debug(">> resolveRideLocation(locationId={}, lat={}, lng={}, defaultName={})", locationId, lat, lng,
+                defaultName);
         if (locationId != null) {
             log.debug("Resolving ride location by ID: {}", locationId);
             Location location = locationRepository.findById(locationId)
-                .orElseGet(() -> {
-                    log.warn("Ride location ID {} not found in repository, creating from coordinates.", locationId);
-                    return createLocation(lat, lng, defaultName);
-                });
+                    .orElseGet(() -> {
+                        log.warn("Ride location ID {} not found in repository, creating from coordinates.", locationId);
+                        return createLocation(lat, lng, defaultName);
+                    });
             log.debug("<< resolveRideLocation(): {}", location);
             return location;
         }
@@ -317,15 +317,13 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private ProximityCheck checkProximity(LocationPair request, LocationPair ride) {
         log.debug(">> checkProximity(request={}, ride={})", request, ride);
         double pickupDistance = GeoUtil.haversineMeters(
-            request.pickup().getLat(), request.pickup().getLng(),
-            ride.pickup().getLat(), ride.pickup().getLng()
-        ) / 1000.0; // convert to km
+                request.pickup().getLat(), request.pickup().getLng(),
+                ride.pickup().getLat(), ride.pickup().getLng()) / 1000.0; // convert to km
         log.debug("Pickup distance: {} km", pickupDistance);
 
         double dropoffDistance = GeoUtil.haversineMeters(
-            request.dropoff().getLat(), request.dropoff().getLng(),
-            ride.dropoff().getLat(), ride.dropoff().getLng()
-        ) / 1000.0;
+                request.dropoff().getLat(), request.dropoff().getLng(),
+                ride.dropoff().getLat(), ride.dropoff().getLng()) / 1000.0;
         log.debug("Dropoff distance: {} km", dropoffDistance);
 
         double maxProximityKm = rideConfig.getMatching().getMaxProximityKm();
@@ -338,10 +336,10 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     private DetourCalculation calculateDetour(
-        SharedRide ride,
-        LocationPair rideLocations,
-        LocationPair requestLocations,
-        LocalDateTime requestTime) {
+            SharedRide ride,
+            LocationPair rideLocations,
+            LocationPair requestLocations,
+            LocalDateTime requestTime) {
         log.debug(">> calculateDetour(rideId={}, ...)", ride.getSharedRideId());
 
         try {
@@ -351,7 +349,7 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             return result;
         } catch (Exception e) {
             log.warn("Routing API failed for ride {}: {}. Using fallback.",
-                ride.getSharedRideId(), e.getMessage());
+                    ride.getSharedRideId(), e.getMessage());
             DetourCalculation result = calculateDetourFallback(rideLocations, requestLocations);
             log.debug("<< calculateDetour() via fallback: {}", result);
             return result;
@@ -359,10 +357,10 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     private DetourCalculation calculateDetourViaRouting(
-        SharedRide ride,
-        LocationPair rideLocations,
-        LocationPair requestLocations,
-        LocalDateTime requestTime) {
+            SharedRide ride,
+            LocationPair rideLocations,
+            LocationPair requestLocations,
+            LocalDateTime requestTime) {
         log.debug(">> calculateDetourViaRouting(rideId={}, ...)", ride.getSharedRideId());
 
         LatLng effectiveStart = getEffectiveStartLocation(ride, rideLocations);
@@ -370,17 +368,15 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         log.debug("Calculating original route...");
         RouteResponse originalRoute = routingService.getRoute(
-            effectiveStart.latitude(), effectiveStart.longitude(),
-            rideLocations.dropoff().getLat(), rideLocations.dropoff().getLng()
-        );
+                effectiveStart.latitude(), effectiveStart.longitude(),
+                rideLocations.dropoff().getLat(), rideLocations.dropoff().getLng());
         log.debug("Original route: distance={}, time={}", originalRoute.distance(), originalRoute.time());
 
         List<LatLng> waypoints = List.of(
-            effectiveStart,
-            new LatLng(requestLocations.pickup().getLat(), requestLocations.pickup().getLng()),
-            new LatLng(requestLocations.dropoff().getLat(), requestLocations.dropoff().getLng()),
-            new LatLng(rideLocations.dropoff().getLat(), rideLocations.dropoff().getLng())
-        );
+                effectiveStart,
+                new LatLng(requestLocations.pickup().getLat(), requestLocations.pickup().getLng()),
+                new LatLng(requestLocations.dropoff().getLat(), requestLocations.dropoff().getLng()),
+                new LatLng(rideLocations.dropoff().getLat(), rideLocations.dropoff().getLng()));
         log.debug("Calculating modified route with waypoints: {}", waypoints);
 
         RouteResponse modifiedRoute = routingService.getMultiStopRoute(waypoints, requestTime);
@@ -397,14 +393,12 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private DetourCalculation calculateDetourFallback(LocationPair ride, LocationPair request) {
         log.debug(">> calculateDetourFallback(ride={}, request={})", ride, request);
         double pickupProximity = GeoUtil.haversineMeters(
-            request.pickup().getLat(), request.pickup().getLng(),
-            ride.pickup().getLat(), ride.pickup().getLng()
-        );
+                request.pickup().getLat(), request.pickup().getLng(),
+                ride.pickup().getLat(), ride.pickup().getLng());
 
         double dropoffProximity = GeoUtil.haversineMeters(
-            request.dropoff().getLat(), request.dropoff().getLng(),
-            ride.dropoff().getLat(), ride.dropoff().getLng()
-        );
+                request.dropoff().getLat(), request.dropoff().getLng(),
+                ride.dropoff().getLat(), ride.dropoff().getLng());
 
         double avgProximity = (pickupProximity + dropoffProximity) / 2.0;
         int detourMinutes = (int) Math.ceil(avgProximity / 0.5); // 0.5 km/min avg speed
@@ -420,10 +414,11 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         if (ride.getStatus() == SharedRideStatus.ONGOING) {
             log.debug("Ride is ongoing, getting latest position.");
             LatLng latestPosition = rideTrackingService.getLatestPosition(ride.getSharedRideId(), 5)
-                .orElseGet(() -> {
-                    log.warn("Could not get latest position for ongoing ride {}, using ride start location.", ride.getSharedRideId());
-                    return new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng());
-                });
+                    .orElseGet(() -> {
+                        log.warn("Could not get latest position for ongoing ride {}, using ride start location.",
+                                ride.getSharedRideId());
+                        return new LatLng(ride.getStartLocation().getLat(), ride.getStartLocation().getLng());
+                    });
             log.debug("<< getEffectiveStartLocation(): {}", latestPosition);
             return latestPosition;
         }
@@ -447,9 +442,9 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         log.debug("Max proposals to return: {}", maxProposals);
 
         List<RideMatchProposalResponse> topProposals = proposals.stream()
-            .sorted(Comparator.comparing(RideMatchProposalResponse::getMatchScore).reversed())
-            .limit(maxProposals)
-            .toList();
+                .sorted(Comparator.comparing(RideMatchProposalResponse::getMatchScore).reversed())
+                .limit(maxProposals)
+                .toList();
 
         log.info("Returning {} match proposals", topProposals.size());
         log.debug("<< selectTopProposals()");
@@ -459,8 +454,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     private void logMatchingMetrics(MatchingMetrics metrics, int proposalsCount) {
         log.debug(">> logMatchingMetrics(...)");
         log.debug("Matching summary: {} processed, {} rejected (proximity: {}, detour: {}), {} errors, {} proposals",
-            metrics.processed, metrics.rejectedProximity + metrics.rejectedDetour,
-            metrics.rejectedProximity, metrics.rejectedDetour, metrics.errors, proposalsCount);
+                metrics.processed, metrics.rejectedProximity + metrics.rejectedDetour,
+                metrics.rejectedProximity, metrics.rejectedDetour, metrics.errors, proposalsCount);
         log.debug("<< logMatchingMetrics()");
     }
 
@@ -475,18 +470,17 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     public record MatchFeatures(
-        double proximityScore,
-        double timeAlignmentScore,
-        double driverRatingScore,
-        double detourScore,
-        double pickupDistanceKm,
-        double dropoffDistanceKm,
-        double detourKm,
-        int detourMinutes,
-        long timeGapMinutes,
-        boolean withinDetourLimit,
-        float finalScore
-    ) {
+            double proximityScore,
+            double timeAlignmentScore,
+            double driverRatingScore,
+            double detourScore,
+            double pickupDistanceKm,
+            double dropoffDistanceKm,
+            double detourKm,
+            int detourMinutes,
+            long timeGapMinutes,
+            boolean withinDetourLimit,
+            float finalScore) {
     }
 
     private static class MatchingMetrics {
@@ -512,11 +506,11 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         }
     }
 
-
     private float calculateMatchScore(SharedRide ride, double pickupDistance, double dropoffDistance,
-                                      LocalDateTime requestTime, double detourKm) {
-        log.debug(">> calculateMatchScore(rideId={}, pickupDistance={}, dropoffDistance={}, requestTime={}, detourKm={})",
-            ride.getSharedRideId(), pickupDistance, dropoffDistance, requestTime, detourKm);
+            LocalDateTime requestTime, double detourKm) {
+        log.debug(
+                ">> calculateMatchScore(rideId={}, pickupDistance={}, dropoffDistance={}, requestTime={}, detourKm={})",
+                ride.getSharedRideId(), pickupDistance, dropoffDistance, requestTime, detourKm);
 
         var scoring = rideConfig.getMatching().getScoring();
 
@@ -524,13 +518,15 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         double avgProximity = (pickupDistance + dropoffDistance) / 2.0;
         double maxProximityKm = rideConfig.getMatching().getMaxProximityKm();
         double proximityScore = Math.max(0, 1.0 - (avgProximity / maxProximityKm));
-        log.debug("Proximity score: {} (avgProximity={}, maxProximityKm={})", proximityScore, avgProximity, maxProximityKm);
+        log.debug("Proximity score: {} (avgProximity={}, maxProximityKm={})", proximityScore, avgProximity,
+                maxProximityKm);
 
         // 2. Time alignment score (0-1): closer to requested time is better
         long timeDiffMinutes = Math.abs(java.time.Duration.between(ride.getScheduledTime(), requestTime).toMinutes());
         int timeWindowMinutes = rideConfig.getMatching().getTimeWindowMinutes();
         double timeScore = Math.max(0, 1.0 - ((double) timeDiffMinutes / timeWindowMinutes));
-        log.debug("Time alignment score: {} (timeDiffMinutes={}, timeWindowMinutes={})", timeScore, timeDiffMinutes, timeWindowMinutes);
+        log.debug("Time alignment score: {} (timeDiffMinutes={}, timeWindowMinutes={})", timeScore, timeDiffMinutes,
+                timeWindowMinutes);
 
         // 3. Driver rating score (0-1): higher rating is better
         double ratingScore = ride.getDriver().getRatingAvg() / 5.0;
@@ -543,11 +539,12 @@ public class RideMatchingServiceImpl implements RideMatchingService {
 
         // Weighted sum
         double totalScore = (proximityScore * scoring.getProximityWeight()) +
-            (timeScore * scoring.getTimeWeight()) +
-            (ratingScore * scoring.getRatingWeight()) +
-            (detourScore * scoring.getDetourWeight());
+                (timeScore * scoring.getTimeWeight()) +
+                (ratingScore * scoring.getRatingWeight()) +
+                (detourScore * scoring.getDetourWeight());
         log.debug("Weighted score: {} (weights: proximity={}, time={}, rating={}, detour={})",
-            totalScore, scoring.getProximityWeight(), scoring.getTimeWeight(), scoring.getRatingWeight(), scoring.getDetourWeight());
+                totalScore, scoring.getProximityWeight(), scoring.getTimeWeight(), scoring.getRatingWeight(),
+                scoring.getDetourWeight());
 
         // Convert to 0-100 scale
         float finalScore = (float) (totalScore * 100.0);
@@ -556,23 +553,24 @@ public class RideMatchingServiceImpl implements RideMatchingService {
     }
 
     private RideMatchProposalResponse buildProposal(SharedRide ride,
-                                                    double detourKm, int detourMinutes, float matchScore,
-                                                    SharedRideRequest request) {
+            double detourKm, int detourMinutes, float matchScore,
+            SharedRideRequest request) {
         log.debug(">> buildProposal(rideId={}, detourKm={}, detourMinutes={}, matchScore={}, ...)",
-            ride.getSharedRideId(), detourKm, detourMinutes, matchScore);
+                ride.getSharedRideId(), detourKm, detourMinutes, matchScore);
 
         try {
-            double estimatedDistanceKm = ride.getEstimatedDistance() != null ?
-                ride.getEstimatedDistance() : (detourKm * 2); // Rough estimate
-            int estimatedTripMinutes = ride.getEstimatedDuration() != null ?
-                ride.getEstimatedDuration() : (int) (estimatedDistanceKm * 2); // ~30 km/h average
-            log.debug("Estimated distance: {} km, estimated duration: {} minutes", estimatedDistanceKm, estimatedTripMinutes);
+            double estimatedDistanceKm = ride.getEstimatedDistance() != null ? ride.getEstimatedDistance()
+                    : (detourKm * 2); // Rough estimate
+            int estimatedTripMinutes = ride.getEstimatedDuration() != null ? ride.getEstimatedDuration()
+                    : (int) (estimatedDistanceKm * 2); // ~30 km/h average
+            log.debug("Estimated distance: {} km, estimated duration: {} minutes", estimatedDistanceKm,
+                    estimatedTripMinutes);
 
             BigDecimal totalFare = request.getTotalFare();
             BigDecimal earnedAmount = totalFare
-                .subtract(totalFare.multiply(ride.getPricingConfig().getSystemCommissionRate()));
+                    .subtract(totalFare.multiply(ride.getPricingConfig().getSystemCommissionRate()));
             log.debug("Fare calculation: totalFare={}, commissionRate={}, earnedAmount={}",
-                totalFare, ride.getPricingConfig().getSystemCommissionRate(), earnedAmount);
+                    totalFare, ride.getPricingConfig().getSystemCommissionRate(), earnedAmount);
 
             // Calculate estimated times
             // Assume detour happens at beginning, then straight to pickup
@@ -581,23 +579,23 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             log.debug("Estimated times: pickup={}, dropoff={}", estimatedPickupTime, estimatedDropoffTime);
 
             RideMatchProposalResponse proposal = RideMatchProposalResponse.builder()
-                .sharedRideId(ride.getSharedRideId())
-                .driverId(ride.getDriver().getDriverId())
-                .driverName(ride.getDriver().getUser().getFullName())
-                .driverRating(ride.getDriver().getRatingAvg())
-                .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
-                .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
-                .scheduledTime(ride.getScheduledTime())
-                .totalFare(totalFare)
-                .earnedAmount(earnedAmount)
-                .estimatedDuration(estimatedTripMinutes)
-                .estimatedDistance((float) estimatedDistanceKm)
-                .detourDistance((float) detourKm)
-                .detourDuration(detourMinutes)
-                .matchScore(matchScore)
-                .estimatedPickupTime(estimatedPickupTime)
-                .estimatedDropoffTime(estimatedDropoffTime)
-                .build();
+                    .sharedRideId(ride.getSharedRideId())
+                    .driverId(ride.getDriver().getDriverId())
+                    .driverName(ride.getDriver().getUser().getFullName())
+                    .driverRating(ride.getDriver().getRatingAvg())
+                    .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
+                    .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
+                    .scheduledTime(ride.getScheduledTime())
+                    .totalFare(totalFare)
+                    .earnedAmount(earnedAmount)
+                    .estimatedDuration(estimatedTripMinutes)
+                    .estimatedDistance((float) estimatedDistanceKm)
+                    .detourDistance((float) detourKm)
+                    .detourDuration(detourMinutes)
+                    .matchScore(matchScore)
+                    .estimatedPickupTime(estimatedPickupTime)
+                    .estimatedDropoffTime(estimatedDropoffTime)
+                    .build();
             log.debug("<< buildProposal() (success): {}", proposal);
             return proposal;
 
@@ -608,37 +606,37 @@ public class RideMatchingServiceImpl implements RideMatchingService {
             double estimatedDistanceKm = ride.getEstimatedDistance() != null ? ride.getEstimatedDistance() : 10.0;
             BigDecimal totalFare = request.getTotalFare();
             BigDecimal earnedAmount = totalFare
-                .subtract(totalFare.multiply(ride.getPricingConfig().getSystemCommissionRate()));
+                    .subtract(totalFare.multiply(ride.getPricingConfig().getSystemCommissionRate()));
 
             LocalDateTime estimatedPickupTime = ride.getScheduledTime().plusMinutes(detourMinutes);
             int estimatedTripMinutes = ride.getEstimatedDuration() != null ? ride.getEstimatedDuration() : 30;
             LocalDateTime estimatedDropoffTime = estimatedPickupTime.plusMinutes(estimatedTripMinutes);
 
             return RideMatchProposalResponse.builder()
-                .sharedRideId(ride.getSharedRideId())
-                .driverId(ride.getDriver().getDriverId())
-                .driverName(ride.getDriver().getUser().getFullName())
-                .driverRating(ride.getDriver().getRatingAvg())
-                .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
-                .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
-                .scheduledTime(ride.getScheduledTime())
-                .totalFare(totalFare)
-                .earnedAmount(earnedAmount)
-                .estimatedDuration(estimatedTripMinutes)
-                .estimatedDistance((float) estimatedDistanceKm)
-                .detourDistance((float) detourKm)
-                .detourDuration(detourMinutes)
-                .matchScore(matchScore)
-                .estimatedPickupTime(estimatedPickupTime)
-                .estimatedDropoffTime(estimatedDropoffTime)
-                .build();
+                    .sharedRideId(ride.getSharedRideId())
+                    .driverId(ride.getDriver().getDriverId())
+                    .driverName(ride.getDriver().getUser().getFullName())
+                    .driverRating(ride.getDriver().getRatingAvg())
+                    .vehicleModel(ride.getVehicle() != null ? ride.getVehicle().getModel() : "Unknown")
+                    .vehiclePlate(ride.getVehicle() != null ? ride.getVehicle().getPlateNumber() : "N/A")
+                    .scheduledTime(ride.getScheduledTime())
+                    .totalFare(totalFare)
+                    .earnedAmount(earnedAmount)
+                    .estimatedDuration(estimatedTripMinutes)
+                    .estimatedDistance((float) estimatedDistanceKm)
+                    .detourDistance((float) detourKm)
+                    .detourDuration(detourMinutes)
+                    .matchScore(matchScore)
+                    .estimatedPickupTime(estimatedPickupTime)
+                    .estimatedDropoffTime(estimatedDropoffTime)
+                    .build();
         }
     }
 
     public MatchFeatures extractMatchFeatures(SharedRide ride, LocationPair requestLocations,
-                                              SharedRideRequest request, double pickupDistance,
-                                              double dropoffDistance, DetourCalculation detour,
-                                              float matchScore) {
+            SharedRideRequest request, double pickupDistance,
+            double dropoffDistance, DetourCalculation detour,
+            float matchScore) {
         log.debug(">> extractMatchFeatures(rideId={}, ...)", ride.getSharedRideId());
         var scoring = rideConfig.getMatching().getScoring();
 
@@ -646,7 +644,8 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         double maxProximityKm = rideConfig.getMatching().getMaxProximityKm();
         double proximityScore = Math.max(0, 1.0 - (avgProximity / maxProximityKm));
 
-        long timeDiffMinutes = Math.abs(java.time.Duration.between(ride.getScheduledTime(), request.getPickupTime()).toMinutes());
+        long timeDiffMinutes = Math
+                .abs(java.time.Duration.between(ride.getScheduledTime(), request.getPickupTime()).toMinutes());
         int timeWindowMinutes = rideConfig.getMatching().getTimeWindowMinutes();
         double timeScore = Math.max(0, 1.0 - ((double) timeDiffMinutes / timeWindowMinutes));
 
@@ -658,18 +657,17 @@ public class RideMatchingServiceImpl implements RideMatchingService {
         boolean withinDetourLimit = isDetourAcceptable(ride, detour.durationMinutes());
 
         MatchFeatures features = new MatchFeatures(
-            proximityScore,
-            timeScore,
-            ratingScore,
-            detourScore,
-            pickupDistance,
-            dropoffDistance,
-            detour.distanceKm(),
-            detour.durationMinutes(),
-            timeDiffMinutes,
-            withinDetourLimit,
-            matchScore
-        );
+                proximityScore,
+                timeScore,
+                ratingScore,
+                detourScore,
+                pickupDistance,
+                dropoffDistance,
+                detour.distanceKm(),
+                detour.durationMinutes(),
+                timeDiffMinutes,
+                withinDetourLimit,
+                matchScore);
         log.debug("<< extractMatchFeatures(): {}", features);
         return features;
     }

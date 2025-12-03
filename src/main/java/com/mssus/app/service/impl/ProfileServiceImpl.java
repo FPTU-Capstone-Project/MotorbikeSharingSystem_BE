@@ -12,6 +12,7 @@ import com.mssus.app.service.AuthService;
 import com.mssus.app.service.BalanceCalculationService;
 import com.mssus.app.service.EmergencyContactService;
 import com.mssus.app.service.FPTAIService;
+import com.mssus.app.common.enums.FuelType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import com.mssus.app.entity.*;
@@ -30,10 +31,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,8 +58,8 @@ public class ProfileServiceImpl implements ProfileService {
     private final FileUploadService fileUploadService;
     private final FPTAIService fptaiService;
     private final EmergencyContactService emergencyContactService;
-    private final BalanceCalculationService balanceCalculationService;  // ✅ SSOT: Calculate balance from ledger
-
+    private final BalanceCalculationService balanceCalculationService;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -104,19 +107,91 @@ public class ProfileServiceImpl implements ProfileService {
 
         // ✅ SSOT: Populate WalletInfo với balance từ ledger
         if (response.getWallet() != null && user.getWallet() != null) {
-            BigDecimal availableBalance = balanceCalculationService.calculateAvailableBalance(user.getWallet().getWalletId());
-            BigDecimal pendingBalance = balanceCalculationService.calculatePendingBalance(user.getWallet().getWalletId());
-            
+            BigDecimal availableBalance = balanceCalculationService
+                    .calculateAvailableBalance(user.getWallet().getWalletId());
+            BigDecimal pendingBalance = balanceCalculationService
+                    .calculatePendingBalance(user.getWallet().getWalletId());
+
             response.getWallet().setShadowBalance(availableBalance);
             response.getWallet().setPendingBalance(pendingBalance);
         }
 
+        // Attach verification summary so clients can gate flows without extra calls
+        UserProfileResponse.StudentVerification studentVerification = buildStudentVerification(user);
+        String riderStatus = Optional.ofNullable(user.getRiderProfile())
+                .map(r -> r.getStatus() != null ? r.getStatus().name() : null)
+                .orElse(null);
+        String driverStatus = Optional.ofNullable(user.getDriverProfile())
+                .map(d -> d.getStatus() != null ? d.getStatus().name() : null)
+                .orElse(null);
+        boolean campusVerified = (studentVerification != null
+                && "APPROVED".equalsIgnoreCase(studentVerification.getStatus()))
+                || RiderProfileStatus.ACTIVE
+                        .equals(Optional.ofNullable(user.getRiderProfile()).map(RiderProfile::getStatus).orElse(null));
+
+        UserProfileResponse.VerificationSummary verificationSummary = UserProfileResponse.VerificationSummary.builder()
+                .student(studentVerification)
+                .riderProfileStatus(riderStatus)
+                .driverProfileStatus(driverStatus)
+                .campusVerified(campusVerified)
+                .build();
+        response.setVerification(verificationSummary);
+
         return response;
+    }
+
+    private UserProfileResponse.StudentVerification buildStudentVerification(User user) {
+        List<Verification> verifications = verificationRepository.findByUserIdAndType(
+                user.getUserId(), VerificationType.STUDENT_ID);
+
+        return verifications.stream()
+                .max(Comparator.comparing(Verification::getCreatedAt))
+                .map(latest -> UserProfileResponse.StudentVerification.builder()
+                        .status(latest.getStatus() != null ? latest.getStatus().name() : null)
+                        .rejectionReason(latest.getRejectionReason())
+                        .documentUrl(latest.getDocumentUrl())
+                        .submittedAt(latest.getCreatedAt())
+                        .verifiedAt(latest.getVerifiedAt())
+                        .build())
+                .orElse(UserProfileResponse.StudentVerification.builder()
+                        .status("NONE")
+                        .build());
+    }
+
+    /**
+     * Ensure a driver profile exists for the user; create a pending one if missing.
+     */
+    private DriverProfile ensureDriverProfile(User user) {
+        DriverProfile existing = user.getDriverProfile();
+        if (existing != null) {
+            return existing;
+        }
+
+        String licenseNumber = Optional.ofNullable(user.getPhone())
+                .filter(p -> !p.isBlank())
+                .orElse("TEMP-" + user.getUserId() + "-" + System.currentTimeMillis());
+
+        DriverProfile driverProfile = DriverProfile.builder()
+                .user(user)
+                .licenseNumber(licenseNumber)
+                .status(DriverProfileStatus.PENDING)
+                .ratingAvg(5.0f)
+                .totalSharedRides(0)
+                .totalEarned(BigDecimal.ZERO)
+                .isAvailable(false)
+                .maxPassengers(1)
+                .maxDetourMinutes(8)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        DriverProfile saved = driverProfileRepository.save(driverProfile);
+        user.setDriverProfile(saved);
+        return saved;
     }
 
     @Override
     @Transactional
-    @Retryable(value = {OptimisticLockingFailureException.class}, maxAttempts = 3)
+    @Retryable(value = { OptimisticLockingFailureException.class }, maxAttempts = 3)
     public UserProfileResponse updateProfile(String username, UpdateProfileRequest request) {
         // This method is reserved for admin updates
         throw new UnsupportedOperationException("Sử dụng updateMyProfile cho người dùng tự cập nhật");
@@ -124,7 +199,7 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    @Retryable(value = {OptimisticLockingFailureException.class}, maxAttempts = 3)
+    @Retryable(value = { OptimisticLockingFailureException.class }, maxAttempts = 3)
     public UserProfileResponse updateMyProfile(String username, UpdateProfileRequest request) {
         User user = userRepository.findByEmailWithProfiles(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
@@ -165,34 +240,35 @@ public class ProfileServiceImpl implements ProfileService {
             user.setStudentId(null);
         }
 
-        // Update emergency contact (update primary contact if exists, or create new one)
+        // Update emergency contact (update primary contact if exists, or create new
+        // one)
         if (request.getEmergencyContact() != null && !request.getEmergencyContact().trim().isEmpty()) {
             String emergencyPhone = request.getEmergencyContact().trim();
             List<EmergencyContactResponse> existingContacts = emergencyContactService.getContacts(user);
-            
+
             // Find primary contact
             EmergencyContactResponse primaryContact = existingContacts.stream()
-                .filter(EmergencyContactResponse::getPrimary)
-                .findFirst()
-                .orElse(null);
+                    .filter(EmergencyContactResponse::getPrimary)
+                    .findFirst()
+                    .orElse(null);
 
             if (primaryContact != null) {
                 // Update existing primary contact phone
                 EmergencyContactRequest updateRequest = EmergencyContactRequest.builder()
-                    .name(primaryContact.getName())
-                    .phone(emergencyPhone)
-                    .relationship(primaryContact.getRelationship())
-                    .primary(true)
-                    .build();
+                        .name(primaryContact.getName())
+                        .phone(emergencyPhone)
+                        .relationship(primaryContact.getRelationship())
+                        .primary(true)
+                        .build();
                 emergencyContactService.updateContact(user, primaryContact.getContactId(), updateRequest);
             } else {
                 // Create new primary emergency contact
                 EmergencyContactRequest createRequest = EmergencyContactRequest.builder()
-                    .name("Emergency Contact")
-                    .phone(emergencyPhone)
-                    .relationship("Emergency")
-                    .primary(true)
-                    .build();
+                        .name("Emergency Contact")
+                        .phone(emergencyPhone)
+                        .relationship("Emergency")
+                        .primary(true)
+                        .build();
                 emergencyContactService.createContact(user, createRequest);
             }
         }
@@ -223,7 +299,8 @@ public class ProfileServiceImpl implements ProfileService {
     @Transactional
     public SwitchProfileResponse switchProfile(String username, SwitchProfileRequest request) {
         User user = userRepository.findByEmailWithProfiles(username)
-                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "Không tìm thấy người dùng với email: " + username));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email",
+                        "Không tìm thấy người dùng với email: " + username));
 
         String targetProfile = request.getTargetProfile();
 
@@ -232,9 +309,7 @@ public class ProfileServiceImpl implements ProfileService {
                 if (user.getDriverProfile() == null) {
                     throw BaseDomainException.of("user.validation.profile-not-exists");
                 }
-//                if (!DriverProfileStatus.ACTIVE.equals(user.getDriverProfile().getStatus())) {
-//                    throw BaseDomainException.of("user.validation.profile-not-active", "Driver profile is not active");
-//                }
+                // Allow switch; status will be set to ACTIVE/INACTIVE below
             }
             case RIDER -> {
                 if (user.getRiderProfile() == null) {
@@ -286,17 +361,17 @@ public class ProfileServiceImpl implements ProfileService {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
 
-        // Enforce email and phone verification before allowing student_id submission
+        // Enforce email verification before allowing student_id submission
         if (Boolean.FALSE.equals(user.getEmailVerified())) {
             throw ValidationException.of("Email phải được xác thực trước khi nộp mã sinh viên");
         }
-        if (Boolean.FALSE.equals(user.getPhoneVerified())) {
-            throw ValidationException.of("Số điện thoại phải được xác thực trước khi nộp mã sinh viên");
-        }
-        if(documents == null || documents.isEmpty()){
+        // Phone verification is optional; can be completed later in profile
+        if (documents == null || documents.isEmpty()) {
             throw new ValidationException("Cần ít nhất một tài liệu để tải lên");
         }
-        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.STUDENT_ID,VerificationStatus.PENDING).isPresent()){
+        if (verificationRepository
+                .findByUserIdAndTypeAndStatus(user.getUserId(), VerificationType.STUDENT_ID, VerificationStatus.PENDING)
+                .isPresent()) {
             throw new IllegalStateException("Yêu cầu xác thực sinh viên đã tồn tại");
         }
         try {
@@ -318,7 +393,7 @@ public class ProfileServiceImpl implements ProfileService {
                     })
                     .collect(Collectors.toList());
             List<String> documentUrls = futuresList.stream()
-                    .map(CompletableFuture:: join)
+                    .map(CompletableFuture::join)
                     .collect(Collectors.toList());
 
             String documentUrlsCombined = String.join(",", documentUrls);
@@ -341,7 +416,8 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     public MessageResponse updateAvatar(String username, MultipartFile avatarFile) {
-        User user = userRepository.findByEmail(username).orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+        User user = userRepository.findByEmail(username)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
         try {
             String profilePhotoUrl = fileUploadService.uploadFile(avatarFile).get();
             user.setProfilePhotoUrl(profilePhotoUrl);
@@ -354,7 +430,6 @@ public class ProfileServiceImpl implements ProfileService {
         }
     }
 
-
     @Override
     @Transactional
     public VerificationResponse submitDriverLicense(String username, List<MultipartFile> documents) {
@@ -363,7 +438,9 @@ public class ProfileServiceImpl implements ProfileService {
         if (documents == null || documents.isEmpty()) {
             throw ValidationException.of("Cần ít nhất một tài liệu để tải lên");
         }
-        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_LICENSE,VerificationStatus.PENDING).isPresent()){
+        ensureDriverProfile(user);
+        if (verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(), VerificationType.DRIVER_LICENSE,
+                VerificationStatus.PENDING).isPresent()) {
             throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
         boolean isValid = fptaiService.verifyDriverLicense(user, documents.get(0));
@@ -414,7 +491,9 @@ public class ProfileServiceImpl implements ProfileService {
         if (documents == null || documents.isEmpty()) {
             throw ValidationException.of("Cần ít nhất một tài liệu để tải lên");
         }
-        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.DRIVER_DOCUMENTS,VerificationStatus.PENDING).isPresent()){
+        ensureDriverProfile(user);
+        if (verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(), VerificationType.DRIVER_DOCUMENTS,
+                VerificationStatus.PENDING).isPresent()) {
             throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
         try {
@@ -460,16 +539,18 @@ public class ProfileServiceImpl implements ProfileService {
         if (documents == null || documents.isEmpty()) {
             throw ValidationException.of("Cần ít nhất một tài liệu để tải lên");
         }
-        if(verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(),VerificationType.VEHICLE_REGISTRATION,VerificationStatus.PENDING).isPresent()){
+        ensureDriverProfile(user);
+        if (verificationRepository.findByUserIdAndTypeAndStatus(user.getUserId(), VerificationType.VEHICLE_REGISTRATION,
+                VerificationStatus.PENDING).isPresent()) {
             throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
-        
-        // 验证车辆登记证的真实性
+
         boolean isValid = fptaiService.verifyVehicleRegistration(documents.get(0));
         if (!isValid) {
-            throw ValidationException.of("Đăng ký xe không hợp lệ hoặc không phải ảnh chứng từ thật. Vui lòng tải lên ảnh đăng ký xe thật với độ phân giải tối thiểu 800x600 và kích thước tối thiểu 50KB");
+            throw ValidationException.of(
+                    "Đăng ký xe không hợp lệ hoặc không phải ảnh chứng từ thật. Vui lòng tải lên ảnh đăng ký xe thật với độ phân giải tối thiểu 800x600 và kích thước tối thiểu 50KB");
         }
-        
+
         try {
             List<CompletableFuture<String>> futuresList = documents.parallelStream()
                     .map(file -> {
@@ -489,6 +570,16 @@ public class ProfileServiceImpl implements ProfileService {
                     .collect(Collectors.toList());
 
             String documentUrlsCombined = String.join(",", documentUrls);
+            // Build minimal vehicle metadata (demo fallback)
+            String vehicleMetadata = objectMapper.writeValueAsString(
+                    Map.of(
+                            "plateNumber", "PENDING-" + user.getUserId(),
+                            "model", "Chưa cập nhật",
+                            "color", "Chưa cập nhật",
+                            "year", LocalDate.now().getYear(),
+                            "capacity", 1,
+                            "fuelType", FuelType.GASOLINE.name(),
+                            "insuranceExpiry", LocalDateTime.now().plusYears(1)));
 
             Verification verification = Verification.builder()
                     .user(user)
@@ -496,6 +587,7 @@ public class ProfileServiceImpl implements ProfileService {
                     .status(VerificationStatus.PENDING)
                     .documentUrl(documentUrlsCombined)
                     .documentType(DocumentType.IMAGE)
+                    .metadata(vehicleMetadata)
                     .build();
 
             verification = verificationRepository.save(verification);
@@ -529,7 +621,8 @@ public class ProfileServiceImpl implements ProfileService {
     @Transactional
     public void setDriverStatus(String username, boolean isActive) {
         User user = userRepository.findByEmailWithProfiles(username)
-            .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email", "Không tìm thấy người dùng với email: " + username));
+                .orElseThrow(() -> BaseDomainException.of("user.not-found.by-email",
+                        "Không tìm thấy người dùng với email: " + username));
 
         if (user.getDriverProfile() == null) {
             throw ValidationException.of("Người dùng không có hồ sơ tài xế");
@@ -545,7 +638,7 @@ public class ProfileServiceImpl implements ProfileService {
             driverProfileRepository.save(driverProfile);
 
             log.info("Driver status updated for user {} from {} to {}",
-                user.getUserId(), currentStatus, newStatus);
+                    user.getUserId(), currentStatus, newStatus);
         }
     }
 
@@ -556,7 +649,7 @@ public class ProfileServiceImpl implements ProfileService {
                 .orElseThrow(() -> NotFoundException.userNotFound(username));
 
         List<Verification> verifications = verificationRepository.findByListUserId(user.getUserId());
-        
+
         // Sort by created_at descending (newest first)
         verifications.sort((v1, v2) -> {
             LocalDateTime date1 = v1.getCreatedAt() != null ? v1.getCreatedAt() : LocalDateTime.MIN;

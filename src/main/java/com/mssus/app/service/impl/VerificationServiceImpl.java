@@ -2,6 +2,8 @@ package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mssus.app.common.enums.*;
+import com.mssus.app.common.enums.FuelType;
+import com.mssus.app.common.enums.PaymentMethod;
 import com.mssus.app.dto.request.BackgroundCheckRequest;
 import com.mssus.app.dto.request.BulkApprovalRequest;
 import com.mssus.app.dto.request.VerificationDecisionRequest;
@@ -12,6 +14,7 @@ import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.mapper.VerificationMapper;
 import com.mssus.app.repository.*;
 import com.mssus.app.service.EmailService;
+import com.mssus.app.service.WalletService;
 import com.mssus.app.service.VerificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +26,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -41,6 +45,7 @@ public class VerificationServiceImpl implements VerificationService {
     private final EmailService emailService;
     private final VehicleRepository vehicleRepository;
     private final ObjectMapper objectMapper;
+    private final WalletService walletService;
 
     @Override
     @Transactional(readOnly = true)
@@ -273,20 +278,26 @@ public class VerificationServiceImpl implements VerificationService {
             verification.setMetadata(request.getNotes());
         }
 
-        if (typeStr == VerificationType.STUDENT_ID && user.getRiderProfile() != null) {
-            RiderProfile rider = user.getRiderProfile();
-            if (rider.getStatus() != RiderProfileStatus.ACTIVE) {
-                rider.setActivatedAt(LocalDateTime.now());
-                rider.setStatus(RiderProfileStatus.ACTIVE);
-                riderProfileRepository.save(rider);
-                try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send rider activation email for user {}: {}", user.getUserId(), e.getMessage()); }
+        if (typeStr == VerificationType.STUDENT_ID) {
+            RiderProfile rider = ensureRiderProfile(user);
+            rider.setActivatedAt(LocalDateTime.now());
+            rider.setStatus(RiderProfileStatus.ACTIVE);
+            riderProfileRepository.save(rider);
+            if (user.getWallet() == null) {
+                walletService.createWalletForUser(user.getUserId());
             }
+            user.setStatus(UserStatus.ACTIVE);
+            userRepository.save(user);
+            try { emailService.notifyRiderActivated(user); } catch (Exception e) { log.warn("Failed to send rider activation email for user {}: {}", user.getUserId(), e.getMessage()); }
         } else if ((isDriverVerification(typeStr))
                 && user.getDriverProfile() != null) {
             if (typeStr == VerificationType.VEHICLE_REGISTRATION) {
                 createVehicleFromVerification(verification);
             }
-            checkAndActivateDriverProfile(user);
+            // Mark driver verified but inactive after approval
+            DriverProfile driver = user.getDriverProfile();
+            driver.setStatus(DriverProfileStatus.INACTIVE);
+            driverProfileRepository.save(driver);
         }
 
 
@@ -321,17 +332,24 @@ public class VerificationServiceImpl implements VerificationService {
         User user = verification.getUser();
         VerificationType type = verification.getType();
 
-        if(type == VerificationType.STUDENT_ID && user.getRiderProfile() != null){
-            RiderProfile rider = user.getRiderProfile();
+        if(type == VerificationType.STUDENT_ID){
+            RiderProfile rider = ensureRiderProfile(user);
             if(rider.getStatus() != RiderProfileStatus.ACTIVE){
                 rider.setStatus(RiderProfileStatus.ACTIVE);
                 rider.setActivatedAt(LocalDateTime.now());
                 riderProfileRepository.save(rider);
                 log.info("Rider profile activated for user: {}", user.getUserId());
-                try { emailService.notifyUserActivated(user); } catch (Exception e) { log.warn("Failed to send rider activation email for user {}: {}", user.getUserId(), e.getMessage()); }
+                if (user.getWallet() == null) {
+                    walletService.createWalletForUser(user.getUserId());
+                }
+                user.setStatus(UserStatus.ACTIVE);
+                userRepository.save(user);
+                try { emailService.notifyRiderActivated(user); } catch (Exception e) { log.warn("Failed to send rider activation email for user {}: {}", user.getUserId(), e.getMessage()); }
             }
         } else if (isDriverVerification(type) && user.getDriverProfile() != null) {
-            checkAndActivateDriverProfile(user);
+            DriverProfile driver = user.getDriverProfile();
+            driver.setStatus(DriverProfileStatus.INACTIVE);
+            driverProfileRepository.save(driver);
         }
         usersToNotify.put(user.getUserId(),user);
         successfulIds.add(verificationId);
@@ -404,10 +422,31 @@ public class VerificationServiceImpl implements VerificationService {
 
     private VehicleInfo parseVehicleInfoFromMetadata(String metadata) {
         try {
+            if (metadata == null || metadata.isBlank()) {
+                log.warn("Metadata trống, dùng thông tin mặc định cho vehicle");
+                return VehicleInfo.builder()
+                        .plateNumber("PENDING")
+                        .model("Chưa cập nhật")
+                        .color("Chưa cập nhật")
+                        .year(LocalDateTime.now().getYear())
+                        .capacity(1)
+                        .fuelType(FuelType.GASOLINE)
+                        .insuranceExpiry(LocalDateTime.now().plusYears(1))
+                        .build();
+            }
             return objectMapper.readValue(metadata, VehicleInfo.class);
         } catch (Exception e) {
             log.error("Failed to parse vehicle info from metadata: {}", e.getMessage());
-            throw new ValidationException("Thông tin phương tiện không hợp lệ trong metadata xác thực");
+            // Fallback to default vehicle info to avoid blocking approval
+            return VehicleInfo.builder()
+                    .plateNumber("PENDING")
+                    .model("Chưa cập nhật")
+                    .color("Chưa cập nhật")
+                    .year(LocalDateTime.now().getYear())
+                    .capacity(1)
+                    .fuelType(FuelType.GASOLINE)
+                    .insuranceExpiry(LocalDateTime.now().plusYears(1))
+                    .build();
         }
     }
 
@@ -451,6 +490,27 @@ public class VerificationServiceImpl implements VerificationService {
             log.info("Driver profile waiting for verification completion for user: {}", user.getUserId());
         }
 
+    }
+
+    /**
+     * Ensure a rider profile exists for the given user; create a pending one if missing.
+     */
+    private RiderProfile ensureRiderProfile(User user) {
+        RiderProfile existing = user.getRiderProfile();
+        if (existing != null) {
+            return existing;
+        }
+        RiderProfile rider = RiderProfile.builder()
+                .user(user)
+                .status(RiderProfileStatus.PENDING)
+                .totalRides(0)
+                .totalSpent(BigDecimal.ZERO)
+                .preferredPaymentMethod(PaymentMethod.WALLET)
+                .createdAt(LocalDateTime.now())
+                .build();
+        RiderProfile saved = riderProfileRepository.save(rider);
+        user.setRiderProfile(saved);
+        return saved;
     }
 
     private DriverKycResponse mapToDriverKycResponse(DriverProfile driver) {

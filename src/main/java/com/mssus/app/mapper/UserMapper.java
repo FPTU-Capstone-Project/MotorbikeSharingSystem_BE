@@ -59,6 +59,7 @@ public interface UserMapper {
     @Mapping(target = "wallet", source = "wallet")
     @Mapping(target = "availableProfiles", expression = "java(getUserProfiles(user))")
     @Mapping(target = "activeProfile", ignore = true)
+    @Mapping(target = "verification", ignore = true)
     UserProfileResponse toRiderProfileResponse(User user);
 
     @Mapping(target = "user", source = ".")
@@ -67,6 +68,7 @@ public interface UserMapper {
     @Mapping(target = "wallet", source = "wallet")
     @Mapping(target = "availableProfiles", expression = "java(getUserProfiles(user))")
     @Mapping(target = "activeProfile", ignore = true)
+    @Mapping(target = "verification", ignore = true)
     UserProfileResponse toDriverProfileResponse(User user);
 
     @Mapping(target = "user", source = ".")
@@ -75,6 +77,7 @@ public interface UserMapper {
     @Mapping(target = "wallet", ignore = true)
     @Mapping(target = "availableProfiles", ignore = true)
     @Mapping(target = "activeProfile", ignore = true)
+    @Mapping(target = "verification", ignore = true)
     UserProfileResponse toAdminProfileResponse(User user);
 
     @Mapping(target = "userType", expression = "java(toReadableType(user.getUserType()))")

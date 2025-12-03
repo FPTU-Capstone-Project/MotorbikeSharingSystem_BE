@@ -122,16 +122,22 @@ public class AuthServiceImpl implements AuthService {
                     user.getRiderProfile().setStatus(RiderProfileStatus.ACTIVE);
                     riderProfileRepository.save(user.getRiderProfile());
                 }
-                // Profile might not exist yet - that's OK, user can still login
+                // Only flip driver runtime status if it was already ACTIVE/INACTIVE
                 if (user.getDriverProfile() != null) {
-                    user.getDriverProfile().setStatus(DriverProfileStatus.INACTIVE);
-                    driverProfileRepository.save(user.getDriverProfile());
+                    DriverProfileStatus current = user.getDriverProfile().getStatus();
+                    if (DriverProfileStatus.ACTIVE.equals(current) || DriverProfileStatus.INACTIVE.equals(current)) {
+                        user.getDriverProfile().setStatus(DriverProfileStatus.INACTIVE);
+                        driverProfileRepository.save(user.getDriverProfile());
+                    }
                 }
             } else if ("driver".equalsIgnoreCase(currentProfile)) {
                 // Only update status if profile exists
                 if (user.getDriverProfile() != null) {
-                    user.getDriverProfile().setStatus(DriverProfileStatus.ACTIVE);
-                    driverProfileRepository.save(user.getDriverProfile());
+                    DriverProfileStatus current = user.getDriverProfile().getStatus();
+                    if (DriverProfileStatus.ACTIVE.equals(current) || DriverProfileStatus.INACTIVE.equals(current)) {
+                        user.getDriverProfile().setStatus(DriverProfileStatus.ACTIVE);
+                        driverProfileRepository.save(user.getDriverProfile());
+                    }
                 }
                 // Profile might not exist yet - that's OK, user can still login
                 if (user.getRiderProfile() != null) {
