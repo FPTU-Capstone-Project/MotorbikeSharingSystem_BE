@@ -106,6 +106,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
     /**
      * Tính số dư khả dụng từ ledger
      * SSOT - Single Source of Truth
+     * 
+     * ✅ FIX: Tính cả PENDING payout vào balance để tránh double spending
+     * - SUCCESS transactions: Tính tất cả
+     * - PENDING PAYOUT: Tính vào balance (đã trừ số dư ngay khi tạo)
+     * - FAILED transactions: Không tính (đã được refund hoặc không thành công)
      */
     @Query(value = """
         SELECT COALESCE(SUM(
@@ -119,7 +124,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
         ), 0)
         FROM transactions
         WHERE wallet_id = :walletId
-          AND status = 'SUCCESS'
+          AND (
+            status = 'SUCCESS'
+            OR (status = 'PENDING' AND type = 'PAYOUT' AND direction = 'OUT')
+          )
         """, nativeQuery = true)
     BigDecimal calculateAvailableBalance(@Param("walletId") Integer walletId);
 
@@ -226,4 +234,18 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
      * ✅ FIX P0-BALANCE_CACHE: Đếm số lượng transactions của wallet với status cụ thể
      */
     long countByWallet_WalletIdAndStatus(Integer walletId, TransactionStatus status);
+    
+    /**
+     * ✅ FIX: Tính tổng số tiền đang pending payout cho wallet
+     * Dùng để validate khi tạo payout request mới
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE wallet_id = :walletId
+          AND type = 'PAYOUT'
+          AND status = 'PENDING'
+          AND actor_kind = 'USER'
+        """, nativeQuery = true)
+    BigDecimal sumPendingPayoutAmount(@Param("walletId") Integer walletId);
 }

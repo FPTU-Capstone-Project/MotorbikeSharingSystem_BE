@@ -1,13 +1,13 @@
 package com.mssus.app.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mssus.app.common.enums.SystemWallet;
 import com.mssus.app.common.enums.TransactionStatus;
 import com.mssus.app.common.enums.TransactionType;
 import com.mssus.app.common.exception.NotFoundException;
 import com.mssus.app.common.exception.ValidationException;
 import com.mssus.app.dto.request.wallet.PayoutWebhookRequest;
 import com.mssus.app.entity.Transaction;
-import com.mssus.app.entity.User;
 import com.mssus.app.entity.Wallet;
 import com.mssus.app.repository.TransactionRepository;
 import com.mssus.app.repository.WalletRepository;
@@ -186,10 +186,11 @@ public class PayoutWebhookServiceImpl implements PayoutWebhookService {
             transactionRepository.save(txn);
         }
 
-        // Create refund transaction if needed
-        if (userTransaction.getWallet() != null && userTransaction.getActorUser() != null) {
-            createRefundForFailedPayout(userTransaction, webhookRequest.getFailureReason());
-        }
+        // ✅ FIX: KHÔNG tạo REFUND transaction khi payout PENDING/PROCESSING bị FAILED
+        // Lý do: Balance đã tự động hoàn lại khi status đổi từ PENDING → FAILED
+        // (PENDING được tính vào balance, FAILED không được tính → balance tự động tăng lại)
+        // Nếu tạo REFUND sẽ làm balance tăng 2 lần (1 lần từ FAILED + 1 lần từ REFUND)
+        // createRefundForFailedPayout chỉ cần khi payout đã SUCCESS rồi mới FAILED (không xảy ra trong flow hiện tại)
 
         // Invalidate balance cache
         if (userTransaction.getWallet() != null) {
@@ -231,9 +232,19 @@ public class PayoutWebhookServiceImpl implements PayoutWebhookService {
     }
 
     private void createRefundForFailedPayout(Transaction failedPayout, String reason) {
-        User user = failedPayout.getActorUser();
         Wallet wallet = failedPayout.getWallet();
         BigDecimal amount = failedPayout.getAmount();
+        String pspRef = failedPayout.getPspRef();
+
+        // ✅ FIX: Generate idempotency key để tránh duplicate refund
+        String idempotencyKey = "REFUND_PAYOUT_" + pspRef + "_" + amount;
+        
+        // ✅ FIX: Check idempotency (prevent duplicate refund)
+        Optional<Transaction> existingRefund = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingRefund.isPresent()) {
+            log.warn("Refund already processed for failed payout pspRef: {}, idempotencyKey: {}", pspRef, idempotencyKey);
+            return; // Idempotent - already refunded
+        }
 
         UUID refundGroupId = UUID.randomUUID();
         Transaction refundTxn = Transaction.builder()
@@ -242,16 +253,18 @@ public class PayoutWebhookServiceImpl implements PayoutWebhookService {
                 .type(TransactionType.REFUND)
                 .direction(com.mssus.app.common.enums.TransactionDirection.IN)
                 .actorKind(com.mssus.app.common.enums.ActorKind.SYSTEM)
-                .actorUser(user)
+                .systemWallet(SystemWallet.MASTER)  // ✅ FIX: Required when actorKind is SYSTEM (constraint: txn_system_wallet_presence)
+                // actorUser must be null when actorKind is SYSTEM (constraint: txn_actor_user_presence)
                 .amount(amount)
                 .currency("VND")
                 .status(TransactionStatus.SUCCESS)
-                .note("Refund for failed PayOS payout: " + failedPayout.getPspRef() + " | reason: " + reason)
+                .idempotencyKey(idempotencyKey)  // ✅ FIX: Idempotency
+                .note("Refund for failed PayOS payout: " + pspRef + " | reason: " + reason)
                 .build();
 
         transactionRepository.save(refundTxn);
-        log.info("Refund transaction created for failed payout referenceId={}, amount={}",
-                failedPayout.getPspRef(), amount);
+        log.info("Refund transaction created for failed payout referenceId={}, amount={}, idempotencyKey={}",
+                pspRef, amount, idempotencyKey);
     }
 
     /**
