@@ -4,6 +4,17 @@
 
 ## Chuẩn bị Demo
 
+- Flow verification:
+   - Họ và tên: Test
+   - Email: anhdungp0304@gmail.com (hoặc 1 email thật để OTP hoạt động)
+   - Số điện thoại: 0111111111
+   - Mật khẩu: Password1!
+   - Nhập lại mật khẩu: như trên
+
+- Lỗi vặt: Trang "Quản lí xác minh" hiển thị ID là U0017 nhưng search "U0017" không ra, chỉ khi search bằng "17" mới ra
+- Luồng register dùng tài khoản với thông tin trên, luồng book ride dùng tài khoản như đã setup
+- Xóa bật tắt trạng thái hoạt động trên driver, mặc định luôn active mỗi khi driver bật app
+
 ### Thiết bị cần có
 - **2 điện thoại** (hoặc 2 emulator): 1 cho hành khách (Rider), 1 cho tài xế (Driver)
 - Cả hai cần bật **định vị GPS** và cho phép ứng dụng truy cập vị trí
@@ -13,8 +24,8 @@
 
 | Vai trò | Email | Mật khẩu | Dùng cho |
 |---------|-------|----------|----------|
-| Hành khách | `john.doe@example.com` | `Password1!` | Điện thoại hành khách |
-| Tài xế | `driver1@example.com` | `Password1!` | Điện thoại tài xế |
+| Hành khách | `john.doe@example.com` | `Password1!` | Điện thoại hành khách (sử dụng trên giả lập của laptop) |
+| Tài xế | `driver1@example.com` | `Password1!` | Điện thoại tài xế (sử dụng 1 điện thoại vật lí) |
 
 ### Số dư ví ban đầu
 Trước khi bắt đầu demo, kiểm tra số dư ví của cả hai tài khoản:
