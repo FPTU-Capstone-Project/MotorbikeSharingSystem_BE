@@ -6,6 +6,7 @@ import com.mssus.app.dto.request.wallet.PayoutWebhookRequest;
 import com.mssus.app.dto.request.wallet.PayOSPayoutListRequest;
 import com.mssus.app.service.PayOSService;
 import com.mssus.app.service.PayoutWebhookService;
+import com.mssus.app.service.TopUpService;
 import com.mssus.app.service.impl.PayOSPayoutClient;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -29,6 +30,7 @@ public class PayOSController {
     private final PayoutWebhookService payoutWebhookService;
     private final PayOSPayoutClient payOSPayoutClient;
     private final ObjectMapper objectMapper;
+    private final TopUpService topUpService;
 
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Top-up payment link created successfully"),
@@ -59,12 +61,12 @@ public class PayOSController {
     public ResponseEntity<String> handleWebhook(@RequestBody String payload) {
         try {
             log.info("Received PayOS webhook");
-//            PayOSService.WebhookPayload webhookPayload = payOSService.parseWebhook(payload);
-//            topUpService.handleTopUpWebhook(
-//                    webhookPayload.orderCode(),
-//                    webhookPayload.status(),
-//                    webhookPayload.amount()
-//            );
+            PayOSService.WebhookPayload webhookPayload = payOSService.parseWebhook(payload);
+            topUpService.handleTopUpWebhook(
+                    webhookPayload.orderCode(),
+                    webhookPayload.status(),
+                    webhookPayload.amount()
+            );
             return ResponseEntity.ok("Succeeded");
         } catch (Exception e) {
             log.error("Error processing webhook", e);

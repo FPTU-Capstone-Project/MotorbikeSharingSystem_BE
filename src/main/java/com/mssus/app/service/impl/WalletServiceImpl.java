@@ -368,27 +368,17 @@ public class WalletServiceImpl implements WalletService {
      * Determine payout mode from request or config-based rules.
      */
     private PayoutMode determinePayoutMode(PayoutInitRequest request) {
-        // 1. Use mode from request if provided
-        if (request.getMode() != null) {
-            return request.getMode();
-        }
-
-        // 2. Rule-based: amount >= threshold → MANUAL, else AUTOMATIC
-        if ("HYBRID".equalsIgnoreCase(defaultPayoutMode) || "AUTOMATIC".equalsIgnoreCase(defaultPayoutMode)) {
-            if (request.getAmount().compareTo(manualReviewThreshold) >= 0) {
-                return PayoutMode.MANUAL;
-            } else {
-                return PayoutMode.AUTOMATIC;
-            }
-        }
-
-        // 3. Default from config
-        if ("MANUAL".equalsIgnoreCase(defaultPayoutMode)) {
+        // Auto-determine mode based on amount threshold (ignore mode from request)
+        // Rule: amount >= manualReviewThreshold → MANUAL, else AUTOMATIC
+        if (request.getAmount().compareTo(manualReviewThreshold) >= 0) {
+            log.info("Payout amount {} >= threshold {}, setting mode to MANUAL", 
+                    request.getAmount(), manualReviewThreshold);
             return PayoutMode.MANUAL;
+        } else {
+            log.info("Payout amount {} < threshold {}, setting mode to AUTOMATIC", 
+                    request.getAmount(), manualReviewThreshold);
+            return PayoutMode.AUTOMATIC;
         }
-
-        // Default to AUTOMATIC
-        return PayoutMode.AUTOMATIC;
     }
 
     /**
@@ -1086,34 +1076,16 @@ public class WalletServiceImpl implements WalletService {
             transactionRepository.save(txn);
         }
 
-        // ✅ SSOT: KHÔNG update wallet balance trực tiếp
-        // Transaction status = FAILED nên sẽ không được tính vào balance
-        // Nếu cần refund, tạo REFUND transaction thay vì update balance trực tiếp
+        // ✅ FIX: KHÔNG tạo REFUND transaction khi payout PENDING/PROCESSING bị FAILED
+        // Lý do: Balance đã tự động hoàn lại khi status đổi từ PENDING → FAILED
+        // (PENDING được tính vào balance, FAILED không được tính → balance tự động tăng lại)
+        // Nếu tạo REFUND sẽ làm balance tăng 2 lần (1 lần từ FAILED + 1 lần từ REFUND)
         BigDecimal payoutAmount = userTransaction.getAmount();
-
-        // Get wallet for refund transaction
-        Wallet refundWallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
-
-        UUID refundGroupId = UUID.randomUUID();
-        Transaction refundTxn = Transaction.builder()
-                .groupId(refundGroupId)
-                .wallet(refundWallet)
-                .type(TransactionType.REFUND)
-                .direction(TransactionDirection.IN)
-                .actorKind(ActorKind.SYSTEM)
-                .actorUser(user)
-                .amount(payoutAmount)
-                .currency("VND")
-                .status(TransactionStatus.SUCCESS)
-                .note("Refund for failed payout: " + payoutRef)
-                .build();
-        transactionRepository.save(refundTxn);
 
         // ✅ SSOT: Tính balance từ ledger để log
         BigDecimal newAvailableBalance = balanceCalculationService
-                .calculateAvailableBalance(refundWallet.getWalletId());
-        BigDecimal newPendingBalance = balanceCalculationService.calculatePendingBalance(refundWallet.getWalletId());
+                .calculateAvailableBalance(wallet.getWalletId());
+        BigDecimal newPendingBalance = balanceCalculationService.calculatePendingBalance(wallet.getWalletId());
 
         log.info(
                 "Admin {} failed payout {} with reason: {}. Refund transaction created. New balance: available={}, pending={}",
