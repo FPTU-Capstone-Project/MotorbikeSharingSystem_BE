@@ -414,12 +414,12 @@ public class SharedRideServiceImpl implements SharedRideService {
                 username, request.rideRequestId(), request.rideId());
 
         SharedRide ride = rideRepository.findByIdForUpdate(request.rideId())
-                .orElseThrow(() -> BaseDomainException.formatted("ride.not-found.resource",
-                        request.rideId()));
+                .orElseThrow(() -> BaseDomainException.of("ride.not-found.resource",
+                        Map.of("rideId", request.rideId())));
 
         SharedRideRequest rideRequest = requestRepository.findById(request.rideRequestId())
-                .orElseThrow(() -> BaseDomainException.formatted(
-                        "ride-request.not-found.resource", request.rideRequestId()));
+                .orElseThrow(() -> BaseDomainException.of(
+                        "ride-request.not-found.resource", Map.of("requestId", request.rideRequestId())));
 
         if (rideRequest.getSharedRide() == null
                 || !rideRequest.getSharedRide().getSharedRideId().equals(ride.getSharedRideId())) {
