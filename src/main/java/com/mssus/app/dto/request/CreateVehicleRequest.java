@@ -48,6 +48,7 @@ public class CreateVehicleRequest {
     private Integer capacity;
 
     @Schema(description = "Insurance expiry date")
+    @NotNull
     @FutureOrPresent(message = "Insurance expiry must be today or in the future")
     private LocalDateTime insuranceExpiry;
 
