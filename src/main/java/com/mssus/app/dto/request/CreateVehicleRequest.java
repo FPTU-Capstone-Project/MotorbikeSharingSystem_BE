@@ -23,7 +23,7 @@ public class CreateVehicleRequest {
     @NotBlank(message = "Plate number is required")
     @Size(max = 20, message = "Plate number must not exceed 20 characters")
     @Pattern(regexp = "^[0-9]{2}[A-Za-z]-[0-9]{4,5}$",
-             message = "Plate number must follow pattern NNX-12345 (e.g., 29A-12345)")
+             message = "Biển số xe phải theo format NNX-12345 (e.g., 29A-12345)")
     @Schema(description = "Vehicle plate number", example = "29A-12345")
     private String plateNumber;
 
@@ -34,11 +34,13 @@ public class CreateVehicleRequest {
 
     @Size(max = 50, message = "Color must not exceed 50 characters")
     @Schema(description = "Vehicle color", example = "Red")
+    @NotBlank(message = "Color is required")
     private String color;
 
     @Schema(description = "Manufacturing year", example = "2020")
     @Min(value = 1900, message = "Year must be no earlier than 1900")
     @Max(value = 2100, message = "Year must be realistic (<= 2100)")
+    @NotNull(message = "Color is required")
     private Integer year;
 
     @Schema(description = "Vehicle capacity", example = "2")
