@@ -18,6 +18,8 @@ import java.time.LocalDateTime;
 public class UpdateVehicleRequest {
 
     @Size(max = 20, message = "Plate number must not exceed 20 characters")
+    @Pattern(regexp = "^[0-9]{2}[A-Za-z]-[0-9]{4,5}$",
+             message = "Plate number must follow pattern NNX-12345 (e.g., 29A-12345)")
     @Schema(description = "Vehicle plate number", example = "29A-12345")
     private String plateNumber;
 

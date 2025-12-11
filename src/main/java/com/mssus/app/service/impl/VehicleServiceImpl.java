@@ -49,9 +49,9 @@ public class VehicleServiceImpl implements VehicleService {
 
         Vehicle vehicle = Vehicle.builder()
                 .driver(driver)
-                .plateNumber(request.getPlateNumber())
-                .model(request.getModel())
-                .color(request.getColor())
+                .plateNumber(request.getPlateNumber().trim())
+                .model(request.getModel().trim())
+                .color(request.getColor() != null ? request.getColor().trim() : null)
                 .year(request.getYear())
                 .capacity(request.getCapacity())
                 .insuranceExpiry(request.getInsuranceExpiry())
@@ -162,13 +162,13 @@ public class VehicleServiceImpl implements VehicleService {
 
     private void updateVehicleFields(Vehicle vehicle, UpdateVehicleRequest request) {
         if (request.getPlateNumber() != null) {
-            vehicle.setPlateNumber(request.getPlateNumber());
+            vehicle.setPlateNumber(request.getPlateNumber().trim());
         }
         if (request.getModel() != null) {
-            vehicle.setModel(request.getModel());
+            vehicle.setModel(request.getModel().trim());
         }
         if (request.getColor() != null) {
-            vehicle.setColor(request.getColor());
+            vehicle.setColor(request.getColor().trim());
         }
         if (request.getYear() != null) {
             vehicle.setYear(request.getYear());
@@ -192,17 +192,27 @@ public class VehicleServiceImpl implements VehicleService {
 
     private FuelType resolveFuelType(String rawFuelType) {
         if (rawFuelType == null || rawFuelType.trim().isEmpty()) {
-            throw new IllegalArgumentException("Fuel type cannot be null or empty");
+            throw BaseDomainException.validation("Fuel type is required");
         }
         String candidate = rawFuelType.trim().toUpperCase(Locale.ROOT);
-        return FuelType.valueOf(candidate);
+        try {
+            return FuelType.valueOf(candidate);
+        } catch (IllegalArgumentException ex) {
+            throw BaseDomainException.validation("Invalid fuel type: " + rawFuelType);
+        }
     }
 
     private VehicleStatus resolveVehicleStatus(String rawStatus) {
-        String candidate = (rawStatus == null || rawStatus.trim().isEmpty())
-                ? VehicleStatus.PENDING.name()
-                : rawStatus.trim().toUpperCase(Locale.ROOT);
-        return VehicleStatus.valueOf(candidate);
+        if (rawStatus == null || rawStatus.trim().isEmpty()) {
+            return VehicleStatus.PENDING;
+        }
+
+        String candidate = rawStatus.trim().toUpperCase(Locale.ROOT);
+        try {
+            return VehicleStatus.valueOf(candidate);
+        } catch (IllegalArgumentException ex) {
+            throw BaseDomainException.validation("Invalid vehicle status: " + rawStatus);
+        }
     }
 
     private VehicleResponse mapVehicleResponse(Vehicle vehicle) {
