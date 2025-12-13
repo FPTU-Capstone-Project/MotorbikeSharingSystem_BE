@@ -27,6 +27,10 @@ public class OpenApiConfig {
         productionServer.setUrl("http://13.215.143.121");
         productionServer.setDescription("Production Server (AWS EC2)");
 
+        Server productionServer = new Server();
+        productionServerAWS.setUrl("https://13.215.143.121");
+        productionServerAWS.setDescription("Production Server (AWS EC2)");
+
         //http://34.142.227.237/
         Server productionServerGCP = new Server();
         productionServerGCP.setUrl("http://34.142.227.237");
@@ -38,7 +42,7 @@ public class OpenApiConfig {
         localServer.setDescription("Local Development Server");
         
         return new OpenAPI()
-                .servers(List.of(productionServer, productionServerGCP, localServer))
+                .servers(List.of(productionServerAWS, productionServer, productionServerGCP, localServer))
                 .info(new Info()
                         .title("MSSUS Account Service API")
                         .version(appVersion)
