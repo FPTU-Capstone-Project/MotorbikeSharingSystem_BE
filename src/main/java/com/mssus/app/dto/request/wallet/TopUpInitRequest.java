@@ -1,6 +1,7 @@
 package com.mssus.app.dto.request.wallet;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
@@ -13,6 +14,7 @@ public class TopUpInitRequest {
 
     @NotNull(message = "Amount is required")
     @Positive(message = "Amount must be positive")
+    @DecimalMin(value = "2000",  message = "Amount must be at least 2000")
     @Schema(description = "Amount to top up", example = "100000", required = true)
     private BigDecimal amount;
 
