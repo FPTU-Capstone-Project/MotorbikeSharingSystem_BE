@@ -61,12 +61,12 @@ public class PayOSController {
     public ResponseEntity<String> handleWebhook(@RequestBody String payload) {
         try {
             log.info("Received PayOS webhook");
-//            PayOSService.WebhookPayload webhookPayload = payOSService.parseWebhook(payload);
-//            topUpService.handleTopUpWebhook(
-//                    webhookPayload.orderCode(),
-//                    webhookPayload.status(),
-//                    webhookPayload.amount()
-//            );
+            PayOSService.WebhookPayload webhookPayload = payOSService.parseWebhook(payload);
+            topUpService.handleTopUpWebhook(
+                    webhookPayload.orderCode(),
+                    webhookPayload.status(),
+                    webhookPayload.amount()
+            );
             return ResponseEntity.ok("Succeeded");
         } catch (Exception e) {
             log.error("Error processing webhook", e);
