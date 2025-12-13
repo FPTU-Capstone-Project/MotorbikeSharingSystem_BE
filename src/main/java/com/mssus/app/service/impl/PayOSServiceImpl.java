@@ -52,7 +52,6 @@ public class PayOSServiceImpl implements PayOSService {
 
     private PayOS payOS;
     private static final AtomicLong orderCodeCounter = new AtomicLong(System.currentTimeMillis() / 1000);
-    private static final long expiredAt = (System.currentTimeMillis() / 1000) + 15 * 60;
 
     @PostConstruct
     public void init() {
@@ -85,6 +84,9 @@ public class PayOSServiceImpl implements PayOSService {
         }
         
         Long orderCode = generateUniqueOrderCode();
+        
+        // Calculate expiredAt dynamically (15 minutes from now)
+        long expiredAt = (System.currentTimeMillis() / 1000) + 15 * 60;
         
         PaymentData data = PaymentData.builder()
             .orderCode(orderCode)
@@ -184,6 +186,9 @@ public class PayOSServiceImpl implements PayOSService {
         
         // ✅ Tạo orderCode mới (PayOS không cho phép tạo trùng orderCode)
         Long newOrderCode = generateUniqueOrderCode();
+        
+        // Calculate expiredAt dynamically (15 minutes from now)
+        long expiredAt = (System.currentTimeMillis() / 1000) + 15 * 60;
         
         // ✅ Tạo payment link mới với orderCode mới
         PaymentData data = PaymentData.builder()
