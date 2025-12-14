@@ -10,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface WalletService {
@@ -58,7 +59,7 @@ public interface WalletService {
      * @param status Transaction status (PENDING or SUCCESS)
      * @return Created transaction
      */
-    com.mssus.app.entity.Transaction createTopUpTransaction(
+    Transaction createTopUpTransaction(
         Integer userId, 
         BigDecimal amount, 
         String pspRef, 
@@ -79,7 +80,7 @@ public interface WalletService {
     /**
      * Find transaction by idempotency key
      */
-    java.util.Optional<Transaction> findTransactionByIdempotencyKey(String idempotencyKey);
+    Optional<Transaction> findTransactionByIdempotencyKey(String idempotencyKey);
     
     /**
      * Hold amount: Create HOLD_CREATE transaction
