@@ -41,11 +41,11 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional
     public VehicleResponse createVehicle(CreateVehicleRequest request) {
         if (vehicleRepository.existsByPlateNumber(request.getPlateNumber())) {
-            throw new ConflictException("Vehicle with plate number " + request.getPlateNumber() + " already exists");
+            throw new ConflictException("Phương tiện với biển số " + request.getPlateNumber() + " đã tồn tại");
         }
 
         DriverProfile driver = driverProfileRepository.findById(request.getDriverId())
-                .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + request.getDriverId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy tài xế với ID: " + request.getDriverId()));
 
         Vehicle vehicle = Vehicle.builder()
                 .driver(driver)
@@ -68,7 +68,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional(readOnly = true)
     public VehicleResponse getVehicleById(Integer vehicleId) {
         Vehicle vehicle = vehicleRepository.findByIdWithDriver(vehicleId)
-                .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy phương tiện với ID: " + vehicleId));
         return mapVehicleResponse(vehicle);
     }
 
@@ -76,12 +76,12 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional
     public VehicleResponse updateVehicle(Integer vehicleId, UpdateVehicleRequest request) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy phương tiện với ID: " + vehicleId));
 
         if (request.getPlateNumber() != null &&
             !request.getPlateNumber().equals(vehicle.getPlateNumber()) &&
             vehicleRepository.existsByPlateNumber(request.getPlateNumber())) {
-            throw new ConflictException("Vehicle with plate number " + request.getPlateNumber() + " already exists");
+            throw new ConflictException("Phương tiện với biển số " + request.getPlateNumber() + " đã tồn tại");
         }
 
         updateVehicleFields(vehicle, request);
@@ -93,11 +93,11 @@ public class VehicleServiceImpl implements VehicleService {
     @Transactional
     public MessageResponse deleteVehicle(Integer vehicleId) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new NotFoundException("Vehicle not found with ID: " + vehicleId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy phương tiện với ID: " + vehicleId));
         vehicle.setStatus(VehicleStatus.INACTIVE);
         vehicleRepository.save(vehicle);
         return MessageResponse.builder()
-                .message("Vehicle deleted successfully")
+                .message("Xóa phương tiện thành công")
                 .build();
     }
 
@@ -123,7 +123,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<VehicleResponse> getVehiclesByDriverId(String driver, Pageable pageable) {
-        User users = userRepository.findByEmail(driver).orElseThrow(() -> new NotFoundException("User not found with email: " + driver));
+        User users = userRepository.findByEmail(driver).orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với email: " + driver));
         Integer driverId = users.getDriverProfile().getDriverId();
         Page<Vehicle> vehiclePage = vehicleRepository.findByDriverDriverId(driverId, pageable);
         List<VehicleResponse> vehicles = vehiclePage.getContent().stream()
@@ -192,13 +192,13 @@ public class VehicleServiceImpl implements VehicleService {
 
     private FuelType resolveFuelType(String rawFuelType) {
         if (rawFuelType == null || rawFuelType.trim().isEmpty()) {
-            throw BaseDomainException.validation("Fuel type is required");
+            throw BaseDomainException.validation("Loại nhiên liệu là bắt buộc");
         }
         String candidate = rawFuelType.trim().toUpperCase(Locale.ROOT);
         try {
             return FuelType.valueOf(candidate);
         } catch (IllegalArgumentException ex) {
-            throw BaseDomainException.validation("Invalid fuel type: " + rawFuelType);
+            throw BaseDomainException.validation("Loại nhiên liệu không hợp lệ: " + rawFuelType);
         }
     }
 
@@ -211,7 +211,7 @@ public class VehicleServiceImpl implements VehicleService {
         try {
             return VehicleStatus.valueOf(candidate);
         } catch (IllegalArgumentException ex) {
-            throw BaseDomainException.validation("Invalid vehicle status: " + rawStatus);
+            throw BaseDomainException.validation("Trạng thái phương tiện không hợp lệ: " + rawStatus);
         }
     }
 

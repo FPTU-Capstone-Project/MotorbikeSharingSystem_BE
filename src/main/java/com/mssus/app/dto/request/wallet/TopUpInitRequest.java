@@ -12,13 +12,13 @@ import java.math.BigDecimal;
 @Schema(description = "Request to initiate a top-up transaction")
 public class TopUpInitRequest {
 
-    @NotNull(message = "Amount is required")
-    @Positive(message = "Amount must be positive")
-    @DecimalMin(value = "2000",  message = "Amount must be at least 2000")
+    @NotNull(message = "Số tiền là bắt buộc")
+    @Positive(message = "Số tiền phải là số dương")
+    @DecimalMin(value = "2000",  message = "Số tiền phải ít nhất 2000")
     @Schema(description = "Amount to top up", example = "100000", required = true)
     private BigDecimal amount;
 
-    @NotNull(message = "Payment method is required")
+    @NotNull(message = "Phương thức thanh toán là bắt buộc")
     @Schema(description = "Payment method (PAYOS)", example = "PAYOS", required = true)
     private String paymentMethod;
 

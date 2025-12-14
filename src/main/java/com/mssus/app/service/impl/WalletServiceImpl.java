@@ -942,7 +942,7 @@ public class WalletServiceImpl implements WalletService {
         }
 
         if (evidenceFile == null || evidenceFile.isEmpty()) {
-            throw new ValidationException("Evidence file is required for payout completion");
+            throw new ValidationException("File minh chứng là bắt buộc để hoàn thành rút tiền");
         }
 
         // Find transactions
@@ -953,7 +953,7 @@ public class WalletServiceImpl implements WalletService {
             transactions = transactionRepository.findByPspRefAndStatus(payoutRef, TransactionStatus.PENDING);
             if (transactions.isEmpty()) {
                 throw new NotFoundException(
-                        "No processing or pending payout transactions found for pspRef: " + payoutRef);
+                        "Không tìm thấy giao dịch rút tiền đang xử lý hoặc chờ xử lý cho pspRef: " + payoutRef);
             }
         }
 
@@ -967,7 +967,7 @@ public class WalletServiceImpl implements WalletService {
         PayoutMode payoutMode = extractPayoutModeFromNote(userTransaction.getNote());
         if (payoutMode == PayoutMode.AUTOMATIC) {
             throw new InvalidPayoutStateException(
-                    "completePayout is only available for MANUAL payouts. This payout is AUTOMATIC and handled by PayOS webhook.");
+                    "completePayout chỉ khả dụng cho rút tiền THỦ CÔNG. Giao dịch này là TỰ ĐỘNG và được xử lý bởi PayOS webhook.");
         }
 
         User user = userTransaction.getActorUser();
@@ -1067,7 +1067,7 @@ public class WalletServiceImpl implements WalletService {
         }
 
         Wallet wallet = walletRepository.findByUser_UserId(user.getUserId())
-                .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + user.getUserId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy ví cho người dùng: " + user.getUserId()));
 
         // Update all transactions to FAILED status
         for (Transaction txn : transactions) {
@@ -1315,7 +1315,7 @@ public class WalletServiceImpl implements WalletService {
         // Find original hold transaction
         Transaction holdTxn = transactionRepository
                 .findByGroupIdAndType(groupId, TransactionType.HOLD_CREATE)
-                .orElseThrow(() -> new NotFoundException("Hold transaction not found for groupId: " + groupId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy giao dịch giữ tiền cho groupId: " + groupId));
 
         Optional<Transaction> existingRelease = transactionRepository
                 .findByGroupIdAndType(groupId, TransactionType.HOLD_RELEASE);
