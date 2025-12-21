@@ -443,10 +443,10 @@ public class ProfileServiceImpl implements ProfileService {
                 VerificationStatus.PENDING).isPresent()) {
             throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
-        boolean isValid = fptaiService.verifyDriverLicense(user, documents.get(0));
-        if (!isValid) {
-            throw ValidationException.of("Giấy phép lái xe không khớp với thông tin người dùng");
-        }
+//        boolean isValid = fptaiService.verifyDriverLicense(user, documents.get(0));
+//        if (!isValid) {
+//            throw ValidationException.of("Giấy phép lái xe không khớp với thông tin người dùng");
+//        }
 
         try {
             List<CompletableFuture<String>> futuresList = documents.parallelStream()
@@ -545,11 +545,11 @@ public class ProfileServiceImpl implements ProfileService {
             throw new IllegalStateException("Yêu cầu xác thực tài xế đã tồn tại");
         }
 
-        boolean isValid = fptaiService.verifyVehicleRegistration(documents.get(0));
-        if (!isValid) {
-            throw ValidationException.of(
-                    "Đăng ký xe không hợp lệ hoặc không phải ảnh chứng từ thật. Vui lòng tải lên ảnh đăng ký xe thật với độ phân giải tối thiểu 800x600 và kích thước tối thiểu 50KB");
-        }
+//        boolean isValid = fptaiService.verifyVehicleRegistration(documents.get(0));
+//        if (!isValid) {
+//            throw ValidationException.of(
+//                    "Đăng ký xe không hợp lệ hoặc không phải ảnh chứng từ thật. Vui lòng tải lên ảnh đăng ký xe thật với độ phân giải tối thiểu 800x600 và kích thước tối thiểu 50KB");
+//        }
 
         try {
             List<CompletableFuture<String>> futuresList = documents.parallelStream()
