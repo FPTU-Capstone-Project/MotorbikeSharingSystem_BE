@@ -6,6 +6,7 @@ import com.mssus.app.dto.response.PageResponse;
 import com.mssus.app.dto.response.wallet.*;
 import com.mssus.app.service.TopUpService;
 import com.mssus.app.service.WalletService;
+import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -150,7 +151,7 @@ public class WalletController {
             @ApiResponse(responseCode = "403", description = "Only admins can complete payouts"),
             @ApiResponse(responseCode = "404", description = "Payout not found")
     })
-    @PutMapping("/payout/{payoutRef}/complete")
+    @PutMapping(value = "/payout/{payoutRef}/complete", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PayoutProcessResponse> completePayout(
             @Parameter(description = "Payout reference ID") @PathVariable String payoutRef,
