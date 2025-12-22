@@ -257,7 +257,7 @@ public class WalletServiceImpl implements WalletService {
         // Store full account number in note for later use in processPayout
         String description = String.format("Payout to %s - %s (%s) [BIN:%s]",
                 request.getBankName(),
-                maskAccountNumber(bankAccountNumber),
+                bankAccountNumber,
                 accountHolderName,
                 bankBin);
 
