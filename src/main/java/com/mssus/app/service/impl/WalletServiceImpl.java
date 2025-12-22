@@ -68,7 +68,7 @@ public class WalletServiceImpl implements WalletService {
     @Value("${app.payout.mode:HYBRID}")
     private String defaultPayoutMode;
 
-    @Value("${app.payout.manual-review-threshold:500000}")
+    @Value("${app.payout.manual-review-threshold:50000}")
     private BigDecimal manualReviewThreshold;
 
     // ✅ SSOT: Balance luôn được tính từ ledger, không update trực tiếp
