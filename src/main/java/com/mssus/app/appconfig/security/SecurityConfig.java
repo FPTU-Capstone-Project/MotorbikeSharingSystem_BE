@@ -350,13 +350,18 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // Allow multiple origins including Vercel deployment
+        // Allow multiple origins including production and Vercel deployment
         configuration.setAllowedOriginPatterns(List.of(
+            // Local development
             "http://localhost:3000",
             "http://localhost:8080",
+            // Production domains
+            "https://mssus.it.com",
+            "https://www.mssus.it.com",
+            "https://*.mssus.it.com",
+            // Vercel deployments
             "https://*.vercel.app",
-            "https://frontend-web-capstone.vercel.app",
-            "*" // Allow all for development - remove in production
+            "https://frontend-web-capstone.vercel.app"
         ));
         
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
