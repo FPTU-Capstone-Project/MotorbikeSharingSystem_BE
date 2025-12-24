@@ -230,7 +230,7 @@ public class SharedRideRequestServiceImpl implements SharedRideRequestService {
                 .orElseThrow(() -> BaseDomainException.of("user.not-found.rider-profile"));
 
         Quote quote = quoteService.getQuote(request.quoteId());
-        log.debug("rider id {}, {}", rider.getRiderId(), quote.riderId());
+        log.info("rider id {},  quote rider id{}", rider.getRiderId(), quote.riderId());
         if (quote.riderId() != rider.getRiderId()) {
             throw BaseDomainException.of("ride.unauthorized.request-not-owner",
                     "Quote belongs to different user");
