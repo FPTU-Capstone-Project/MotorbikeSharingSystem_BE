@@ -303,7 +303,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/vehicles/*").hasRole("DRIVER")
                         // DELETE /api/v1/vehicles/{id} - Driver deletes their vehicle
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/vehicles/*").hasRole("DRIVER")
-                        
+                        .requestMatchers("/api/v1/ride-requests/rides/*").hasAnyRole("DRIVER", "RIDER")
                         // Driver-specific endpoints (check AFTER vehicle-specific rules)
                         .requestMatchers(SecurityEndpoints.DRIVER_PATHS).hasRole("DRIVER")
 
